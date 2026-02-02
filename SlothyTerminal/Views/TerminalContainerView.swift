@@ -1,16 +1,22 @@
 import SwiftUI
 
 /// Container view that displays the active tab's terminal or an empty state.
+/// All terminal views are kept alive to preserve sessions when switching tabs.
 struct TerminalContainerView: View {
   @Environment(AppState.self) private var appState
 
   var body: some View {
-    Group {
-      if let activeTab = appState.activeTab {
-        ActiveTerminalView(tab: activeTab)
-          .id(activeTab.id)
-      } else {
+    ZStack {
+      if appState.tabs.isEmpty {
         EmptyTerminalView()
+      } else {
+        /// Render all terminal views but only show the active one.
+        /// This keeps sessions alive when switching between tabs.
+        ForEach(appState.tabs) { tab in
+          ActiveTerminalView(tab: tab)
+            .opacity(tab.id == appState.activeTabID ? 1 : 0)
+            .allowsHitTesting(tab.id == appState.activeTabID)
+        }
       }
     }
   }
@@ -35,7 +41,8 @@ struct ActiveTerminalView: View {
           arguments: tab.arguments,
           onOutput: { output in
             tab.processOutput(output)
-          }
+          },
+          shouldAutoRunCommand: tab.agentType.showsUsageStats
         )
       } else {
         ProgressView("Starting \(tab.agent.displayName)...")

@@ -78,7 +78,9 @@ class UsageStats {
   }
 
   /// Applies an update from parsed terminal output.
-  func applyUpdate(_ update: UsageUpdate) {
+  /// - Parameter update: The parsed usage update.
+  /// - Parameter incrementMessages: If true, adds to message count instead of replacing.
+  func applyUpdate(_ update: UsageUpdate, incrementMessages: Bool = false) {
     if let tokensIn = update.tokensIn {
       self.tokensIn = tokensIn
     }
@@ -92,7 +94,11 @@ class UsageStats {
     }
 
     if let messageCount = update.messageCount {
-      self.messageCount = messageCount
+      if incrementMessages {
+        self.messageCount += messageCount
+      } else {
+        self.messageCount = messageCount
+      }
     }
 
     if let limit = update.contextWindowLimit {

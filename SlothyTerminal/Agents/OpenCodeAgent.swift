@@ -9,7 +9,8 @@ struct OpenCodeAgent: AIAgent {
   let displayName = "OpenCode"
   let contextWindowLimit = 200_000
 
-  /// Path to the opencode CLI executable.
+  /// Command to run OpenCode CLI.
+  /// Uses just "opencode" to let the shell's PATH find the correct version.
   var command: String {
     if let envPath = ProcessInfo.processInfo.environment["OPENCODE_PATH"],
        FileManager.default.isExecutableFile(atPath: envPath)
@@ -17,20 +18,8 @@ struct OpenCodeAgent: AIAgent {
       return envPath
     }
 
-    let commonPaths = [
-      "/usr/local/bin/opencode",
-      "/opt/homebrew/bin/opencode",
-      "\(NSHomeDirectory())/.local/bin/opencode",
-      "\(NSHomeDirectory())/go/bin/opencode"
-    ]
-
-    for path in commonPaths {
-      if FileManager.default.isExecutableFile(atPath: path) {
-        return path
-      }
-    }
-
-    return "/usr/local/bin/opencode"
+    /// Use just "opencode" - the shell will find it via PATH.
+    return "opencode"
   }
 
   var defaultArgs: [String] {
@@ -50,6 +39,25 @@ struct OpenCodeAgent: AIAgent {
   }
 
   func isAvailable() -> Bool {
-    FileManager.default.isExecutableFile(atPath: command)
+    /// Check if OPENCODE_PATH is set and valid.
+    if let envPath = ProcessInfo.processInfo.environment["OPENCODE_PATH"] {
+      return FileManager.default.isExecutableFile(atPath: envPath)
+    }
+
+    /// Check common installation paths.
+    let commonPaths = [
+      "/usr/local/bin/opencode",
+      "/opt/homebrew/bin/opencode",
+      "\(NSHomeDirectory())/.local/bin/opencode",
+      "\(NSHomeDirectory())/go/bin/opencode"
+    ]
+
+    for path in commonPaths {
+      if FileManager.default.isExecutableFile(atPath: path) {
+        return true
+      }
+    }
+
+    return false
   }
 }

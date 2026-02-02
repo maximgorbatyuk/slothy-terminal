@@ -76,7 +76,7 @@ class Tab: Identifiable {
 
     /// Try to parse stats from the new output.
     if let update = agent.parseStats(from: output) {
-      usageStats.applyUpdate(update)
+      usageStats.applyUpdate(update, incrementMessages: update.incrementMessageCount)
     }
   }
 

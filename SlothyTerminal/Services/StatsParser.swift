@@ -9,6 +9,9 @@ struct UsageUpdate {
   var messageCount: Int?
   var contextWindowUsed: Int?
   var contextWindowLimit: Int?
+
+  /// If true, messageCount should be added to existing count instead of replacing.
+  var incrementMessageCount: Bool = false
 }
 
 /// Parses agent terminal output to extract usage statistics.
@@ -23,57 +26,129 @@ class StatsParser {
     var update = UsageUpdate()
     var hasUpdates = false
 
+    /// Strip ANSI escape codes for easier parsing.
+    let cleanText = stripAnsiCodes(text)
+
     /// Try to parse JSON status updates (Claude CLI outputs JSON for status).
-    if let jsonUpdate = parseJSONStatus(text) {
+    if let jsonUpdate = parseJSONStatus(cleanText) {
       return jsonUpdate
     }
 
     /// Pattern: "Tokens: 1234 in / 567 out"
-    if let (tokensIn, tokensOut) = matchTokensInOut(text) {
+    if let (tokensIn, tokensOut) = matchTokensInOut(cleanText) {
       update.tokensIn = tokensIn
       update.tokensOut = tokensOut
       update.totalTokens = tokensIn + tokensOut
       hasUpdates = true
     }
 
-    /// Pattern: "Total tokens: 1234"
-    if let total = matchPattern(text, pattern: "[Tt]otal\\s+[Tt]okens?:\\s*(\\d[\\d,]*)") {
+    /// Pattern: "Total tokens: 1234" or just "1234 tokens"
+    if let total = matchPattern(cleanText, pattern: "(?:[Tt]otal\\s+)?[Tt]okens?:?\\s*(\\d[\\d,]*)") {
       update.totalTokens = parseNumber(total)
       hasUpdates = true
     }
 
-    /// Pattern: "Input: 1234 tokens" or "Input tokens: 1234"
-    if let input = matchPattern(text, pattern: "[Ii]nput(?:\\s+[Tt]okens?)?:\\s*(\\d[\\d,]*)") {
+    /// Pattern: "Input: 1234 tokens" or "Input tokens: 1234" or ">1234"
+    if let input = matchPattern(cleanText, pattern: "[Ii]nput(?:\\s+[Tt]okens?)?:?\\s*(\\d[\\d,]*)") {
       update.tokensIn = parseNumber(input)
       hasUpdates = true
     }
 
-    /// Pattern: "Output: 567 tokens" or "Output tokens: 567"
-    if let output = matchPattern(text, pattern: "[Oo]utput(?:\\s+[Tt]okens?)?:\\s*(\\d[\\d,]*)") {
+    /// Pattern: "Output: 567 tokens" or "Output tokens: 567" or "<567"
+    if let output = matchPattern(cleanText, pattern: "[Oo]utput(?:\\s+[Tt]okens?)?:?\\s*(\\d[\\d,]*)") {
       update.tokensOut = parseNumber(output)
       hasUpdates = true
     }
 
-    /// Pattern: "Cost: $0.0123" or "Estimated cost: $0.0123"
-    if let costStr = matchPattern(text, pattern: "[Cc]ost:\\s*\\$?([\\d.]+)") {
+    /// Pattern: ">1234 <567" (Claude Code status bar format)
+    if let (tokensIn, tokensOut) = matchClaudeCodeTokens(cleanText) {
+      update.tokensIn = tokensIn
+      update.tokensOut = tokensOut
+      update.totalTokens = tokensIn + tokensOut
+      hasUpdates = true
+    }
+
+    /// Pattern: "Cost: $0.0123" or "Estimated cost: $0.0123" or "$0.0123"
+    if let costStr = matchPattern(cleanText, pattern: "\\$([\\d.]+)") {
       update.cost = Double(costStr)
       hasUpdates = true
     }
 
     /// Pattern: "Context: 12345 / 200000" or "Context window: 12345/200000"
-    if let (used, limit) = matchContextWindow(text) {
+    if let (used, limit) = matchContextWindow(cleanText) {
       update.contextWindowUsed = used
       update.contextWindowLimit = limit
       hasUpdates = true
     }
 
     /// Pattern: "Messages: 24" or "Message count: 24"
-    if let messages = matchPattern(text, pattern: "[Mm]essages?(?:\\s+[Cc]ount)?:\\s*(\\d+)") {
+    if let messages = matchPattern(cleanText, pattern: "[Mm]essages?(?:\\s+[Cc]ount)?:\\s*(\\d+)") {
       update.messageCount = Int(messages)
       hasUpdates = true
     }
 
+    /// Detect assistant responses to increment message count.
+    /// Claude Code typically starts assistant responses with specific markers.
+    if containsAssistantMarker(cleanText) {
+      update.messageCount = 1
+      update.incrementMessageCount = true
+      hasUpdates = true
+    }
+
     return hasUpdates ? update : nil
+  }
+
+  /// Strips ANSI escape codes from text.
+  private func stripAnsiCodes(_ text: String) -> String {
+    let pattern = "\\x1B\\[[0-9;]*[a-zA-Z]|\\x1B\\][^\\x07]*\\x07"
+    guard let regex = try? NSRegularExpression(pattern: pattern, options: []) else {
+      return text
+    }
+
+    let range = NSRange(text.startIndex..., in: text)
+    return regex.stringByReplacingMatches(in: text, options: [], range: range, withTemplate: "")
+  }
+
+  /// Matches Claude Code status bar token format: ">1234 <567"
+  private func matchClaudeCodeTokens(_ text: String) -> (Int, Int)? {
+    let pattern = ">(\\d[\\d,]*)\\s*<(\\d[\\d,]*)"
+    guard let regex = try? NSRegularExpression(pattern: pattern, options: []) else {
+      return nil
+    }
+
+    let range = NSRange(text.startIndex..., in: text)
+    guard let match = regex.firstMatch(in: text, options: [], range: range),
+          match.numberOfRanges >= 3,
+          let inRange = Range(match.range(at: 1), in: text),
+          let outRange = Range(match.range(at: 2), in: text),
+          let inTokens = parseNumber(String(text[inRange])),
+          let outTokens = parseNumber(String(text[outRange]))
+    else {
+      return nil
+    }
+
+    return (inTokens, outTokens)
+  }
+
+  /// Checks if the text contains markers indicating an assistant response.
+  private func containsAssistantMarker(_ text: String) -> Bool {
+    let markers = [
+      "Claude:",
+      "Assistant:",
+      "claude>",
+      "❯",  /// Common prompt character used by Claude Code
+      "I'll",  /// Common start of assistant response
+      "Let me",  /// Common start of assistant response
+      "Here's"  /// Common start of assistant response
+    ]
+
+    for marker in markers {
+      if text.contains(marker) {
+        return true
+      }
+    }
+
+    return false
   }
 
   /// Parses output from GLM to extract usage information.

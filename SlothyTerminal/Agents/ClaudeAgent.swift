@@ -9,7 +9,8 @@ struct ClaudeAgent: AIAgent {
   let displayName = "Claude"
   let contextWindowLimit = 200_000
 
-  /// Path to the Claude CLI executable.
+  /// Command to run Claude CLI.
+  /// Uses just "claude" to let the shell's PATH find the correct version.
   var command: String {
     if let envPath = ProcessInfo.processInfo.environment["CLAUDE_PATH"],
        FileManager.default.isExecutableFile(atPath: envPath)
@@ -17,20 +18,8 @@ struct ClaudeAgent: AIAgent {
       return envPath
     }
 
-    let commonPaths = [
-      "/usr/local/bin/claude",
-      "/opt/homebrew/bin/claude",
-      "\(NSHomeDirectory())/.local/bin/claude",
-      "\(NSHomeDirectory())/bin/claude"
-    ]
-
-    for path in commonPaths {
-      if FileManager.default.isExecutableFile(atPath: path) {
-        return path
-      }
-    }
-
-    return "/usr/local/bin/claude"
+    /// Use just "claude" - the shell will find it via PATH.
+    return "claude"
   }
 
   var defaultArgs: [String] {
@@ -56,6 +45,26 @@ struct ClaudeAgent: AIAgent {
   }
 
   func isAvailable() -> Bool {
-    FileManager.default.isExecutableFile(atPath: command)
+    /// Check if CLAUDE_PATH is set and valid.
+    if let envPath = ProcessInfo.processInfo.environment["CLAUDE_PATH"] {
+      return FileManager.default.isExecutableFile(atPath: envPath)
+    }
+
+    /// Check common installation paths.
+    let commonPaths = [
+      "/usr/local/bin/claude",
+      "/opt/homebrew/bin/claude",
+      "\(NSHomeDirectory())/.local/bin/claude",
+      "\(NSHomeDirectory())/.claude/local/claude",
+      "\(NSHomeDirectory())/bin/claude"
+    ]
+
+    for path in commonPaths {
+      if FileManager.default.isExecutableFile(atPath: path) {
+        return true
+      }
+    }
+
+    return false
   }
 }

@@ -9,8 +9,15 @@ struct TerminalViewRepresentable: NSViewRepresentable {
   let arguments: [String]
   let onOutput: ((String) -> Void)?
 
+  /// Whether to auto-run the command after the shell starts.
+  let shouldAutoRunCommand: Bool
+
   /// Command to auto-run after shell starts (optional).
   var autoRunCommand: String? {
+    guard shouldAutoRunCommand else {
+      return nil
+    }
+
     /// Build the command string from command and arguments.
     if arguments.isEmpty {
       return command
@@ -189,12 +196,16 @@ struct StandaloneTerminalView: View {
   let arguments: [String]
   var onOutput: ((String) -> Void)? = nil
 
+  /// Whether to auto-run the command (true for AI agents, false for plain terminal).
+  var shouldAutoRunCommand: Bool = true
+
   var body: some View {
     TerminalViewRepresentable(
       workingDirectory: workingDirectory,
       command: command,
       arguments: arguments,
-      onOutput: onOutput
+      onOutput: onOutput,
+      shouldAutoRunCommand: shouldAutoRunCommand
     )
   }
 }
