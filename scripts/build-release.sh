@@ -112,15 +112,32 @@ echo "[6/8] Stapling notarization ticket to app..."
 xcrun stapler staple "$BUILD_DIR/export/$APP_NAME.app"
 echo "Stapling completed"
 
-# Create DMG
+# Create DMG with Applications symlink
 echo ""
 echo "[7/8] Creating DMG..."
+
+# Create temporary folder for DMG contents
+DMG_TEMP="$BUILD_DIR/dmg-contents"
+rm -rf "$DMG_TEMP"
+mkdir -p "$DMG_TEMP"
+
+# Copy app to temp folder
+cp -R "$BUILD_DIR/export/$APP_NAME.app" "$DMG_TEMP/"
+
+# Create symlink to Applications folder
+ln -s /Applications "$DMG_TEMP/Applications"
+
+# Create DMG from temp folder
 hdiutil create \
   -volname "$APP_NAME" \
-  -srcfolder "$BUILD_DIR/export/$APP_NAME.app" \
+  -srcfolder "$DMG_TEMP" \
   -ov \
   -format UDZO \
   "$BUILD_DIR/$APP_NAME-$VERSION.dmg"
+
+# Clean up temp folder
+rm -rf "$DMG_TEMP"
+
 echo "DMG created: $BUILD_DIR/$APP_NAME-$VERSION.dmg"
 
 # Notarize and staple DMG
