@@ -12,6 +12,15 @@ struct TerminalViewRepresentable: NSViewRepresentable {
   /// Whether to auto-run the command after the shell starts.
   let shouldAutoRunCommand: Bool
 
+  /// Callback that provides a function to send text to the terminal.
+  var onTerminalReady: ((@escaping (String) -> Void) -> Void)?
+
+  /// Callback when user enters a command (presses Enter).
+  var onCommandEntered: (() -> Void)?
+
+  /// Callback when the current directory changes.
+  var onDirectoryChanged: ((URL) -> Void)?
+
   /// Command to auto-run after shell starts (optional).
   var autoRunCommand: String? {
     guard shouldAutoRunCommand else {
@@ -43,6 +52,9 @@ struct TerminalViewRepresentable: NSViewRepresentable {
       }
     }
 
+    /// Set up command entered callback.
+    terminalView.onCommandEntered = onCommandEntered
+
     /// Set up the coordinator as the terminal delegate.
     terminalView.processDelegate = context.coordinator
 
@@ -50,10 +62,16 @@ struct TerminalViewRepresentable: NSViewRepresentable {
     context.coordinator.terminalView = terminalView
     context.coordinator.workingDirectory = workingDirectory
     context.coordinator.autoRunCommand = autoRunCommand
+    context.coordinator.onDirectoryChanged = onDirectoryChanged
 
     /// Start the process after a brief delay to ensure the view is ready.
     Task { @MainActor in
       context.coordinator.startProcess()
+    }
+
+    /// Provide send function to parent.
+    onTerminalReady? { text in
+      terminalView.send(txt: text)
     }
 
     return terminalView
@@ -71,6 +89,7 @@ struct TerminalViewRepresentable: NSViewRepresentable {
     weak var terminalView: OutputCapturingTerminalView?
     var workingDirectory: URL?
     var autoRunCommand: String?
+    var onDirectoryChanged: ((URL) -> Void)?
 
     @MainActor
     func startProcess() {
@@ -166,7 +185,27 @@ struct TerminalViewRepresentable: NSViewRepresentable {
     }
 
     func hostCurrentDirectoryUpdate(source: SwiftTerm.TerminalView, directory: String?) {
-      /// Directory change notifications.
+      /// Notify when the current directory changes.
+      guard let directory,
+            !directory.isEmpty
+      else {
+        return
+      }
+
+      /// The directory can come as a file:// URL string (OSC 7 format) or a plain path.
+      let url: URL
+      if directory.hasPrefix("file://") {
+        /// Parse as URL string.
+        guard let parsedURL = URL(string: directory) else {
+          return
+        }
+        url = parsedURL
+      } else {
+        /// Treat as plain path.
+        url = URL(fileURLWithPath: directory)
+      }
+
+      onDirectoryChanged?(url)
     }
 
     func processTerminated(source: SwiftTerm.TerminalView, exitCode: Int32?) {
@@ -175,9 +214,11 @@ struct TerminalViewRepresentable: NSViewRepresentable {
   }
 }
 
-/// Custom LocalProcessTerminalView that captures output data.
+/// Custom LocalProcessTerminalView that captures output data and tracks commands.
 class OutputCapturingTerminalView: LocalProcessTerminalView {
   var onDataReceived: ((Data) -> Void)?
+  var onCommandEntered: (() -> Void)?
+  private var eventMonitor: Any?
 
   override func dataReceived(slice: ArraySlice<UInt8>) {
     /// Call the parent implementation to display the data.
@@ -186,6 +227,43 @@ class OutputCapturingTerminalView: LocalProcessTerminalView {
     /// Forward the data to our callback.
     let data = Data(slice)
     onDataReceived?(data)
+  }
+
+  override func viewDidMoveToWindow() {
+    super.viewDidMoveToWindow()
+
+    /// Set up event monitor when view is added to window.
+    if window != nil && eventMonitor == nil {
+      eventMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+        guard let self,
+              self.window?.firstResponder === self || self.isDescendant(of: self.window?.firstResponder as? NSView ?? NSView())
+        else {
+          return event
+        }
+
+        /// Check if Enter/Return key was pressed (keyCode 36 = Return, 76 = Numpad Enter).
+        if event.keyCode == 36 || event.keyCode == 76 {
+          self.onCommandEntered?()
+        }
+
+        return event
+      }
+    }
+  }
+
+  override func removeFromSuperview() {
+    /// Clean up event monitor.
+    if let monitor = eventMonitor {
+      NSEvent.removeMonitor(monitor)
+      eventMonitor = nil
+    }
+    super.removeFromSuperview()
+  }
+
+  deinit {
+    if let monitor = eventMonitor {
+      NSEvent.removeMonitor(monitor)
+    }
   }
 }
 
@@ -199,13 +277,25 @@ struct StandaloneTerminalView: View {
   /// Whether to auto-run the command (true for AI agents, false for plain terminal).
   var shouldAutoRunCommand: Bool = true
 
+  /// Callback that provides a function to send text to the terminal.
+  var onTerminalReady: ((@escaping (String) -> Void) -> Void)? = nil
+
+  /// Callback when user enters a command (presses Enter).
+  var onCommandEntered: (() -> Void)? = nil
+
+  /// Callback when the current directory changes.
+  var onDirectoryChanged: ((URL) -> Void)? = nil
+
   var body: some View {
     TerminalViewRepresentable(
       workingDirectory: workingDirectory,
       command: command,
       arguments: arguments,
       onOutput: onOutput,
-      shouldAutoRunCommand: shouldAutoRunCommand
+      shouldAutoRunCommand: shouldAutoRunCommand,
+      onTerminalReady: onTerminalReady,
+      onCommandEntered: onCommandEntered,
+      onDirectoryChanged: onDirectoryChanged
     )
   }
 }

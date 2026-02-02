@@ -456,7 +456,7 @@ struct ShortcutRow: View {
         .font(.system(size: 12, design: .monospaced))
         .padding(.horizontal, 8)
         .padding(.vertical, 4)
-        .background(Color(.controlBackgroundColor))
+        .background(appCardColor)
         .cornerRadius(4)
     }
   }

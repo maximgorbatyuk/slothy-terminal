@@ -60,7 +60,7 @@ class StatsParser {
       hasUpdates = true
     }
 
-    /// Pattern: ">1234 <567" (Claude Code status bar format)
+    /// Pattern: ">1234 <567" or ">12.3k <4.5k" (Claude Code status bar format)
     if let (tokensIn, tokensOut) = matchClaudeCodeTokens(cleanText) {
       update.tokensIn = tokensIn
       update.tokensOut = tokensOut
@@ -68,9 +68,17 @@ class StatsParser {
       hasUpdates = true
     }
 
-    /// Pattern: "Cost: $0.0123" or "Estimated cost: $0.0123" or "$0.0123"
-    if let costStr = matchPattern(cleanText, pattern: "\\$([\\d.]+)") {
-      update.cost = Double(costStr)
+    /// Pattern: "12.3k/4.5k" or "12.3k / 4.5k" (alternative token format)
+    if let (tokensIn, tokensOut) = matchSlashTokens(cleanText) {
+      update.tokensIn = tokensIn
+      update.tokensOut = tokensOut
+      update.totalTokens = tokensIn + tokensOut
+      hasUpdates = true
+    }
+
+    /// Pattern: "Cost: $0.0123" or "Estimated cost: $0.0123" or "$0.0123" or "$0.05"
+    if let cost = matchCost(cleanText) {
+      update.cost = cost
       hasUpdates = true
     }
 
@@ -109,10 +117,36 @@ class StatsParser {
     return regex.stringByReplacingMatches(in: text, options: [], range: range, withTemplate: "")
   }
 
-  /// Matches Claude Code status bar token format: ">1234 <567"
+  /// Matches Claude Code status bar token format: ">1234 <567" or ">12.3k <4.5k"
   private func matchClaudeCodeTokens(_ text: String) -> (Int, Int)? {
-    let pattern = ">(\\d[\\d,]*)\\s*<(\\d[\\d,]*)"
-    guard let regex = try? NSRegularExpression(pattern: pattern, options: []) else {
+    /// Try format with k suffix: ">12.3k <4.5k"
+    let kPattern = ">(\\d+\\.?\\d*)k?\\s*<(\\d+\\.?\\d*)k?"
+    if let regex = try? NSRegularExpression(pattern: kPattern, options: []) {
+      let range = NSRange(text.startIndex..., in: text)
+      if let match = regex.firstMatch(in: text, options: [], range: range),
+         match.numberOfRanges >= 3,
+         let inRange = Range(match.range(at: 1), in: text),
+         let outRange = Range(match.range(at: 2), in: text)
+      {
+        let inStr = String(text[inRange])
+        let outStr = String(text[outRange])
+
+        /// Check if original text had 'k' suffix
+        let fullMatch = String(text[Range(match.range, in: text)!])
+        let inHasK = fullMatch.contains(">\(inStr)k")
+        let outHasK = fullMatch.contains("<\(outStr)k")
+
+        if let inTokens = parseNumberWithK(inStr, hasK: inHasK),
+           let outTokens = parseNumberWithK(outStr, hasK: outHasK)
+        {
+          return (inTokens, outTokens)
+        }
+      }
+    }
+
+    /// Try simple number format: ">1234 <567"
+    let simplePattern = ">(\\d[\\d,]*)\\s*<(\\d[\\d,]*)"
+    guard let regex = try? NSRegularExpression(pattern: simplePattern, options: []) else {
       return nil
     }
 
@@ -128,6 +162,66 @@ class StatsParser {
     }
 
     return (inTokens, outTokens)
+  }
+
+  /// Matches slash-separated tokens: "12.3k/4.5k" or "1234 / 567"
+  private func matchSlashTokens(_ text: String) -> (Int, Int)? {
+    let pattern = "(\\d+\\.?\\d*k?)\\s*/\\s*(\\d+\\.?\\d*k?)"
+    guard let regex = try? NSRegularExpression(pattern: pattern, options: []) else {
+      return nil
+    }
+
+    let range = NSRange(text.startIndex..., in: text)
+    guard let match = regex.firstMatch(in: text, options: [], range: range),
+          match.numberOfRanges >= 3,
+          let inRange = Range(match.range(at: 1), in: text),
+          let outRange = Range(match.range(at: 2), in: text)
+    else {
+      return nil
+    }
+
+    let inStr = String(text[inRange])
+    let outStr = String(text[outRange])
+
+    guard let inTokens = parseNumberWithK(inStr, hasK: inStr.hasSuffix("k")),
+          let outTokens = parseNumberWithK(outStr, hasK: outStr.hasSuffix("k"))
+    else {
+      return nil
+    }
+
+    return (inTokens, outTokens)
+  }
+
+  /// Matches cost patterns: "$0.0123" or "$0.05"
+  private func matchCost(_ text: String) -> Double? {
+    let pattern = "\\$([\\d.]+)"
+    guard let regex = try? NSRegularExpression(pattern: pattern, options: []) else {
+      return nil
+    }
+
+    let range = NSRange(text.startIndex..., in: text)
+    guard let match = regex.firstMatch(in: text, options: [], range: range),
+          match.numberOfRanges >= 2,
+          let costRange = Range(match.range(at: 1), in: text)
+    else {
+      return nil
+    }
+
+    return Double(String(text[costRange]))
+  }
+
+  /// Parses a number that may have a 'k' suffix for thousands.
+  private func parseNumberWithK(_ string: String, hasK: Bool) -> Int? {
+    var cleanString = string.replacingOccurrences(of: ",", with: "")
+    cleanString = cleanString.replacingOccurrences(of: "k", with: "")
+
+    if let value = Double(cleanString) {
+      if hasK {
+        return Int(value * 1000)
+      }
+      return Int(value)
+    }
+    return nil
   }
 
   /// Checks if the text contains markers indicating an assistant response.

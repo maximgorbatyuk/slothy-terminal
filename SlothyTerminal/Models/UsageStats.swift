@@ -6,6 +6,7 @@ class UsageStats {
   var tokensIn: Int = 0
   var tokensOut: Int = 0
   var messageCount: Int = 0
+  var commandCount: Int = 0
   var startTime: Date = Date()
   var estimatedCost: Double?
   var contextWindowLimit: Int = 200_000
@@ -111,11 +112,17 @@ class UsageStats {
     messageCount += 1
   }
 
+  /// Increments the command count.
+  func incrementCommandCount() {
+    commandCount += 1
+  }
+
   /// Resets all statistics.
   func reset() {
     tokensIn = 0
     tokensOut = 0
     messageCount = 0
+    commandCount = 0
     startTime = Date()
     estimatedCost = nil
     contextWindowLimit = 200_000

@@ -30,7 +30,7 @@ struct MainView: View {
       }
     }
     .frame(minWidth: 800, minHeight: 600)
-    .background(Color(.windowBackgroundColor))
+    .background(appBackgroundColor)
     .sheet(item: $appState.activeModal) { modal in
       ModalRouter(modal: modal)
     }
@@ -65,29 +65,86 @@ struct AgentSelectionView: View {
   @Environment(AppState.self) private var appState
   @Environment(\.dismiss) private var dismiss
 
+  private let recentFoldersManager = RecentFoldersManager.shared
+
+  /// The currently selected directory.
+  @State private var selectedDirectory: URL?
+
+  /// The directory that will be used for the new tab.
+  private var currentDirectory: URL {
+    selectedDirectory ?? recentFoldersManager.recentFolders.first ?? FileManager.default.homeDirectoryForCurrentUser
+  }
+
+  /// Display path with ~ for home directory.
+  private var displayPath: String {
+    let homeDir = FileManager.default.homeDirectoryForCurrentUser.path
+    let fullPath = currentDirectory.path
+
+    if fullPath.hasPrefix(homeDir) {
+      return "~" + fullPath.dropFirst(homeDir.count)
+    }
+    return fullPath
+  }
+
   var body: some View {
-    VStack(spacing: 20) {
-      Text("Select Agent")
+    VStack(spacing: 24) {
+      Text("Open new tab")
         .font(.headline)
 
+      /// Agent selection row.
       HStack(spacing: 16) {
         ForEach(AgentType.allCases) { agent in
           Button {
-            appState.dismissModal()
-            appState.showFolderSelector(for: agent)
+            createTab(agent: agent)
           } label: {
             VStack(spacing: 8) {
               Image(systemName: agent.iconName)
                 .font(.largeTitle)
+                .foregroundColor(agent.accentColor)
               Text(agent.rawValue)
                 .font(.caption)
             }
             .frame(width: 100, height: 80)
-            .background(agent.accentColor.opacity(0.2))
+            .background(appCardColor)
             .cornerRadius(8)
           }
           .buttonStyle(.plain)
         }
+      }
+
+      /// Directory selection row.
+      VStack(alignment: .leading, spacing: 8) {
+        Text("WORKING DIRECTORY")
+          .font(.system(size: 10, weight: .semibold))
+          .foregroundColor(.secondary)
+
+        HStack(spacing: 12) {
+          /// Current directory display.
+          HStack(spacing: 8) {
+            Image(systemName: "folder.fill")
+              .font(.system(size: 14))
+              .foregroundColor(.secondary)
+
+            Text(displayPath)
+              .font(.system(size: 12))
+              .foregroundColor(.primary)
+              .lineLimit(1)
+              .truncationMode(.middle)
+          }
+          .frame(maxWidth: .infinity, alignment: .leading)
+
+          /// Change directory button.
+          Button {
+            openFolderPicker()
+          } label: {
+            Text("Change...")
+              .font(.system(size: 12))
+          }
+          .buttonStyle(.bordered)
+        }
+        .padding(12)
+        .background(appCardColor)
+        .cornerRadius(8)
       }
 
       Button("Cancel") {
@@ -95,8 +152,32 @@ struct AgentSelectionView: View {
       }
       .keyboardShortcut(.escape)
     }
-    .padding(24)
-    .frame(width: 300)
+    .padding(32)
+    .frame(width: 400)
+    .background(appBackgroundColor)
+  }
+
+  /// Creates a tab with the selected agent and directory.
+  private func createTab(agent: AgentType) {
+    recentFoldersManager.addRecentFolder(currentDirectory)
+    appState.createTab(agent: agent, directory: currentDirectory)
+    dismiss()
+  }
+
+  /// Opens the system folder picker.
+  private func openFolderPicker() {
+    let panel = NSOpenPanel()
+    panel.canChooseFiles = false
+    panel.canChooseDirectories = true
+    panel.allowsMultipleSelection = false
+    panel.canCreateDirectories = true
+    panel.message = "Select a working directory"
+    panel.prompt = "Select"
+    panel.directoryURL = currentDirectory
+
+    if panel.runModal() == .OK, let url = panel.url {
+      selectedDirectory = url
+    }
   }
 }
 

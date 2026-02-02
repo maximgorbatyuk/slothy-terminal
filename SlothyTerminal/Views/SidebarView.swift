@@ -27,7 +27,7 @@ struct SidebarView: View {
       Spacer()
     }
     .padding()
-    .background(Color(.controlBackgroundColor))
+    .background(appBackgroundColor)
   }
 }
 
@@ -85,9 +85,6 @@ struct TerminalSidebarView: View {
 
   var body: some View {
     VStack(spacing: 16) {
-      /// Terminal badge.
-      AgentBadge(tab: tab)
-
       /// Working directory.
       WorkingDirectoryCard(path: tab.workingDirectory)
 
@@ -125,37 +122,14 @@ struct AgentStatsView: View {
 
   var body: some View {
     VStack(alignment: .leading, spacing: 16) {
-      /// Agent badge with status indicator.
-      AgentBadge(tab: tab)
-
       /// Working directory.
       WorkingDirectoryCard(path: tab.workingDirectory)
 
-      /// Token usage section.
-      StatsSection(title: "Token Usage") {
-        StatRow(label: "Input", value: tab.usageStats.formattedTokensIn)
-        StatRow(label: "Output", value: tab.usageStats.formattedTokensOut)
-        StatRow(
-          label: "Total",
-          value: tab.usageStats.formattedTotalTokens,
-          isHighlighted: true
-        )
-      }
-
       /// Session info section.
       StatsSection(title: "Session Info") {
-        StatRow(label: "Messages", value: "\(tab.usageStats.messageCount)")
         StatRow(label: "Duration", value: formattedDuration)
-        if let cost = tab.usageStats.formattedCost {
-          StatRow(label: "Est. Cost", value: cost, style: .cost)
-        }
+        StatRow(label: "Commands", value: "\(tab.usageStats.commandCount)")
       }
-
-      /// Context window progress.
-      ContextWindowProgress(
-        used: tab.usageStats.totalTokens,
-        limit: tab.usageStats.contextWindowLimit
-      )
     }
     .onReceive(timer) { _ in
       currentTime = Date()
@@ -174,58 +148,6 @@ struct AgentStatsView: View {
     } else {
       return String(format: "%dm %02ds", minutes, seconds)
     }
-  }
-}
-
-/// Badge showing agent type and status.
-struct AgentBadge: View {
-  let tab: Tab
-
-  private var isRunning: Bool {
-    tab.ptyController?.isRunning == true
-  }
-
-  private var statusText: String {
-    isRunning ? "Active" : "Idle"
-  }
-
-  private var statusColor: Color {
-    isRunning ? .green : .gray
-  }
-
-  var body: some View {
-    HStack(spacing: 10) {
-      /// Agent icon with accent color background.
-      ZStack {
-        RoundedRectangle(cornerRadius: 6)
-          .fill(tab.agentType.accentColor.opacity(0.2))
-          .frame(width: 32, height: 32)
-
-        Image(systemName: tab.agentType.iconName)
-          .font(.system(size: 14, weight: .medium))
-          .foregroundColor(tab.agentType.accentColor)
-      }
-
-      VStack(alignment: .leading, spacing: 2) {
-        Text(tab.agentType.rawValue)
-          .font(.system(size: 13, weight: .semibold))
-
-        HStack(spacing: 4) {
-          Circle()
-            .fill(statusColor)
-            .frame(width: 6, height: 6)
-
-          Text(statusText)
-            .font(.system(size: 11))
-            .foregroundColor(.secondary)
-        }
-      }
-
-      Spacer()
-    }
-    .padding(10)
-    .background(Color(.textBackgroundColor))
-    .cornerRadius(8)
   }
 }
 
@@ -262,7 +184,7 @@ struct WorkingDirectoryCard: View {
     }
     .padding(10)
     .frame(maxWidth: .infinity, alignment: .leading)
-    .background(Color(.textBackgroundColor))
+    .background(appCardColor)
     .cornerRadius(8)
   }
 }
@@ -283,7 +205,7 @@ struct StatsSection<Content: View>: View {
         content
       }
       .padding(10)
-      .background(Color(.textBackgroundColor))
+      .background(appCardColor)
       .cornerRadius(8)
     }
   }
@@ -398,7 +320,7 @@ struct ContextWindowProgress: View {
         GeometryReader { geometry in
           ZStack(alignment: .leading) {
             RoundedRectangle(cornerRadius: 4)
-              .fill(Color(.separatorColor))
+              .fill(appBackgroundColor)
               .frame(height: 8)
 
             RoundedRectangle(cornerRadius: 4)
@@ -424,7 +346,7 @@ struct ContextWindowProgress: View {
         }
       }
       .padding(10)
-      .background(Color(.textBackgroundColor))
+      .background(appCardColor)
       .cornerRadius(8)
     }
   }

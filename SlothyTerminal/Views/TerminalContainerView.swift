@@ -30,7 +30,7 @@ struct ActiveTerminalView: View {
 
   var body: some View {
     ZStack {
-      Color(.textBackgroundColor)
+      appCardColor
 
       if let error = agentUnavailableError {
         AgentUnavailableView(agentName: tab.agent.displayName, error: error)
@@ -42,7 +42,16 @@ struct ActiveTerminalView: View {
           onOutput: { output in
             tab.processOutput(output)
           },
-          shouldAutoRunCommand: tab.agentType.showsUsageStats
+          shouldAutoRunCommand: tab.agentType.showsUsageStats,
+          onTerminalReady: { sendFunc in
+            tab.sendToTerminal = sendFunc
+          },
+          onCommandEntered: {
+            tab.usageStats.incrementCommandCount()
+          },
+          onDirectoryChanged: { newDirectory in
+            tab.workingDirectory = newDirectory
+          }
         )
       } else {
         ProgressView("Starting \(tab.agent.displayName)...")
@@ -92,13 +101,13 @@ struct AgentUnavailableView: View {
         Text(installationInstructions)
           .font(.system(size: 11, design: .monospaced))
           .padding(12)
-          .background(Color(.textBackgroundColor))
+          .background(appCardColor)
           .cornerRadius(6)
       }
       .padding(.top, 8)
     }
     .frame(maxWidth: .infinity, maxHeight: .infinity)
-    .background(Color(.windowBackgroundColor))
+    .background(appBackgroundColor)
   }
 
   private var installationInstructions: String {
@@ -155,7 +164,7 @@ struct EmptyTerminalView: View {
       .frame(maxWidth: 320)
     }
     .frame(maxWidth: .infinity, maxHeight: .infinity)
-    .background(Color(.windowBackgroundColor))
+    .background(appBackgroundColor)
   }
 }
 
@@ -204,7 +213,7 @@ struct TabTypeButton: View {
       .padding(.horizontal, 16)
       .padding(.vertical, 12)
       .frame(maxWidth: .infinity, alignment: .leading)
-      .background(Color(.controlBackgroundColor))
+      .background(appCardColor)
       .cornerRadius(8)
     }
     .buttonStyle(.plain)

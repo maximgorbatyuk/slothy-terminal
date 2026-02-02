@@ -17,6 +17,9 @@ class Tab: Identifiable {
   /// Set after the tab is created and the terminal is initialized.
   var ptyController: PTYController?
 
+  /// Callback to send text to the terminal.
+  var sendToTerminal: ((String) -> Void)?
+
   /// Buffer for accumulating terminal output for stats parsing.
   private var outputBuffer: String = ""
   private let maxBufferSize = 10_000
@@ -88,5 +91,16 @@ class Tab: Identifiable {
   /// Checks if the agent is available (installed).
   var isAgentAvailable: Bool {
     agent.isAvailable()
+  }
+
+  /// Sends a command to request usage stats from the agent.
+  func requestUsageStats() {
+    /// Only send for AI agents (not plain terminal).
+    guard agentType.showsUsageStats else {
+      return
+    }
+
+    /// Send /usage command to Claude CLI.
+    sendToTerminal?("/usage\n")
   }
 }

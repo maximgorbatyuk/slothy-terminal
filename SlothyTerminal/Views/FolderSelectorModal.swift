@@ -114,7 +114,7 @@ struct FolderSelectorModal: View {
     }
     .frame(width: 400)
     .fixedSize(horizontal: false, vertical: true)
-    .background(Color(.windowBackgroundColor))
+    .background(appBackgroundColor)
   }
 
   /// Opens the system folder picker.
@@ -206,7 +206,7 @@ struct RecentFolderButton: View {
     .padding(.vertical, 8)
     .background(
       RoundedRectangle(cornerRadius: 8)
-        .fill(isHovered ? Color(.selectedContentBackgroundColor).opacity(0.5) : Color.clear)
+        .fill(isHovered ? appCardColor : Color.clear)
     )
     .contentShape(Rectangle())
     .onHover { hovering in

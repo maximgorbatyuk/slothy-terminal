@@ -1,23 +1,34 @@
 import SwiftUI
 
+/// App theme color (#282c34).
+let appBackgroundColor = Color(red: 40/255, green: 44/255, blue: 52/255)
+
+/// Slightly lighter variant for cards/controls.
+let appCardColor = Color(red: 50/255, green: 54/255, blue: 62/255)
+
 /// The tab bar displaying all open terminal tabs.
 struct TabBarView: View {
   @Environment(AppState.self) private var appState
 
   var body: some View {
-    HStack(spacing: 0) {
-      /// Tab items.
-      ForEach(appState.tabs) { tab in
-        TabItemView(tab: tab)
+    VStack(spacing: 0) {
+      HStack(spacing: 0) {
+        /// Tab items.
+        ForEach(appState.tabs) { tab in
+          TabItemView(tab: tab)
+        }
+
+        /// New tab button.
+        NewTabButton()
+
+        Spacer()
       }
+      .frame(height: 36)
 
-      /// New tab button.
-      NewTabButton()
-
-      Spacer()
+      /// Divider line between tab bar and content.
+      Divider()
     }
-    .frame(height: 36)
-    .background(Color(.windowBackgroundColor))
+    .background(appBackgroundColor)
   }
 }
 
@@ -34,12 +45,13 @@ struct TabItemView: View {
     HStack(spacing: 6) {
       /// Agent icon.
       Image(systemName: tab.agentType.iconName)
-        .foregroundColor(tab.agentType.accentColor)
+        .foregroundColor(isActive ? tab.agentType.accentColor : .gray)
         .font(.system(size: 12))
 
       /// Tab title.
       Text(tab.title)
         .font(.system(size: 12))
+        .foregroundColor(isActive ? .primary : .gray)
         .lineLimit(1)
 
       /// Close button.
@@ -48,14 +60,14 @@ struct TabItemView: View {
       } label: {
         Image(systemName: "xmark")
           .font(.system(size: 9, weight: .medium))
-          .foregroundColor(.secondary)
+          .foregroundColor(.gray)
       }
       .buttonStyle(.plain)
       .opacity(isActive ? 1 : 0.5)
     }
     .padding(.horizontal, 12)
     .padding(.vertical, 8)
-    .background(isActive ? Color(.controlBackgroundColor) : Color.clear)
+    .background(isActive ? appCardColor : Color.clear)
     .cornerRadius(6)
     .contentShape(Rectangle())
     .onTapGesture {
