@@ -73,7 +73,7 @@ struct AboutView: View {
       Spacer()
 
       /// Copyright.
-      Text("© 2025 \(BuildConfig.developerName). All rights reserved.")
+      Text("© 2026 \(BuildConfig.developerName). All rights reserved.")
         .font(.caption2)
         .foregroundColor(.secondary)
     }

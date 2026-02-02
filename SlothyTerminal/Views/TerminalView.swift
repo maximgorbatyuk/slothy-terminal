@@ -43,7 +43,7 @@ struct TerminalViewRepresentable: NSViewRepresentable {
 
     /// Configure terminal appearance.
     terminalView.configureNativeColors()
-    terminalView.font = NSFont.monospacedSystemFont(ofSize: 13, weight: .regular)
+    terminalView.font = ConfigManager.shared.terminalFont
 
     /// Set up output callback.
     terminalView.onDataReceived = { [onOutput] data in
@@ -78,7 +78,11 @@ struct TerminalViewRepresentable: NSViewRepresentable {
   }
 
   func updateNSView(_ nsView: OutputCapturingTerminalView, context: Context) {
-    /// No updates needed.
+    /// Update font if it changed in settings.
+    let configuredFont = ConfigManager.shared.terminalFont
+    if nsView.font != configuredFont {
+      nsView.font = configuredFont
+    }
   }
 
   func makeCoordinator() -> Coordinator {

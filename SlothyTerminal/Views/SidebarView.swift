@@ -7,10 +7,6 @@ struct SidebarView: View {
 
   var body: some View {
     VStack(alignment: .leading, spacing: 16) {
-      /// Header.
-      SidebarHeader(onCollapse: { appState.toggleSidebar() })
-
-      Divider()
 
       if let tab = appState.activeTab {
         if tab.agentType.showsUsageStats {
@@ -28,32 +24,6 @@ struct SidebarView: View {
     }
     .padding()
     .background(appBackgroundColor)
-  }
-}
-
-/// Header for the sidebar with title and collapse button.
-struct SidebarHeader: View {
-  let onCollapse: () -> Void
-
-  var body: some View {
-    HStack {
-      Text("Usage Statistics")
-        .font(.system(size: 11, weight: .semibold))
-        .textCase(.uppercase)
-        .foregroundColor(.secondary)
-
-      Spacer()
-
-      Button {
-        onCollapse()
-      } label: {
-        Image(systemName: "chevron.right")
-          .font(.system(size: 10, weight: .medium))
-          .foregroundColor(.secondary)
-      }
-      .buttonStyle(.plain)
-      .help("Hide sidebar")
-    }
   }
 }
 

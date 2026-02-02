@@ -3,6 +3,11 @@ import SwiftUI
 /// The main application view containing the tab bar, terminal, and sidebar.
 struct MainView: View {
   @Environment(AppState.self) private var appState
+  private var configManager = ConfigManager.shared
+
+  private var sidebarPosition: SidebarPosition {
+    configManager.config.sidebarPosition
+  }
 
   var body: some View {
     @Bindable var appState = appState
@@ -13,13 +18,23 @@ struct MainView: View {
         .padding(.top, 8)
 
       HStack(spacing: 0) {
+        /// Sidebar on the left.
+        if appState.isSidebarVisible && sidebarPosition == .left {
+          SidebarView()
+            .frame(width: appState.sidebarWidth)
+            .padding(.vertical, 8)
+            .padding(.leading, 8)
+
+          Divider()
+        }
+
         /// Terminal container takes remaining space.
         TerminalContainerView()
           .frame(maxWidth: .infinity, maxHeight: .infinity)
           .padding(8)
 
         /// Sidebar on the right.
-        if appState.isSidebarVisible {
+        if appState.isSidebarVisible && sidebarPosition == .right {
           Divider()
 
           SidebarView()

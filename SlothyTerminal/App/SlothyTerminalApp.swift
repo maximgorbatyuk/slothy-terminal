@@ -117,6 +117,7 @@ struct SlothyTerminalApp: App {
 
     Settings {
       SettingsView()
+        .environment(appState)
     }
 
     Window("About \(BuildConfig.current.appName)", id: "about") {

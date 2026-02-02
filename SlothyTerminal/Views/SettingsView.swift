@@ -28,6 +28,7 @@ struct SettingsView: View {
         }
     }
     .frame(width: 550, height: 450)
+    .background(appBackgroundColor)
   }
 }
 
@@ -36,6 +37,7 @@ struct SettingsView: View {
 struct GeneralSettingsTab: View {
   private var configManager = ConfigManager.shared
   private var recentFoldersManager = RecentFoldersManager.shared
+  @Environment(AppState.self) private var appState
 
   var body: some View {
     Form {
@@ -49,7 +51,13 @@ struct GeneralSettingsTab: View {
       }
 
       Section("Sidebar") {
-        Toggle("Show sidebar by default", isOn: Bindable(configManager).config.showSidebarByDefault)
+        Toggle("Show sidebar by default", isOn: Binding(
+          get: { configManager.config.showSidebarByDefault },
+          set: { newValue in
+            configManager.config.showSidebarByDefault = newValue
+            appState.isSidebarVisible = newValue
+          }
+        ))
 
         Picker("Sidebar position", selection: Bindable(configManager).config.sidebarPosition) {
           ForEach(SidebarPosition.allCases, id: \.self) { position in
@@ -113,6 +121,7 @@ struct GeneralSettingsTab: View {
     }
     .formStyle(.grouped)
     .padding()
+    .background(appBackgroundColor)
   }
 
   private func shortenedPath(_ url: URL) -> String {
@@ -154,6 +163,7 @@ struct AgentsSettingsTab: View {
     }
     .formStyle(.grouped)
     .padding()
+    .background(appBackgroundColor)
     .task {
       await checkAgentStatuses()
     }
@@ -319,15 +329,6 @@ struct AppearanceSettingsTab: View {
 
   var body: some View {
     Form {
-      Section("Theme") {
-        Picker("Color scheme", selection: Bindable(configManager).config.colorScheme) {
-          ForEach(AppColorScheme.allCases, id: \.self) { scheme in
-            Text(scheme.displayName).tag(scheme)
-          }
-        }
-        .pickerStyle(.segmented)
-      }
-
       Section("Terminal Font") {
         Picker("Font family", selection: Bindable(configManager).config.terminalFontName) {
           ForEach(ConfigManager.availableMonospacedFonts, id: \.self) { font in
@@ -373,6 +374,7 @@ struct AppearanceSettingsTab: View {
     }
     .formStyle(.grouped)
     .padding()
+    .background(appBackgroundColor)
   }
 }
 
@@ -430,6 +432,7 @@ struct ShortcutsSettingsTab: View {
     }
     .formStyle(.grouped)
     .padding()
+    .background(appBackgroundColor)
   }
 }
 
