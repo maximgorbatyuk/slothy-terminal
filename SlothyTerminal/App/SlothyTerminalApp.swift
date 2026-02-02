@@ -28,15 +28,20 @@ struct SlothyTerminalApp: App {
     .commands {
       /// File menu.
       CommandGroup(replacing: .newItem) {
-        Button("New Claude Tab") {
-          appState.showFolderSelector(for: .claude)
+        Button("New Terminal Tab") {
+          appState.showFolderSelector(for: .terminal)
         }
         .keyboardShortcut("t", modifiers: .command)
 
-        Button("New GLM Tab") {
-          appState.showFolderSelector(for: .glm)
+        Button("New Claude Tab") {
+          appState.showFolderSelector(for: .claude)
         }
         .keyboardShortcut("t", modifiers: [.command, .shift])
+
+        Button("New OpenCode Tab") {
+          appState.showFolderSelector(for: .opencode)
+        }
+        .keyboardShortcut("t", modifiers: [.command, .option])
 
         Divider()
 

@@ -229,7 +229,7 @@ struct RecentFolderButton: View {
 }
 
 #Preview("Empty") {
-  FolderSelectorModal(agent: .glm) { url in
+  FolderSelectorModal(agent: .opencode) { url in
     print("Selected: \(url)")
   }
 }

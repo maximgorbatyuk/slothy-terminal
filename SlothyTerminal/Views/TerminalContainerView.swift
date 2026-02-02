@@ -8,6 +8,7 @@ struct TerminalContainerView: View {
     Group {
       if let activeTab = appState.activeTab {
         ActiveTerminalView(tab: activeTab)
+          .id(activeTab.id)
       } else {
         EmptyTerminalView()
       }
@@ -18,7 +19,7 @@ struct TerminalContainerView: View {
 /// Displays the terminal for an active tab.
 struct ActiveTerminalView: View {
   let tab: Tab
-  @State private var ptyController: PTYController?
+  @State private var isReady: Bool = false
   @State private var agentUnavailableError: String?
 
   var body: some View {
@@ -27,11 +28,14 @@ struct ActiveTerminalView: View {
 
       if let error = agentUnavailableError {
         AgentUnavailableView(agentName: tab.agent.displayName, error: error)
-      } else if ptyController != nil {
+      } else if isReady {
         StandaloneTerminalView(
           workingDirectory: tab.workingDirectory,
           command: tab.command,
-          arguments: tab.arguments
+          arguments: tab.arguments,
+          onOutput: { output in
+            tab.processOutput(output)
+          }
         )
       } else {
         ProgressView("Starting \(tab.agent.displayName)...")
@@ -44,10 +48,11 @@ struct ActiveTerminalView: View {
         return
       }
 
-      /// Initialize PTY controller when view appears.
-      let controller = PTYController()
-      ptyController = controller
-      tab.ptyController = controller
+      /// Mark as ready to show terminal.
+      isReady = true
+
+      /// Start the session timer.
+      tab.usageStats.startSession()
     }
   }
 }
@@ -118,34 +123,37 @@ struct EmptyTerminalView: View {
   @Environment(AppState.self) private var appState
 
   var body: some View {
-    VStack(spacing: 24) {
-      Image(systemName: "terminal")
-        .font(.system(size: 64))
-        .foregroundColor(.secondary)
+    VStack(spacing: 32) {
+      VStack(spacing: 8) {
+        Image(systemName: "terminal.fill")
+          .font(.system(size: 48))
+          .foregroundColor(.secondary)
 
-      Text("No Terminal Open")
-        .font(.title2)
-        .foregroundColor(.secondary)
+        Text("SlothyTerminal")
+          .font(.title)
+          .fontWeight(.semibold)
 
-      Text("Create a new tab to get started")
-        .font(.subheadline)
-        .foregroundColor(.secondary)
+        Text("Choose a tab type to get started")
+          .font(.subheadline)
+          .foregroundColor(.secondary)
+      }
 
-      HStack(spacing: 16) {
-        ForEach(AgentType.allCases) { agent in
-          AgentButton(agentType: agent) {
-            appState.showFolderSelector(for: agent)
+      VStack(spacing: 12) {
+        ForEach(AgentType.allCases) { agentType in
+          TabTypeButton(agentType: agentType) {
+            appState.showFolderSelector(for: agentType)
           }
         }
       }
+      .frame(maxWidth: 320)
     }
     .frame(maxWidth: .infinity, maxHeight: .infinity)
     .background(Color(.windowBackgroundColor))
   }
 }
 
-/// Button for creating a new tab with a specific agent.
-struct AgentButton: View {
+/// Button for creating a new tab with a specific type.
+struct TabTypeButton: View {
   let agentType: AgentType
   let action: () -> Void
 
@@ -159,17 +167,41 @@ struct AgentButton: View {
 
   var body: some View {
     Button(action: action) {
-      HStack(spacing: 8) {
-        Image(systemName: agent.iconName)
-        Text("New \(agent.displayName) Tab")
+      HStack(spacing: 12) {
+        Image(systemName: agentType.iconName)
+          .font(.system(size: 20))
+          .foregroundColor(agentType.accentColor)
+          .frame(width: 32)
+
+        VStack(alignment: .leading, spacing: 2) {
+          Text("New \(agentType.rawValue) Tab")
+            .font(.system(size: 14, weight: .medium))
+
+          Text(agentType.description)
+            .font(.system(size: 11))
+            .foregroundColor(.secondary)
+        }
+
+        Spacer()
+
+        if !isAvailable && agentType != .terminal {
+          Text("Not installed")
+            .font(.system(size: 10))
+            .foregroundColor(.orange)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 2)
+            .background(Color.orange.opacity(0.1))
+            .cornerRadius(4)
+        }
       }
       .padding(.horizontal, 16)
-      .padding(.vertical, 8)
+      .padding(.vertical, 12)
+      .frame(maxWidth: .infinity, alignment: .leading)
+      .background(Color(.controlBackgroundColor))
+      .cornerRadius(8)
     }
-    .buttonStyle(.borderedProminent)
-    .tint(agent.accentColor)
-    .opacity(isAvailable ? 1.0 : 0.6)
-    .help(isAvailable ? "Create a new \(agent.displayName) tab" : "\(agent.displayName) CLI not found")
+    .buttonStyle(.plain)
+    .opacity(isAvailable ? 1.0 : 0.7)
   }
 }
 

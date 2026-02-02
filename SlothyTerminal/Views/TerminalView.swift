@@ -2,21 +2,39 @@ import AppKit
 import SwiftTerm
 import SwiftUI
 
-/// A SwiftUI wrapper for SwiftTerm's terminal view with custom PTY integration.
+/// A SwiftUI wrapper for SwiftTerm's terminal view with output capture.
 struct TerminalViewRepresentable: NSViewRepresentable {
   let workingDirectory: URL
   let command: String
   let arguments: [String]
+  let onOutput: ((String) -> Void)?
 
-  func makeNSView(context: Context) -> SwiftTerm.LocalProcessTerminalView {
-    let terminalView = SwiftTerm.LocalProcessTerminalView(frame: .zero)
+  /// Command to auto-run after shell starts (optional).
+  var autoRunCommand: String? {
+    /// Build the command string from command and arguments.
+    if arguments.isEmpty {
+      return command
+    } else {
+      let escapedArgs = arguments.map { arg in
+        arg.contains(" ") ? "\"\(arg)\"" : arg
+      }
+      return "\(command) \(escapedArgs.joined(separator: " "))"
+    }
+  }
+
+  func makeNSView(context: Context) -> OutputCapturingTerminalView {
+    let terminalView = OutputCapturingTerminalView(frame: .zero)
 
     /// Configure terminal appearance.
     terminalView.configureNativeColors()
     terminalView.font = NSFont.monospacedSystemFont(ofSize: 13, weight: .regular)
 
-    /// Enable text selection and copy.
-    terminalView.allowMouseReporting = true
+    /// Set up output callback.
+    terminalView.onDataReceived = { [onOutput] data in
+      if let string = String(data: data, encoding: .utf8) {
+        onOutput?(string)
+      }
+    }
 
     /// Set up the coordinator as the terminal delegate.
     terminalView.processDelegate = context.coordinator
@@ -24,19 +42,17 @@ struct TerminalViewRepresentable: NSViewRepresentable {
     /// Store reference to terminal view in coordinator.
     context.coordinator.terminalView = terminalView
     context.coordinator.workingDirectory = workingDirectory
+    context.coordinator.autoRunCommand = autoRunCommand
 
     /// Start the process after a brief delay to ensure the view is ready.
     Task { @MainActor in
-      context.coordinator.startProcess(
-        command: command,
-        arguments: arguments
-      )
+      context.coordinator.startProcess()
     }
 
     return terminalView
   }
 
-  func updateNSView(_ nsView: SwiftTerm.LocalProcessTerminalView, context: Context) {
+  func updateNSView(_ nsView: OutputCapturingTerminalView, context: Context) {
     /// No updates needed.
   }
 
@@ -45,13 +61,12 @@ struct TerminalViewRepresentable: NSViewRepresentable {
   }
 
   class Coordinator: NSObject, LocalProcessTerminalViewDelegate {
-    weak var terminalView: SwiftTerm.LocalProcessTerminalView?
-    var ptyController: PTYController?
+    weak var terminalView: OutputCapturingTerminalView?
     var workingDirectory: URL?
-    private var readTask: Task<Void, Never>?
+    var autoRunCommand: String?
 
     @MainActor
-    func startProcess(command: String, arguments: [String]) {
+    func startProcess() {
       guard let terminalView,
             let workingDirectory
       else {
@@ -85,19 +100,54 @@ struct TerminalViewRepresentable: NSViewRepresentable {
       /// Set working directory.
       environment["PWD"] = workingDirectory.path
 
+      /// Set terminal environment variables for proper CLI operation.
+      environment["TERM"] = "xterm-256color"
+      environment["COLORTERM"] = "truecolor"
+      environment["LANG"] = environment["LANG"] ?? "en_US.UTF-8"
+      environment["LC_ALL"] = environment["LC_ALL"] ?? "en_US.UTF-8"
+
+      /// Ensure HOME is set (required by many Node.js CLIs).
+      if environment["HOME"] == nil {
+        environment["HOME"] = NSHomeDirectory()
+      }
+
+      /// Ensure USER is set.
+      if environment["USER"] == nil {
+        environment["USER"] = NSUserName()
+      }
+
+      /// Set SHELL if not present.
+      if environment["SHELL"] == nil {
+        environment["SHELL"] = "/bin/zsh"
+      }
+
+      /// Force interactive mode hints for CLIs.
+      environment["FORCE_COLOR"] = "1"
+      environment.removeValue(forKey: "CI")
+      environment["TERM_PROGRAM"] = "SlothyTerminal"
+
       /// Convert environment to array of strings.
       let envArray = environment.map { "\($0.key)=\($0.value)" }
 
       /// Change to working directory before starting process.
       FileManager.default.changeCurrentDirectoryPath(workingDirectory.path)
 
-      /// Use SwiftTerm's built-in process spawning.
+      /// Start an interactive login shell.
+      let shell = environment["SHELL"] ?? "/bin/zsh"
       terminalView.startProcess(
-        executable: command,
-        args: arguments,
+        executable: shell,
+        args: ["--login"],
         environment: envArray,
         execName: nil
       )
+
+      /// Send the auto-run command after a short delay to let the shell initialize.
+      if let autoRunCommand {
+        Task { @MainActor in
+          try? await Task.sleep(for: .milliseconds(500))
+          terminalView.send(txt: "\(autoRunCommand)\n")
+        }
+      }
     }
 
     func sizeChanged(source: SwiftTerm.LocalProcessTerminalView, newCols: Int, newRows: Int) {
@@ -115,10 +165,20 @@ struct TerminalViewRepresentable: NSViewRepresentable {
     func processTerminated(source: SwiftTerm.TerminalView, exitCode: Int32?) {
       /// Process termination handling.
     }
+  }
+}
 
-    deinit {
-      readTask?.cancel()
-    }
+/// Custom LocalProcessTerminalView that captures output data.
+class OutputCapturingTerminalView: LocalProcessTerminalView {
+  var onDataReceived: ((Data) -> Void)?
+
+  override func dataReceived(slice: ArraySlice<UInt8>) {
+    /// Call the parent implementation to display the data.
+    super.dataReceived(slice: slice)
+
+    /// Forward the data to our callback.
+    let data = Data(slice)
+    onDataReceived?(data)
   }
 }
 
@@ -127,12 +187,14 @@ struct StandaloneTerminalView: View {
   let workingDirectory: URL
   let command: String
   let arguments: [String]
+  var onOutput: ((String) -> Void)? = nil
 
   var body: some View {
     TerminalViewRepresentable(
       workingDirectory: workingDirectory,
       command: command,
-      arguments: arguments
+      arguments: arguments,
+      onOutput: onOutput
     )
   }
 }

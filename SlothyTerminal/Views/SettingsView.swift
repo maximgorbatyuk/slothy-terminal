@@ -130,7 +130,7 @@ struct GeneralSettingsTab: View {
 struct AgentsSettingsTab: View {
   private var configManager = ConfigManager.shared
   @State private var claudeStatus: AgentStatus = .checking
-  @State private var glmStatus: AgentStatus = .checking
+  @State private var opencodeStatus: AgentStatus = .checking
 
   var body: some View {
     Form {
@@ -141,9 +141,9 @@ struct AgentsSettingsTab: View {
       )
 
       AgentSettingsSection(
-        agentType: .glm,
-        customPath: Bindable(configManager).config.glmPath,
-        status: $glmStatus
+        agentType: .opencode,
+        customPath: Bindable(configManager).config.opencodePath,
+        status: $opencodeStatus
       )
 
       Section {
@@ -161,7 +161,7 @@ struct AgentsSettingsTab: View {
 
   private func checkAgentStatuses() async {
     claudeStatus = checkAgent(.claude)
-    glmStatus = checkAgent(.glm)
+    opencodeStatus = checkAgent(.opencode)
   }
 
   private func checkAgent(_ type: AgentType) -> AgentStatus {
@@ -366,8 +366,8 @@ struct AppearanceSettingsTab: View {
         )
 
         AgentColorPicker(
-          agentType: .glm,
-          customColor: Bindable(configManager).config.glmAccentColor
+          agentType: .opencode,
+          customColor: Bindable(configManager).config.opencodeAccentColor
         )
       }
     }

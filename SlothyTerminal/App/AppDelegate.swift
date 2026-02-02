@@ -19,6 +19,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     saveWindowState()
   }
 
+  func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
+    return true
+  }
+
   private func restoreWindowState() {
     guard let windowState = configManager.config.windowState,
           let window = NSApplication.shared.windows.first
@@ -64,6 +68,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     let menu = NSMenu()
 
     /// New tab items.
+    let terminalItem = NSMenuItem(
+      title: "New Terminal Tab",
+      action: #selector(newTerminalTab),
+      keyEquivalent: ""
+    )
+    terminalItem.target = self
+    menu.addItem(terminalItem)
+
     let claudeItem = NSMenuItem(
       title: "New Claude Tab",
       action: #selector(newClaudeTab),
@@ -72,13 +84,13 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     claudeItem.target = self
     menu.addItem(claudeItem)
 
-    let glmItem = NSMenuItem(
-      title: "New GLM Tab",
-      action: #selector(newGLMTab),
+    let opencodeItem = NSMenuItem(
+      title: "New OpenCode Tab",
+      action: #selector(newOpencodeTab),
       keyEquivalent: ""
     )
-    glmItem.target = self
-    menu.addItem(glmItem)
+    opencodeItem.target = self
+    menu.addItem(opencodeItem)
 
     /// Recent folders submenu.
     let recentFolders = recentFoldersManager.recentFolders
@@ -109,6 +121,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     return menu
   }
 
+  @objc private func newTerminalTab() {
+    NotificationCenter.default.post(
+      name: .newTabRequested,
+      object: nil,
+      userInfo: ["agentType": AgentType.terminal]
+    )
+  }
+
   @objc private func newClaudeTab() {
     NotificationCenter.default.post(
       name: .newTabRequested,
@@ -117,11 +137,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     )
   }
 
-  @objc private func newGLMTab() {
+  @objc private func newOpencodeTab() {
     NotificationCenter.default.post(
       name: .newTabRequested,
       object: nil,
-      userInfo: ["agentType": AgentType.glm]
+      userInfo: ["agentType": AgentType.opencode]
     )
   }
 

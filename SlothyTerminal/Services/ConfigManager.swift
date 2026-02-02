@@ -102,33 +102,39 @@ class ConfigManager {
   /// Returns the custom path for an agent, if set.
   func customPath(for agentType: AgentType) -> String? {
     switch agentType {
+    case .terminal:
+      return nil
     case .claude:
       return config.claudePath
-    case .glm:
-      return config.glmPath
+    case .opencode:
+      return config.opencodePath
     }
   }
 
   /// Sets a custom path for an agent.
   func setCustomPath(_ path: String?, for agentType: AgentType) {
     switch agentType {
+    case .terminal:
+      break
     case .claude:
       config.claudePath = path
-    case .glm:
-      config.glmPath = path
+    case .opencode:
+      config.opencodePath = path
     }
   }
 
   /// Returns the accent color for an agent.
   func accentColor(for agentType: AgentType) -> Color {
     switch agentType {
+    case .terminal:
+      return agentType.accentColor
     case .claude:
       if let customColor = config.claudeAccentColor {
         return customColor.color
       }
       return agentType.accentColor
-    case .glm:
-      if let customColor = config.glmAccentColor {
+    case .opencode:
+      if let customColor = config.opencodeAccentColor {
         return customColor.color
       }
       return agentType.accentColor
@@ -139,10 +145,12 @@ class ConfigManager {
   func setAccentColor(_ color: Color?, for agentType: AgentType) {
     let codableColor = color.map { CodableColor($0) }
     switch agentType {
+    case .terminal:
+      break
     case .claude:
       config.claudeAccentColor = codableColor
-    case .glm:
-      config.glmAccentColor = codableColor
+    case .opencode:
+      config.opencodeAccentColor = codableColor
     }
   }
 

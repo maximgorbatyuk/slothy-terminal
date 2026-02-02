@@ -1,39 +1,56 @@
 import SwiftUI
 
-/// Represents the different AI agent types supported by the terminal.
+/// Represents the different tab types supported by the terminal.
 enum AgentType: String, CaseIterable, Identifiable, Codable {
+  case terminal = "Terminal"
   case claude = "Claude"
-  case glm = "GLM"
+  case opencode = "OpenCode"
 
   var id: String { rawValue }
 
-  /// The command to execute for this agent.
-  var command: String {
-    switch self {
-    case .claude:
-      return ProcessInfo.processInfo.environment["CLAUDE_PATH"] ?? "/usr/local/bin/claude"
-    case .glm:
-      return ProcessInfo.processInfo.environment["GLM_PATH"] ?? "/usr/local/bin/glm"
-    }
-  }
-
-  /// SF Symbol icon name for this agent.
+  /// SF Symbol icon name for this tab type.
   var iconName: String {
     switch self {
+    case .terminal:
+      return "terminal"
     case .claude:
       return "brain.head.profile"
-    case .glm:
-      return "cpu"
+    case .opencode:
+      return "chevron.left.forwardslash.chevron.right"
     }
   }
 
-  /// Accent color for this agent.
+  /// Accent color for this tab type.
   var accentColor: Color {
     switch self {
+    case .terminal:
+      return .secondary
     case .claude:
-      return Color(red: 0.85, green: 0.47, blue: 0.34)  // #da7756
-    case .glm:
-      return Color(red: 0.29, green: 0.62, blue: 1.0)  // #4a9eff
+      return Color(red: 0.85, green: 0.47, blue: 0.34)
+    case .opencode:
+      return Color(red: 0.29, green: 0.78, blue: 0.49)
+    }
+  }
+
+  /// Whether this tab type shows usage stats in the sidebar.
+  var showsUsageStats: Bool {
+    switch self {
+    case .terminal:
+      return false
+    case .claude, .opencode:
+      return true
+    }
+  }
+
+  /// Description for the tab type.
+  var description: String {
+    switch self {
+    case .terminal:
+      return "Plain shell terminal"
+    case .claude:
+      return "Claude AI assistant"
+    case .opencode:
+      return "OpenCode AI assistant"
     }
   }
 }

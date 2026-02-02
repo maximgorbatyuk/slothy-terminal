@@ -1,0 +1,31 @@
+import SwiftUI
+
+/// Plain terminal shell agent.
+struct TerminalAgent: AIAgent {
+  let type: AgentType = .terminal
+
+  let accentColor = Color.secondary
+  let iconName = "terminal"
+  let displayName = "Terminal"
+  let contextWindowLimit = 0
+
+  /// Uses the user's default shell.
+  var command: String {
+    ProcessInfo.processInfo.environment["SHELL"] ?? "/bin/zsh"
+  }
+
+  /// No arguments needed - just start the shell.
+  var defaultArgs: [String] {
+    []
+  }
+
+  /// Terminal doesn't parse stats.
+  func parseStats(from output: String) -> UsageUpdate? {
+    nil
+  }
+
+  /// Terminal is always available.
+  func isAvailable() -> Bool {
+    true
+  }
+}

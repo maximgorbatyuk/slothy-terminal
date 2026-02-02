@@ -1,27 +1,27 @@
 import SwiftUI
 
-/// Claude AI agent implementation.
-struct ClaudeAgent: AIAgent {
-  let type: AgentType = .claude
+/// OpenCode AI agent implementation.
+struct OpenCodeAgent: AIAgent {
+  let type: AgentType = .opencode
 
-  let accentColor = Color(red: 0.85, green: 0.47, blue: 0.34)
-  let iconName = "brain.head.profile"
-  let displayName = "Claude"
+  let accentColor = Color(red: 0.29, green: 0.78, blue: 0.49)
+  let iconName = "chevron.left.forwardslash.chevron.right"
+  let displayName = "OpenCode"
   let contextWindowLimit = 200_000
 
-  /// Path to the Claude CLI executable.
+  /// Path to the opencode CLI executable.
   var command: String {
-    if let envPath = ProcessInfo.processInfo.environment["CLAUDE_PATH"],
+    if let envPath = ProcessInfo.processInfo.environment["OPENCODE_PATH"],
        FileManager.default.isExecutableFile(atPath: envPath)
     {
       return envPath
     }
 
     let commonPaths = [
-      "/usr/local/bin/claude",
-      "/opt/homebrew/bin/claude",
-      "\(NSHomeDirectory())/.local/bin/claude",
-      "\(NSHomeDirectory())/bin/claude"
+      "/usr/local/bin/opencode",
+      "/opt/homebrew/bin/opencode",
+      "\(NSHomeDirectory())/.local/bin/opencode",
+      "\(NSHomeDirectory())/go/bin/opencode"
     ]
 
     for path in commonPaths {
@@ -30,7 +30,7 @@ struct ClaudeAgent: AIAgent {
       }
     }
 
-    return "/usr/local/bin/claude"
+    return "/usr/local/bin/opencode"
   }
 
   var defaultArgs: [String] {
@@ -39,14 +39,8 @@ struct ClaudeAgent: AIAgent {
 
   var environmentVariables: [String: String] {
     var env: [String: String] = [:]
-
-    if let apiKey = ProcessInfo.processInfo.environment["ANTHROPIC_API_KEY"] {
-      env["ANTHROPIC_API_KEY"] = apiKey
-    }
-
     env["TERM"] = "xterm-256color"
     env["COLORTERM"] = "truecolor"
-
     return env
   }
 

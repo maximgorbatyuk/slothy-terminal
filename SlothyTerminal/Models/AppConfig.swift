@@ -26,8 +26,8 @@ struct AppConfig: Codable, Equatable {
   /// Custom path to Claude CLI (nil uses auto-detection).
   var claudePath: String?
 
-  /// Custom path to GLM CLI (nil uses auto-detection).
-  var glmPath: String?
+  /// Custom path to OpenCode CLI (nil uses auto-detection).
+  var opencodePath: String?
 
   // MARK: - Appearance Settings
 
@@ -43,8 +43,8 @@ struct AppConfig: Codable, Equatable {
   /// Custom accent color for Claude (nil uses default).
   var claudeAccentColor: CodableColor?
 
-  /// Custom accent color for GLM (nil uses default).
-  var glmAccentColor: CodableColor?
+  /// Custom accent color for OpenCode (nil uses default).
+  var opencodeAccentColor: CodableColor?
 
   // MARK: - Keyboard Shortcuts
 
@@ -153,8 +153,9 @@ struct CodableColor: Codable, Equatable {
 
 /// Actions that can have keyboard shortcuts assigned.
 enum ShortcutAction: String, Codable, CaseIterable {
+  case newTerminalTab
   case newClaudeTab
-  case newGLMTab
+  case newOpencodeTab
   case closeTab
   case nextTab
   case previousTab
@@ -164,10 +165,12 @@ enum ShortcutAction: String, Codable, CaseIterable {
 
   var displayName: String {
     switch self {
+    case .newTerminalTab:
+      return "New Terminal Tab"
     case .newClaudeTab:
       return "New Claude Tab"
-    case .newGLMTab:
-      return "New GLM Tab"
+    case .newOpencodeTab:
+      return "New OpenCode Tab"
     case .closeTab:
       return "Close Tab"
     case .nextTab:
@@ -185,10 +188,12 @@ enum ShortcutAction: String, Codable, CaseIterable {
 
   var defaultShortcut: String {
     switch self {
-    case .newClaudeTab:
+    case .newTerminalTab:
       return "⌘T"
-    case .newGLMTab:
+    case .newClaudeTab:
       return "⌘⇧T"
+    case .newOpencodeTab:
+      return "⌘⌥T"
     case .closeTab:
       return "⌘W"
     case .nextTab:
@@ -206,7 +211,7 @@ enum ShortcutAction: String, Codable, CaseIterable {
 
   var category: ShortcutCategory {
     switch self {
-    case .newClaudeTab, .newGLMTab, .closeTab, .nextTab, .previousTab:
+    case .newTerminalTab, .newClaudeTab, .newOpencodeTab, .closeTab, .nextTab, .previousTab:
       return .tabs
     case .toggleSidebar:
       return .view

@@ -13,8 +13,12 @@ struct SidebarView: View {
       Divider()
 
       if let tab = appState.activeTab {
-        ScrollView {
-          AgentStatsView(tab: tab)
+        if tab.agentType.showsUsageStats {
+          ScrollView {
+            AgentStatsView(tab: tab)
+          }
+        } else {
+          TerminalSidebarView(tab: tab)
         }
       } else {
         EmptySidebarView()
@@ -72,6 +76,42 @@ struct EmptySidebarView: View {
     }
     .frame(maxWidth: .infinity, maxHeight: .infinity)
     .padding()
+  }
+}
+
+/// Sidebar view for plain terminal tabs (no stats).
+struct TerminalSidebarView: View {
+  let tab: Tab
+
+  var body: some View {
+    VStack(spacing: 16) {
+      /// Terminal badge.
+      AgentBadge(tab: tab)
+
+      /// Working directory.
+      WorkingDirectoryCard(path: tab.workingDirectory)
+
+      Spacer()
+
+      /// Info text.
+      VStack(spacing: 8) {
+        Image(systemName: "info.circle")
+          .font(.system(size: 24))
+          .foregroundColor(.secondary)
+
+        Text("Plain terminal session")
+          .font(.system(size: 11))
+          .foregroundColor(.secondary)
+
+        Text("Usage statistics are available for AI agent tabs")
+          .font(.system(size: 10))
+          .foregroundColor(.secondary)
+          .multilineTextAlignment(.center)
+      }
+      .padding()
+
+      Spacer()
+    }
   }
 }
 

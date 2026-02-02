@@ -115,6 +115,11 @@ class UsageStats {
     contextWindowLimit = 200_000
   }
 
+  /// Starts a new session by setting the start time to now.
+  func startSession() {
+    startTime = Date()
+  }
+
   /// Formats a number with thousands separator.
   private func formatNumber(_ value: Int) -> String {
     let formatter = NumberFormatter()

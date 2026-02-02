@@ -71,10 +71,12 @@ enum AgentFactory {
   /// Creates an agent instance for the given type.
   static func createAgent(for type: AgentType) -> AIAgent {
     switch type {
+    case .terminal:
+      return TerminalAgent()
     case .claude:
       return ClaudeAgent()
-    case .glm:
-      return GLMAgent()
+    case .opencode:
+      return OpenCodeAgent()
     }
   }
 
