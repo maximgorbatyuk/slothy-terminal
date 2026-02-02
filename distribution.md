@@ -51,7 +51,7 @@ xcrun notarytool store-credentials "AC_PASSWORD" \
 chmod +x scripts/build-release.sh
 
 # Build release (specify version)
-./scripts/build-release.sh 2026.1.1
+./scripts/build-release.sh 2026.2.1
 ```
 
 The script will:
@@ -62,7 +62,7 @@ The script will:
 5. Notarize the DMG
 6. Verify everything
 
-Output: `build/SlothyTerminal-2026.1.1.dmg`
+Output: `build/SlothyTerminal-2026.2.1.dmg`
 
 ### Manual Method
 
@@ -123,15 +123,15 @@ hdiutil create \
   -srcfolder "./build/export/SlothyTerminal.app" \
   -ov \
   -format UDZO \
-  "./build/SlothyTerminal-2026.1.1.dmg"
+  "./build/SlothyTerminal-2026.2.1.dmg"
 
 # Notarize DMG
-xcrun notarytool submit "./build/SlothyTerminal-2026.1.1.dmg" \
+xcrun notarytool submit "./build/SlothyTerminal-2026.2.1.dmg" \
   --keychain-profile "AC_PASSWORD" \
   --wait
 
 # Staple DMG
-xcrun stapler staple "./build/SlothyTerminal-2026.1.1.dmg"
+xcrun stapler staple "./build/SlothyTerminal-2026.2.1.dmg"
 ```
 
 ## Step 4: Verify Before Upload
@@ -145,17 +145,17 @@ spctl -a -vv "./build/export/SlothyTerminal.app"
 # Expected: "accepted" and "source=Notarized Developer ID"
 
 # Verify DMG
-spctl -a -vv --type install "./build/SlothyTerminal-2026.1.1.dmg"
+spctl -a -vv --type install "./build/SlothyTerminal-2026.2.1.dmg"
 ```
 
 ## Step 5: Upload to GitHub
 
 1. Go to https://github.com/maximgorbatyuk/slothy-terminal/releases
 2. Click "Draft a new release"
-3. Create tag: `v2026.1.1`
-4. Title: `SlothyTerminal v2026.1.1`
+3. Create tag: `v2026.2.1`
+4. Title: `SlothyTerminal v2026.2.1`
 5. Add release notes
-6. Upload `SlothyTerminal-2026.1.1.dmg`
+6. Upload `SlothyTerminal-2026.2.1.dmg`
 7. Publish release
 
 ## Version Management
@@ -163,10 +163,10 @@ spctl -a -vv --type install "./build/SlothyTerminal-2026.1.1.dmg"
 Before each release, update the version in Xcode:
 
 1. Select project → General tab
-2. Update **Version** (e.g., 2026.1.2)
+2. Update **Version** (e.g., 2026.2.2)
 3. Update **Build** number
 
-The app uses semantic versioning: `YEAR.MAJOR.MINOR`
+The app uses semantic versioning: `YEAR.MONTH.MINOR`
 
 ## Troubleshooting
 

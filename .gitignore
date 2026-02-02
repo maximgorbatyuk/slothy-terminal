@@ -1,5 +1,8 @@
 .DS_Store
 
+# Environment secrets
+.env
+
 # Build outputs
 build/
 DerivedData/

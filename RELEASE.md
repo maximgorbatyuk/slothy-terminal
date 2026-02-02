@@ -2,12 +2,18 @@
 
 ## First-Time Setup (One-Time Only)
 
-1. Add Sparkle package in Xcode:
+1. Create `.env` file with your Apple credentials:
+   ```bash
+   cp .env.example .env
+   # Edit .env with your values
+   ```
+
+2. Add Sparkle package in Xcode:
    - File → Add Package Dependencies
    - URL: `https://github.com/sparkle-project/Sparkle`
    - Version: 2.x
 
-2. Download Sparkle tools:
+3. Download Sparkle tools:
    ```bash
    mkdir -p sparkle-tools
    curl -L -o /tmp/Sparkle.tar.xz https://github.com/sparkle-project/Sparkle/releases/download/2.7.0/Sparkle-2.7.0.tar.xz
@@ -15,13 +21,13 @@
    rm /tmp/Sparkle.tar.xz
    ```
 
-3. Generate signing keys:
+4. Generate signing keys:
    ```bash
    ./sparkle-tools/bin/generate_keys
    ```
    Copy the public key output.
 
-4. In Xcode, go to Target → Info, add:
+5. In Xcode, go to Target → Info, add:
    - `SUFeedURL` = `https://raw.githubusercontent.com/maximgorbatyuk/slothy-terminal/main/appcast.xml`
    - `SUPublicEDKey` = `<paste-public-key>`
    - `SUEnableAutomaticChecks` = `YES`
@@ -32,17 +38,17 @@
 
 ### Step 1: Update Version
 In Xcode → Target → General:
-- Version: `2026.1.2` (increment this)
+- Version: `2026.2.2` (increment this)
 - Build: `2` (increment this)
 
 ### Step 2: Build
 ```bash
-./scripts/build-release.sh 2026.1.2
+./scripts/build-release.sh 2026.2.2
 ```
 
 ### Step 3: Sign for Updates
 ```bash
-./sparkle-tools/bin/sign_update build/SlothyTerminal-2026.1.2.dmg
+./sparkle-tools/bin/sign_update build/SlothyTerminal-2026.2.2.dmg
 ```
 Copy the signature output.
 
@@ -50,7 +56,7 @@ Copy the signature output.
 Add new entry at the top of `<channel>` section:
 ```xml
 <item>
-  <title>Version 2026.1.2</title>
+  <title>Version 2026.2.2</title>
   <pubDate>Mon, 03 Feb 2026 12:00:00 +0000</pubDate>
   <sparkle:version>2</sparkle:version>
   <sparkle:shortVersionString>2026.1.2</sparkle:shortVersionString>
@@ -62,7 +68,7 @@ Add new entry at the top of `<channel>` section:
     </ul>
   ]]></description>
   <enclosure
-    url="https://github.com/maximgorbatyuk/slothy-terminal/releases/download/v2026.1.2/SlothyTerminal-2026.1.2.dmg"
+    url="https://github.com/maximgorbatyuk/slothy-terminal/releases/download/v2026.2.2/SlothyTerminal-2026.2.2.dmg"
     type="application/octet-stream"
     sparkle:edSignature="PASTE_SIGNATURE_HERE"
     length="FILE_SIZE_IN_BYTES"
@@ -73,7 +79,7 @@ Add new entry at the top of `<channel>` section:
 ### Step 5: Commit & Push
 ```bash
 git add appcast.xml
-git commit -m "Release v2026.1.2"
+git commit -m "Release v2026.2.2"
 git push
 ```
 
@@ -81,8 +87,8 @@ git push
 1. Go to https://github.com/maximgorbatyuk/slothy-terminal/releases
 2. Click "Draft a new release"
 3. Tag: `v2026.1.2`
-4. Title: `SlothyTerminal v2026.1.2`
-5. Upload: `build/SlothyTerminal-2026.1.2.dmg`
+4. Title: `SlothyTerminal v2026.2.2`
+5. Upload: `build/SlothyTerminal-2026.2.2.dmg`
 6. Publish
 
 ### Step 7: Verify

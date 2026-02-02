@@ -3,14 +3,20 @@ set -e
 
 # SlothyTerminal Build Script
 # Usage: ./scripts/build-release.sh [VERSION]
-# Example: ./scripts/build-release.sh 2026.1.1
+# Example: ./scripts/build-release.sh 2026.2.1
+
+# Load .env file if it exists
+ENV_FILE=".env"
+if [ -f "$ENV_FILE" ]; then
+  export $(grep -v '^#' "$ENV_FILE" | xargs)
+fi
 
 # Configuration
-VERSION="${1:-2026.1.1}"
+VERSION="${1:-2026.2.1}"
 BUILD_DIR="./build"
 APP_NAME="SlothyTerminal"
 KEYCHAIN_PROFILE="AC_PASSWORD"
-TEAM_ID="EKKL63HDHJ"
+TEAM_ID="${TEAM_ID:-EKKL63HDHJ}"
 
 echo "==========================================="
 echo "  $APP_NAME Release Build"
@@ -23,14 +29,31 @@ if ! xcrun notarytool history --keychain-profile "$KEYCHAIN_PROFILE" &>/dev/null
   echo ""
   echo "ERROR: Notarization credentials not found."
   echo ""
-  echo "Run this command first to store your credentials:"
-  echo ""
-  echo "  xcrun notarytool store-credentials \"$KEYCHAIN_PROFILE\" \\"
-  echo "    --apple-id \"YOUR_APPLE_ID_EMAIL\" \\"
-  echo "    --team-id \"$TEAM_ID\" \\"
-  echo "    --password \"YOUR_APP_SPECIFIC_PASSWORD\""
-  echo ""
-  exit 1
+
+  # Check if .env has the required values
+  if [ -n "$APPLE_ID" ] && [ -n "$APP_SPECIFIC_PASSWORD" ]; then
+    echo "Found credentials in .env, storing in Keychain..."
+    xcrun notarytool store-credentials "$KEYCHAIN_PROFILE" \
+      --apple-id "$APPLE_ID" \
+      --team-id "$TEAM_ID" \
+      --password "$APP_SPECIFIC_PASSWORD"
+    echo "Credentials stored successfully."
+  else
+    echo "To fix this, either:"
+    echo ""
+    echo "Option 1: Create .env file with:"
+    echo "  APPLE_ID=your@email.com"
+    echo "  APP_SPECIFIC_PASSWORD=xxxx-xxxx-xxxx-xxxx"
+    echo "  TEAM_ID=$TEAM_ID"
+    echo ""
+    echo "Option 2: Run manually:"
+    echo "  xcrun notarytool store-credentials \"$KEYCHAIN_PROFILE\" \\"
+    echo "    --apple-id \"your@email.com\" \\"
+    echo "    --team-id \"$TEAM_ID\" \\"
+    echo "    --password \"your-app-specific-password\""
+    echo ""
+    exit 1
+  fi
 fi
 
 # Clean previous build
