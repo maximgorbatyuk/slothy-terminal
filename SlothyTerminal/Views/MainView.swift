@@ -28,12 +28,59 @@ struct MainView: View {
             .padding(.trailing, 8)
         }
       }
+
+      /// Status bar at the bottom.
+      StatusBarView()
     }
     .frame(minWidth: 800, minHeight: 600)
     .background(appBackgroundColor)
     .sheet(item: $appState.activeModal) { modal in
       ModalRouter(modal: modal)
     }
+  }
+}
+
+/// Status bar at the bottom of the window.
+struct StatusBarView: View {
+  /// App version from bundle.
+  private var appVersion: String {
+    Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.0.0"
+  }
+
+  /// Build number from bundle.
+  private var buildNumber: String {
+    Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "0"
+  }
+
+  /// Whether this is a development build.
+  private var isDevelopment: Bool {
+    BuildConfig.isDevelopment
+  }
+
+  var body: some View {
+    HStack(spacing: 8) {
+      Spacer()
+
+      /// Version info on the right.
+      HStack(spacing: 6) {
+        Text("v\(appVersion)")
+          .font(.system(size: 10))
+          .foregroundColor(.secondary)
+
+        if isDevelopment {
+          Text("dev")
+            .font(.system(size: 9, weight: .medium))
+            .foregroundColor(.orange)
+            .padding(.horizontal, 4)
+            .padding(.vertical, 1)
+            .background(Color.orange.opacity(0.2))
+            .cornerRadius(3)
+        }
+      }
+    }
+    .padding(.horizontal, 12)
+    .padding(.vertical, 4)
+    .background(appCardColor)
   }
 }
 

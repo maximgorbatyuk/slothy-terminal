@@ -4,6 +4,7 @@ import SwiftUI
 struct SlothyTerminalApp: App {
   @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
   @State private var appState = AppState()
+  @Environment(\.openWindow) private var openWindow
   private var configManager = ConfigManager.shared
 
   var body: some Scene {
@@ -26,6 +27,13 @@ struct SlothyTerminalApp: App {
     }
     .windowStyle(.hiddenTitleBar)
     .commands {
+      /// About menu.
+      CommandGroup(replacing: .appInfo) {
+        Button("About \(BuildConfig.current.appName)") {
+          openWindow(id: "about")
+        }
+      }
+
       /// File menu.
       CommandGroup(replacing: .newItem) {
         Button("New Terminal Tab") {
@@ -110,6 +118,12 @@ struct SlothyTerminalApp: App {
     Settings {
       SettingsView()
     }
+
+    Window("About \(BuildConfig.current.appName)", id: "about") {
+      AboutView()
+    }
+    .windowStyle(.hiddenTitleBar)
+    .windowResizability(.contentSize)
   }
 
   private func navigateToNextTab() {

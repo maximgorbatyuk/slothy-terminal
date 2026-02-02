@@ -1,0 +1,12 @@
+{
+  "environment": "production",
+  "appName": "SlothyTerminal",
+  "logLevel": "error",
+  "developerName": "Maxim Gorbatyuk",
+  "githubUrl": "https://github.com/maximgorbatyuk/slothy-terminal",
+  "features": {
+    "enableDebugMenu": false,
+    "enableCrashReporting": true,
+    "enableAnalytics": true
+  }
+}
