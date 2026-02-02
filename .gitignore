@@ -1,1 +1,24 @@
 .DS_Store
+
+# Build outputs
+build/
+DerivedData/
+*.xcarchive
+
+# Sparkle private keys - NEVER COMMIT
+sparkle_private_key
+sparkle-keys/
+*.pem
+
+# Sparkle tools (download separately)
+sparkle-tools/
+
+# Xcode user data
+*.xcuserdata
+*.xcuserstate
+*.xcscmblueprint
+*.xccheckout
+
+# Swift Package Manager
+.build/
+.swiftpm/

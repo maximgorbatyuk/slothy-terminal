@@ -79,6 +79,27 @@ struct GeneralSettingsTab: View {
         }
       }
 
+      Section("Updates") {
+        Toggle(
+          "Check for updates automatically",
+          isOn: Binding(
+            get: { UpdateManager.shared.automaticallyChecksForUpdates },
+            set: { UpdateManager.shared.automaticallyChecksForUpdates = $0 }
+          )
+        )
+
+        if let lastCheck = UpdateManager.shared.lastUpdateCheckDate {
+          Text("Last checked: \(lastCheck.formatted(date: .abbreviated, time: .shortened))")
+            .font(.caption)
+            .foregroundColor(.secondary)
+        }
+
+        Button("Check for Updates Now") {
+          UpdateManager.shared.checkForUpdates()
+        }
+        .disabled(!UpdateManager.shared.canCheckForUpdates)
+      }
+
       Section("Recent Folders") {
         Picker("Max recent folders", selection: Bindable(configManager).config.maxRecentFolders) {
           ForEach([5, 10, 15, 20], id: \.self) { count in

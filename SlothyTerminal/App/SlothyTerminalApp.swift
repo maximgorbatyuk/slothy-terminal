@@ -34,6 +34,14 @@ struct SlothyTerminalApp: App {
         }
       }
 
+      /// App menu - Check for Updates.
+      CommandGroup(after: .appInfo) {
+        Button("Check for Updates...") {
+          UpdateManager.shared.checkForUpdates()
+        }
+        .disabled(!UpdateManager.shared.canCheckForUpdates)
+      }
+
       /// File menu.
       CommandGroup(replacing: .newItem) {
         Button("New Terminal Tab") {
