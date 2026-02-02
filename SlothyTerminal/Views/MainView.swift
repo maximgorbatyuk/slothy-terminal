@@ -9,11 +9,14 @@ struct MainView: View {
 
     VStack(spacing: 0) {
       TabBarView()
+        .padding(.horizontal, 8)
+        .padding(.top, 8)
 
       HStack(spacing: 0) {
         /// Terminal container takes remaining space.
         TerminalContainerView()
           .frame(maxWidth: .infinity, maxHeight: .infinity)
+          .padding(8)
 
         /// Sidebar on the right.
         if appState.isSidebarVisible {
@@ -21,6 +24,8 @@ struct MainView: View {
 
           SidebarView()
             .frame(width: appState.sidebarWidth)
+            .padding(.vertical, 8)
+            .padding(.trailing, 8)
         }
       }
     }
@@ -43,7 +48,9 @@ struct ModalRouter: View {
       AgentSelectionView(preselectedAgent: preselectedAgent)
 
     case .folderSelector(let agent):
-      FolderSelectorView(agent: agent)
+      FolderSelectorModal(agent: agent) { selectedDirectory in
+        appState.createTab(agent: agent, directory: selectedDirectory)
+      }
 
     case .settings:
       Text("Settings")
@@ -90,58 +97,6 @@ struct AgentSelectionView: View {
     }
     .padding(24)
     .frame(width: 300)
-  }
-}
-
-/// Placeholder for folder selector - will be implemented in Phase 4.
-struct FolderSelectorView: View {
-  let agent: AgentType
-  @Environment(AppState.self) private var appState
-  @Environment(\.dismiss) private var dismiss
-  @State private var selectedDirectory: URL = FileManager.default.homeDirectoryForCurrentUser
-
-  var body: some View {
-    VStack(spacing: 16) {
-      Text("Select Working Directory")
-        .font(.headline)
-
-      Text("Current: \(selectedDirectory.path)")
-        .font(.caption)
-        .foregroundColor(.secondary)
-
-      HStack {
-        Button("Browse...") {
-          let panel = NSOpenPanel()
-          panel.canChooseFiles = false
-          panel.canChooseDirectories = true
-          panel.allowsMultipleSelection = false
-
-          if panel.runModal() == .OK,
-             let url = panel.url
-          {
-            selectedDirectory = url
-          }
-        }
-      }
-
-      HStack {
-        Button("Cancel") {
-          dismiss()
-        }
-        .keyboardShortcut(.escape)
-
-        Spacer()
-
-        Button("Select") {
-          appState.createTab(agent: agent, directory: selectedDirectory)
-          dismiss()
-        }
-        .keyboardShortcut(.return)
-        .buttonStyle(.borderedProminent)
-      }
-    }
-    .padding(24)
-    .frame(width: 400)
   }
 }
 

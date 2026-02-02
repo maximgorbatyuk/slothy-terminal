@@ -1,0 +1,485 @@
+import SwiftUI
+
+/// Main settings view with tabbed interface.
+struct SettingsView: View {
+  private var configManager = ConfigManager.shared
+  private var recentFoldersManager = RecentFoldersManager.shared
+
+  var body: some View {
+    TabView {
+      GeneralSettingsTab()
+        .tabItem {
+          Label("General", systemImage: "gear")
+        }
+
+      AgentsSettingsTab()
+        .tabItem {
+          Label("Agents", systemImage: "cpu")
+        }
+
+      AppearanceSettingsTab()
+        .tabItem {
+          Label("Appearance", systemImage: "paintbrush")
+        }
+
+      ShortcutsSettingsTab()
+        .tabItem {
+          Label("Shortcuts", systemImage: "keyboard")
+        }
+    }
+    .frame(width: 550, height: 450)
+  }
+}
+
+// MARK: - General Settings Tab
+
+struct GeneralSettingsTab: View {
+  private var configManager = ConfigManager.shared
+  private var recentFoldersManager = RecentFoldersManager.shared
+
+  var body: some View {
+    Form {
+      Section("Startup") {
+        Picker("Default Agent", selection: Bindable(configManager).config.defaultAgent) {
+          ForEach(AgentType.allCases) { agent in
+            Text(agent.rawValue).tag(agent)
+          }
+        }
+        .pickerStyle(.menu)
+      }
+
+      Section("Sidebar") {
+        Toggle("Show sidebar by default", isOn: Bindable(configManager).config.showSidebarByDefault)
+
+        Picker("Sidebar position", selection: Bindable(configManager).config.sidebarPosition) {
+          ForEach(SidebarPosition.allCases, id: \.self) { position in
+            Text(position.displayName).tag(position)
+          }
+        }
+        .pickerStyle(.segmented)
+
+        HStack {
+          Text("Sidebar width")
+          Slider(
+            value: Bindable(configManager).config.sidebarWidth,
+            in: 200...400,
+            step: 10
+          )
+          Text("\(Int(configManager.config.sidebarWidth))px")
+            .monospacedDigit()
+            .frame(width: 50, alignment: .trailing)
+        }
+      }
+
+      Section("Recent Folders") {
+        Picker("Max recent folders", selection: Bindable(configManager).config.maxRecentFolders) {
+          ForEach([5, 10, 15, 20], id: \.self) { count in
+            Text("\(count)").tag(count)
+          }
+        }
+        .pickerStyle(.menu)
+
+        if !recentFoldersManager.recentFolders.isEmpty {
+          VStack(alignment: .leading, spacing: 4) {
+            Text("Recent folder history:")
+              .font(.caption)
+              .foregroundColor(.secondary)
+
+            ForEach(recentFoldersManager.recentFolders.prefix(5), id: \.path) { folder in
+              HStack {
+                Text(shortenedPath(folder))
+                  .font(.system(size: 11))
+                  .lineLimit(1)
+                  .truncationMode(.middle)
+
+                Spacer()
+
+                Button {
+                  recentFoldersManager.removeRecentFolder(folder)
+                } label: {
+                  Image(systemName: "xmark.circle.fill")
+                    .foregroundColor(.secondary)
+                }
+                .buttonStyle(.plain)
+              }
+            }
+          }
+
+          Button("Clear All Recent") {
+            recentFoldersManager.clearRecentFolders()
+          }
+        }
+      }
+    }
+    .formStyle(.grouped)
+    .padding()
+  }
+
+  private func shortenedPath(_ url: URL) -> String {
+    let homeDir = FileManager.default.homeDirectoryForCurrentUser.path
+    let path = url.path
+    if path.hasPrefix(homeDir) {
+      return "~" + path.dropFirst(homeDir.count)
+    }
+    return path
+  }
+}
+
+// MARK: - Agents Settings Tab
+
+struct AgentsSettingsTab: View {
+  private var configManager = ConfigManager.shared
+  @State private var claudeStatus: AgentStatus = .checking
+  @State private var glmStatus: AgentStatus = .checking
+
+  var body: some View {
+    Form {
+      AgentSettingsSection(
+        agentType: .claude,
+        customPath: Bindable(configManager).config.claudePath,
+        status: $claudeStatus
+      )
+
+      AgentSettingsSection(
+        agentType: .glm,
+        customPath: Bindable(configManager).config.glmPath,
+        status: $glmStatus
+      )
+
+      Section {
+        Text("Agent paths are auto-detected. Override here if needed.")
+          .font(.caption)
+          .foregroundColor(.secondary)
+      }
+    }
+    .formStyle(.grouped)
+    .padding()
+    .task {
+      await checkAgentStatuses()
+    }
+  }
+
+  private func checkAgentStatuses() async {
+    claudeStatus = checkAgent(.claude)
+    glmStatus = checkAgent(.glm)
+  }
+
+  private func checkAgent(_ type: AgentType) -> AgentStatus {
+    let agent = AgentFactory.createAgent(for: type)
+    if agent.isAvailable() {
+      return .connected
+    }
+    return .notFound
+  }
+}
+
+/// Status of an agent installation.
+enum AgentStatus {
+  case checking
+  case connected
+  case notFound
+
+  var color: Color {
+    switch self {
+    case .checking:
+      return .orange
+    case .connected:
+      return .green
+    case .notFound:
+      return .red
+    }
+  }
+
+  var text: String {
+    switch self {
+    case .checking:
+      return "Checking..."
+    case .connected:
+      return "Connected"
+    case .notFound:
+      return "Not Found"
+    }
+  }
+}
+
+/// Settings section for a single agent.
+struct AgentSettingsSection: View {
+  let agentType: AgentType
+  @Binding var customPath: String?
+  @Binding var status: AgentStatus
+
+  @State private var pathText: String = ""
+  @State private var isVerifying: Bool = false
+
+  private var agent: AIAgent {
+    AgentFactory.createAgent(for: agentType)
+  }
+
+  var body: some View {
+    Section {
+      HStack {
+        Image(systemName: agent.iconName)
+          .foregroundColor(agent.accentColor)
+
+        Text(agent.displayName)
+          .font(.headline)
+
+        Spacer()
+
+        HStack(spacing: 4) {
+          Circle()
+            .fill(status.color)
+            .frame(width: 8, height: 8)
+
+          Text(status.text)
+            .font(.caption)
+            .foregroundColor(.secondary)
+        }
+      }
+
+      HStack {
+        TextField("Path", text: $pathText, prompt: Text(agent.command))
+          .textFieldStyle(.roundedBorder)
+
+        Button("Browse...") {
+          browseForExecutable()
+        }
+      }
+
+      if !pathText.isEmpty || customPath != nil {
+        HStack {
+          Text("Using: \(customPath ?? agent.command)")
+            .font(.caption)
+            .foregroundColor(.secondary)
+
+          Spacer()
+
+          if customPath != nil {
+            Button("Reset") {
+              customPath = nil
+              pathText = ""
+              verifyInstallation()
+            }
+            .font(.caption)
+          }
+        }
+      }
+
+      Button("Verify Installation") {
+        verifyInstallation()
+      }
+      .disabled(isVerifying)
+    }
+    .onAppear {
+      pathText = customPath ?? ""
+    }
+    .onChange(of: pathText) { _, newValue in
+      if newValue.isEmpty {
+        customPath = nil
+      } else {
+        customPath = newValue
+      }
+    }
+  }
+
+  private func browseForExecutable() {
+    let panel = NSOpenPanel()
+    panel.canChooseFiles = true
+    panel.canChooseDirectories = false
+    panel.allowsMultipleSelection = false
+    panel.message = "Select the \(agent.displayName) CLI executable"
+
+    if panel.runModal() == .OK, let url = panel.url {
+      pathText = url.path
+      customPath = url.path
+      verifyInstallation()
+    }
+  }
+
+  private func verifyInstallation() {
+    isVerifying = true
+    status = .checking
+
+    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+      let path = customPath ?? agent.command
+      if FileManager.default.isExecutableFile(atPath: path) {
+        status = .connected
+      } else {
+        status = .notFound
+      }
+      isVerifying = false
+    }
+  }
+}
+
+// MARK: - Appearance Settings Tab
+
+struct AppearanceSettingsTab: View {
+  private var configManager = ConfigManager.shared
+
+  var body: some View {
+    Form {
+      Section("Theme") {
+        Picker("Color scheme", selection: Bindable(configManager).config.colorScheme) {
+          ForEach(AppColorScheme.allCases, id: \.self) { scheme in
+            Text(scheme.displayName).tag(scheme)
+          }
+        }
+        .pickerStyle(.segmented)
+      }
+
+      Section("Terminal Font") {
+        Picker("Font family", selection: Bindable(configManager).config.terminalFontName) {
+          ForEach(ConfigManager.availableMonospacedFonts, id: \.self) { font in
+            Text(font).tag(font)
+          }
+        }
+
+        HStack {
+          Text("Font size")
+          Slider(
+            value: Bindable(configManager).config.terminalFontSize,
+            in: 10...24,
+            step: 1
+          )
+          Text("\(Int(configManager.config.terminalFontSize))pt")
+            .monospacedDigit()
+            .frame(width: 40, alignment: .trailing)
+        }
+
+        /// Font preview.
+        GroupBox("Preview") {
+          Text("claude ❯ Hello, this is a preview.\nABCDEFGHIJKLMNOPQRSTUVWXYZ\nabcdefghijklmnopqrstuvwxyz\n0123456789 !@#$%^&*()")
+            .font(.custom(
+              configManager.config.terminalFontName,
+              size: configManager.config.terminalFontSize
+            ))
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(8)
+        }
+      }
+
+      Section("Agent Colors") {
+        AgentColorPicker(
+          agentType: .claude,
+          customColor: Bindable(configManager).config.claudeAccentColor
+        )
+
+        AgentColorPicker(
+          agentType: .glm,
+          customColor: Bindable(configManager).config.glmAccentColor
+        )
+      }
+    }
+    .formStyle(.grouped)
+    .padding()
+  }
+}
+
+/// Color picker for an agent's accent color.
+struct AgentColorPicker: View {
+  let agentType: AgentType
+  @Binding var customColor: CodableColor?
+
+  private var currentColor: Color {
+    customColor?.color ?? agentType.accentColor
+  }
+
+  var body: some View {
+    HStack {
+      Text("\(agentType.rawValue) accent")
+
+      Spacer()
+
+      ColorPicker("", selection: Binding(
+        get: { currentColor },
+        set: { customColor = CodableColor($0) }
+      ))
+      .labelsHidden()
+
+      if customColor != nil {
+        Button("Reset") {
+          customColor = nil
+        }
+        .font(.caption)
+      }
+    }
+  }
+}
+
+// MARK: - Shortcuts Settings Tab
+
+struct ShortcutsSettingsTab: View {
+  private var configManager = ConfigManager.shared
+
+  var body: some View {
+    Form {
+      ForEach(ShortcutCategory.allCases, id: \.self) { category in
+        Section(category.displayName) {
+          ForEach(ShortcutAction.allCases.filter { $0.category == category }, id: \.self) { action in
+            ShortcutRow(action: action)
+          }
+        }
+      }
+
+      Section {
+        Button("Reset All to Defaults") {
+          configManager.config.shortcuts = [:]
+        }
+      }
+    }
+    .formStyle(.grouped)
+    .padding()
+  }
+}
+
+/// A row displaying a shortcut action and its key binding.
+struct ShortcutRow: View {
+  let action: ShortcutAction
+  private var configManager = ConfigManager.shared
+
+  init(action: ShortcutAction) {
+    self.action = action
+  }
+
+  private var shortcut: String {
+    configManager.config.shortcuts[action.rawValue] ?? action.defaultShortcut
+  }
+
+  var body: some View {
+    HStack {
+      Text(action.displayName)
+
+      Spacer()
+
+      Text(shortcut)
+        .font(.system(size: 12, design: .monospaced))
+        .padding(.horizontal, 8)
+        .padding(.vertical, 4)
+        .background(Color(.controlBackgroundColor))
+        .cornerRadius(4)
+    }
+  }
+}
+
+// MARK: - Previews
+
+#Preview("General") {
+  GeneralSettingsTab()
+    .frame(width: 500, height: 400)
+}
+
+#Preview("Agents") {
+  AgentsSettingsTab()
+    .frame(width: 500, height: 400)
+}
+
+#Preview("Appearance") {
+  AppearanceSettingsTab()
+    .frame(width: 500, height: 400)
+}
+
+#Preview("Shortcuts") {
+  ShortcutsSettingsTab()
+    .frame(width: 500, height: 400)
+}

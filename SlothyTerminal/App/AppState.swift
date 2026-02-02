@@ -24,9 +24,16 @@ enum ModalType: Identifiable {
 class AppState {
   var tabs: [Tab] = []
   var activeTabID: UUID?
-  var isSidebarVisible: Bool = true
-  var sidebarWidth: CGFloat = 260
+  var isSidebarVisible: Bool
+  var sidebarWidth: CGFloat
   var activeModal: ModalType?
+  private var configManager = ConfigManager.shared
+
+  init() {
+    let config = ConfigManager.shared.config
+    self.isSidebarVisible = config.showSidebarByDefault
+    self.sidebarWidth = config.sidebarWidth
+  }
 
   /// Returns the currently active tab, if any.
   var activeTab: Tab? {
