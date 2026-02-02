@@ -9,7 +9,10 @@
 
 2. Download Sparkle tools:
    ```bash
-   curl -L https://github.com/sparkle-project/Sparkle/releases/download/2.7.0/Sparkle-2.7.0.tar.xz | tar -xJ -C . && mv Sparkle-2.7.0 sparkle-tools
+   mkdir -p sparkle-tools
+   curl -L -o /tmp/Sparkle.tar.xz https://github.com/sparkle-project/Sparkle/releases/download/2.7.0/Sparkle-2.7.0.tar.xz
+   tar -xJf /tmp/Sparkle.tar.xz -C sparkle-tools --strip-components=1
+   rm /tmp/Sparkle.tar.xz
    ```
 
 3. Generate signing keys:
