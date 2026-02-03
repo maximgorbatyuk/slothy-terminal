@@ -25,10 +25,16 @@ class ConfigManager {
 
   /// URL for the config file.
   private var configFileURL: URL {
-    let appSupport = FileManager.default.urls(
+    guard let appSupport = FileManager.default.urls(
       for: .applicationSupportDirectory,
       in: .userDomainMask
-    ).first!
+    ).first
+    else {
+      /// Fallback to temporary directory if Application Support is unavailable.
+      return FileManager.default.temporaryDirectory
+        .appendingPathComponent("SlothyTerminal", isDirectory: true)
+        .appendingPathComponent("config.json")
+    }
 
     let appFolder = appSupport.appendingPathComponent("SlothyTerminal", isDirectory: true)
     return appFolder.appendingPathComponent("config.json")

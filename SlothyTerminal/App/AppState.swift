@@ -20,6 +20,7 @@ enum ModalType: Identifiable {
 }
 
 /// Global application state managing tabs and UI state.
+@MainActor
 @Observable
 class AppState {
   var tabs: [Tab] = []

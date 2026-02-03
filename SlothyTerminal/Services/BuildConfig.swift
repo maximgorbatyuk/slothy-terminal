@@ -85,7 +85,5 @@ struct BuildConfig: Codable {
 
   struct Features: Codable {
     let enableDebugMenu: Bool
-    let enableCrashReporting: Bool
-    let enableAnalytics: Bool
   }
 }

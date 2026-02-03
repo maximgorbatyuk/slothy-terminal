@@ -1,0 +1,86 @@
+name: CI
+
+on:
+  pull_request:
+    branches:
+      - develop
+      - main
+  push:
+    branches:
+      - develop
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build
+    runs-on: macos-14
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Select Xcode
+        run: sudo xcode-select -s /Applications/Xcode_16.2.app/Contents/Developer
+
+      - name: Show Xcode version
+        run: xcodebuild -version
+
+      - name: Resolve package dependencies
+        run: xcodebuild -resolvePackageDependencies -scheme SlothyTerminal -project SlothyTerminal.xcodeproj
+
+      - name: Build
+        run: |
+          xcodebuild build \
+            -scheme SlothyTerminal \
+            -project SlothyTerminal.xcodeproj \
+            -destination 'platform=macOS' \
+            -configuration Debug \
+            CODE_SIGNING_ALLOWED=NO
+
+  test:
+    name: Test
+    runs-on: macos-14
+    # Skip tests for PRs from develop to main (already tested on develop)
+    if: github.base_ref != 'main'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Select Xcode
+        run: sudo xcode-select -s /Applications/Xcode_16.2.app/Contents/Developer
+
+      - name: Show Swift version
+        run: swift --version
+
+      - name: Resolve Swift package dependencies
+        run: swift package resolve
+
+      - name: Run tests
+        run: swift test --parallel
+
+  lint:
+    name: Swift Format Check
+    runs-on: macos-14
+    # Skip lint for PRs from develop to main (already checked on develop)
+    if: github.base_ref != 'main'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Check for trailing whitespace
+        run: |
+          if grep -r --include="*.swift" '[[:blank:]]$' SlothyTerminal SlothyTerminalTests 2>/dev/null; then
+            echo "::error::Found trailing whitespace in Swift files"
+            exit 1
+          fi
+          echo "No trailing whitespace found"
+
+      - name: Check for merge conflict markers
+        run: |
+          if grep -r --include="*.swift" -E '^(<<<<<<<|=======|>>>>>>>)' SlothyTerminal SlothyTerminalTests 2>/dev/null; then
+            echo "::error::Found merge conflict markers in Swift files"
+            exit 1
+          fi
+          echo "No merge conflict markers found"

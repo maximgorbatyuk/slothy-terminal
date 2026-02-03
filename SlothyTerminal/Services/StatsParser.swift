@@ -132,7 +132,11 @@ class StatsParser {
         let outStr = String(text[outRange])
 
         /// Check if original text had 'k' suffix
-        let fullMatch = String(text[Range(match.range, in: text)!])
+        guard let fullMatchRange = Range(match.range, in: text) else {
+          return nil
+        }
+
+        let fullMatch = String(text[fullMatchRange])
         let inHasK = fullMatch.contains(">\(inStr)k")
         let outHasK = fullMatch.contains("<\(outStr)k")
 
