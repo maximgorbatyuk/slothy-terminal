@@ -517,7 +517,7 @@ body {
 
 .features-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr));
   gap: 24px;
 }
 
@@ -703,7 +703,7 @@ body {
 
 .install-options {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr));
   gap: 24px;
   margin-bottom: 48px;
 }
@@ -761,6 +761,7 @@ body {
   border-radius: var(--border-radius-sm);
   padding: 16px 20px;
   overflow-x: auto;
+  max-width: 100%;
 }
 
 .code-block code {
@@ -768,6 +769,7 @@ body {
   font-size: 0.85rem;
   color: var(--text-primary);
   line-height: 1.8;
+  word-break: break-all;
 }
 
 .code-block .prompt {
@@ -999,7 +1001,24 @@ body {
   }
 
   .install-card {
-    padding: 24px;
+    padding: 20px;
+  }
+
+  .code-block {
+    padding: 12px 14px;
+  }
+
+  .code-block code {
+    font-size: 0.75rem;
+  }
+
+  .install-card-title {
+    font-size: 1.1rem;
+  }
+
+  .btn-large {
+    padding: 14px 24px;
+    font-size: 1rem;
   }
 }
 
@@ -1032,4 +1051,129 @@ button:focus-visible {
 ::selection {
   background: var(--accent-primary);
   color: #fff;
+}
+
+/* ============================================
+   Lightbox
+   ============================================ */
+.lightbox {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.85);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity var(--transition-medium), visibility var(--transition-medium);
+  cursor: pointer;
+}
+
+.lightbox.active {
+  opacity: 1;
+  visibility: visible;
+}
+
+.lightbox-img {
+  max-width: 90vw;
+  max-height: 90vh;
+  border-radius: var(--border-radius);
+  box-shadow: 0 8px 48px rgba(0, 0, 0, 0.5);
+  transform: scale(0.9);
+  transition: transform var(--transition-medium);
+  cursor: default;
+}
+
+.lightbox.active .lightbox-img {
+  transform: scale(1);
+}
+
+.lightbox-close {
+  position: absolute;
+  top: 24px;
+  right: 24px;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background var(--transition-fast), transform var(--transition-fast);
+}
+
+.lightbox-close:hover {
+  background: rgba(255, 255, 255, 0.2);
+  transform: scale(1.1);
+}
+
+.lightbox-btn {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background var(--transition-fast), transform var(--transition-fast);
+}
+
+.lightbox-btn:hover {
+  background: rgba(255, 255, 255, 0.25);
+  transform: translateY(-50%) scale(1.1);
+}
+
+.lightbox-btn-prev {
+  left: 24px;
+}
+
+.lightbox-btn-next {
+  right: 24px;
+}
+
+@media (max-width: 768px) {
+  .lightbox-btn {
+    width: 44px;
+    height: 44px;
+  }
+
+  .lightbox-btn-prev {
+    left: 12px;
+  }
+
+  .lightbox-btn-next {
+    right: 12px;
+  }
+
+  .lightbox-close {
+    top: 16px;
+    right: 16px;
+    width: 40px;
+    height: 40px;
+  }
+}
+
+/* Make carousel images clickable */
+.carousel-img {
+  cursor: pointer;
+  transition: opacity var(--transition-fast);
+}
+
+.carousel-img:hover {
+  opacity: 0.9;
 }
