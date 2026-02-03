@@ -62,6 +62,9 @@ struct TerminalSidebarView: View {
       /// Open in external app button.
       OpenInAppButton(directory: tab.workingDirectory)
 
+      /// Directory tree.
+      DirectoryTreeView(rootDirectory: tab.workingDirectory)
+
       Spacer()
 
       /// Info text.
@@ -101,6 +104,9 @@ struct AgentStatsView: View {
 
       /// Open in external app button.
       OpenInAppButton(directory: tab.workingDirectory)
+
+      /// Directory tree.
+      DirectoryTreeView(rootDirectory: tab.workingDirectory)
 
       /// Session info section.
       StatsSection(title: "Session Info") {
@@ -206,6 +212,208 @@ struct OpenInAppButton: View {
       }
       .menuStyle(.borderlessButton)
       .frame(maxWidth: .infinity, alignment: .leading)
+    }
+  }
+}
+
+/// Collapsible directory tree showing files and folders.
+struct DirectoryTreeView: View {
+  let rootDirectory: URL
+  @State private var isExpanded: Bool = true
+  @State private var items: [FileItem] = []
+
+  var body: some View {
+    VStack(alignment: .leading, spacing: 8) {
+      /// Header with expand/collapse toggle.
+      Button {
+        isExpanded.toggle()
+      } label: {
+        HStack {
+          Image(systemName: "folder.fill")
+            .font(.system(size: 10))
+
+          Text("Files")
+            .font(.system(size: 10, weight: .semibold))
+
+          Spacer()
+
+          Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
+            .font(.system(size: 10))
+        }
+        .foregroundColor(.secondary)
+      }
+      .buttonStyle(.plain)
+
+      if isExpanded {
+        /// Hint text.
+        Text("Double-click to copy path. Right-click for more options.")
+          .font(.system(size: 9))
+          .foregroundColor(.secondary)
+          .opacity(0.7)
+
+        /// Tree content in a card.
+        ScrollView {
+          VStack(alignment: .leading, spacing: 0) {
+            if items.isEmpty {
+              Text("No files")
+                .font(.system(size: 11))
+                .foregroundColor(.secondary)
+                .padding(.vertical, 8)
+            } else {
+              ForEach(Array(items.indices), id: \.self) { index in
+                FileItemRow(item: $items[index], depth: 0, rootDirectory: rootDirectory)
+              }
+            }
+          }
+          .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .frame(maxHeight: 300)
+        .padding(10)
+        .background(appCardColor)
+        .cornerRadius(8)
+      }
+    }
+    .onAppear {
+      loadItems()
+    }
+    .onChange(of: rootDirectory) {
+      loadItems()
+    }
+  }
+
+  private func loadItems() {
+    items = DirectoryTreeManager.shared.scanDirectory(rootDirectory)
+  }
+}
+
+/// A single row in the directory tree representing a file or folder.
+struct FileItemRow: View {
+  @Binding var item: FileItem
+  let depth: Int
+  let rootDirectory: URL
+  @State private var showCopiedTooltip: Bool = false
+
+  /// Relative path from the root directory.
+  private var relativePath: String {
+    let fullPath = item.url.path
+    let rootPath = rootDirectory.path
+
+    if fullPath.hasPrefix(rootPath) {
+      let relative = String(fullPath.dropFirst(rootPath.count))
+      if relative.hasPrefix("/") {
+        return String(relative.dropFirst())
+      }
+      return relative.isEmpty ? item.name : relative
+    }
+
+    return item.name
+  }
+
+  var body: some View {
+    VStack(alignment: .leading, spacing: 0) {
+      HStack(spacing: 4) {
+        /// Indentation based on depth.
+        if depth > 0 {
+          Spacer()
+            .frame(width: CGFloat(depth) * 12)
+        }
+
+        /// Expand/collapse chevron for directories.
+        if item.isDirectory {
+          Image(systemName: item.isExpanded ? "chevron.down" : "chevron.right")
+            .font(.system(size: 8))
+            .foregroundColor(.secondary)
+            .frame(width: 10)
+        } else {
+          Spacer()
+            .frame(width: 10)
+        }
+
+        /// File/folder icon.
+        Image(nsImage: item.icon)
+          .resizable()
+          .frame(width: 14, height: 14)
+
+        /// Name.
+        Text(item.name)
+          .font(.system(size: 11))
+          .lineLimit(1)
+          .truncationMode(.middle)
+
+        Spacer()
+      }
+      .padding(.vertical, 3)
+      .contentShape(Rectangle())
+      .onTapGesture(count: 1) {
+        if item.isDirectory {
+          toggleExpand()
+        }
+      }
+      .onTapGesture(count: 2) {
+        copyToClipboard(relativePath)
+      }
+      .contextMenu {
+        Button("Copy Relative Path") {
+          copyToClipboard(relativePath)
+        }
+
+        Button("Copy Filename") {
+          copyToClipboard(item.name)
+        }
+
+        Button("Copy Full Path") {
+          copyToClipboard(item.url.path)
+        }
+      }
+      .overlay(alignment: .trailing) {
+        if showCopiedTooltip {
+          Text("Copied!")
+            .font(.system(size: 9))
+            .padding(.horizontal, 6)
+            .padding(.vertical, 2)
+            .background(Color.green.opacity(0.9))
+            .foregroundColor(.white)
+            .cornerRadius(4)
+            .transition(.opacity)
+        }
+      }
+
+      /// Render children if expanded.
+      if item.isDirectory && item.isExpanded, let children = item.children {
+        ForEach(Array(children.indices), id: \.self) { index in
+          FileItemRow(
+            item: Binding(
+              get: { item.children![index] },
+              set: { item.children![index] = $0 }
+            ),
+            depth: depth + 1,
+            rootDirectory: rootDirectory
+          )
+        }
+      }
+    }
+  }
+
+  private func toggleExpand() {
+    item.isExpanded.toggle()
+
+    if item.isExpanded && item.children == nil {
+      item.children = DirectoryTreeManager.shared.loadChildren(for: item)
+    }
+  }
+
+  private func copyToClipboard(_ text: String) {
+    NSPasteboard.general.clearContents()
+    NSPasteboard.general.setString(text, forType: .string)
+
+    withAnimation {
+      showCopiedTooltip = true
+    }
+
+    DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+      withAnimation {
+        showCopiedTooltip = false
+      }
     }
   }
 }

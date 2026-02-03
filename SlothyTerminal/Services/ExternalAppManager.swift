@@ -34,6 +34,7 @@ final class ExternalAppManager {
 
   /// List of known developer applications.
   let knownApps: [ExternalApp] = [
+    ExternalApp(id: "com.apple.finder", name: "Finder", icon: "folder"),
     ExternalApp(id: "com.anthropic.claudefordesktop", name: "Claude", icon: "bubble.left"),
     ExternalApp(id: "com.openai.chat", name: "ChatGPT", icon: "bubble.right"),
     ExternalApp(id: "com.openai.codex", name: "Codex", icon: "terminal"),
@@ -63,6 +64,12 @@ final class ExternalAppManager {
 
   /// Opens a directory in the specified application.
   func openDirectory(_ url: URL, in app: ExternalApp) {
+    /// Finder needs special handling - use selectFile to open the folder.
+    if app.id == "com.apple.finder" {
+      NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: url.path)
+      return
+    }
+
     guard let appURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: app.id) else {
       return
     }
