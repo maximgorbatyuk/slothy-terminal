@@ -29,6 +29,27 @@ SlothyTerminal provides a unified terminal environment for working with AI codin
 - Command counter
 - Configurable sidebar position (left/right)
 
+### Directory Tree Browser
+- Collapsible file tree showing project structure
+- Displays files and folders with native system icons
+- Shows hidden files (.github, .claude, .gitignore, etc.)
+- Sorted display: folders first, then files (alphabetically)
+- Double-click to copy relative path to clipboard
+- Right-click context menu:
+  - Copy Relative Path
+  - Copy Filename
+  - Copy Full Path
+- Lazy-loads subdirectories for performance
+
+### Open in External Apps
+- Quick-access dropdown to open working directory in installed apps
+- Supports popular development tools:
+  - Finder, VS Code, Cursor, Xcode
+  - Claude Desktop, ChatGPT
+  - iTerm, Warp, Ghostty, Terminal
+  - Rider, IntelliJ, Fleet
+  - Sublime Text, Nova, BBEdit, TextMate
+
 ### Settings
 - **General** - Default agent, sidebar preferences, recent folders
 - **Agents** - Custom paths for Claude and OpenCode CLIs
@@ -49,19 +70,23 @@ SlothyTerminal provides a unified terminal environment for working with AI codin
 ├─────────────────────────────────────────────────────────────────────────┤
 │ [C] ~/projects/app  │ [O] ~/api  │ [T] ~/scripts  │        [+]         │
 ├───────────────────────────────────────────────────┬─────────────────────┤
-│                                                   │                     │
 │                                                   │  Working Directory  │
-│  claude ❯ help me refactor the auth module       │  ~/projects/app     │
+│                                                   │  ~/projects/app     │
+│  claude ❯ help me refactor the auth module       │                     │
+│                                                   │  [Open in...     v] │
+│  I'll analyze the authentication code...         │                     │
+│                                                   │  📁 Files           │
+│  Reading: src/auth/index.ts                      │  ├── .github/       │
+│  Reading: src/auth/middleware.ts                 │  ├── src/           │
+│                                                   │  ├── tests/         │
+│  claude ❯ █                                      │  ├── package.json   │
+│                                                   │  └── README.md      │
 │                                                   │                     │
-│  I'll analyze the authentication code...         │  SESSION INFO       │
-│                                                   │  ─────────────────  │
-│  Reading: src/auth/index.ts                      │  Duration  12m 34s  │
-│  Reading: src/auth/middleware.ts                 │  Commands       8   │
-│                                                   │                     │
-│  claude ❯ █                                      │                     │
-│                                                   │                     │
+│                                                   │  SESSION INFO       │
+│                                                   │  Duration  12m 34s  │
+│                                                   │  Commands       8   │
 ├───────────────────────────────────────────────────┴─────────────────────┤
-│                                                            v2026.2.1    │
+│                                                            v2026.2.2    │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -175,6 +200,8 @@ SlothyTerminal/
 │   ├── RecentFoldersManager.swift # Recent folders tracking
 │   ├── StatsParser.swift          # Output parsing for stats
 │   ├── UpdateManager.swift        # Sparkle update manager
+│   ├── DirectoryTreeManager.swift # Directory tree scanning
+│   ├── ExternalAppManager.swift   # External app integration
 │   └── BuildConfig.swift          # Build environment config
 ├── Terminal/
 │   └── PTYController.swift        # PTY/process management
