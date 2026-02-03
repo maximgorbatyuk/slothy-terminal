@@ -31,8 +31,8 @@ struct AppConfig: Codable, Equatable {
 
   // MARK: - Appearance Settings
 
-  /// The color scheme for the app.
-  var colorScheme: AppColorScheme = .system
+  /// The color scheme for the app (always dark).
+  var colorScheme: AppColorScheme = .dark
 
   /// Terminal font family name.
   var terminalFontName: String = "SF Mono"

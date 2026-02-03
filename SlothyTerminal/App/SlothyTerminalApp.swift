@@ -11,7 +11,7 @@ struct SlothyTerminalApp: App {
     WindowGroup {
       MainView()
         .environment(appState)
-        .preferredColorScheme(configManager.config.colorScheme.colorScheme)
+        .preferredColorScheme(.dark)
         .onReceive(NotificationCenter.default.publisher(for: .newTabRequested)) { notification in
           if let agentType = notification.userInfo?["agentType"] as? AgentType {
             appState.showFolderSelector(for: agentType)
