@@ -1,3 +1,4 @@
+import AppKit
 import Combine
 import SwiftUI
 
@@ -58,6 +59,9 @@ struct TerminalSidebarView: View {
       /// Working directory.
       WorkingDirectoryCard(path: tab.workingDirectory)
 
+      /// Open in external app button.
+      OpenInAppButton(directory: tab.workingDirectory)
+
       Spacer()
 
       /// Info text.
@@ -94,6 +98,9 @@ struct AgentStatsView: View {
     VStack(alignment: .leading, spacing: 16) {
       /// Working directory.
       WorkingDirectoryCard(path: tab.workingDirectory)
+
+      /// Open in external app button.
+      OpenInAppButton(directory: tab.workingDirectory)
 
       /// Session info section.
       StatsSection(title: "Session Info") {
@@ -156,6 +163,50 @@ struct WorkingDirectoryCard: View {
     .frame(maxWidth: .infinity, alignment: .leading)
     .background(appCardColor)
     .cornerRadius(8)
+  }
+}
+
+/// Button that shows a dropdown menu of installed developer apps.
+struct OpenInAppButton: View {
+  let directory: URL
+
+  private var installedApps: [ExternalApp] {
+    ExternalAppManager.shared.installedApps
+  }
+
+  var body: some View {
+    if !installedApps.isEmpty {
+      Menu {
+        ForEach(installedApps) { app in
+          Button {
+            ExternalAppManager.shared.openDirectory(directory, in: app)
+          } label: {
+            if let appIcon = app.appIcon {
+              Label {
+                Text(app.name)
+              } icon: {
+                Image(nsImage: appIcon)
+              }
+            } else {
+              Label(app.name, systemImage: app.icon)
+            }
+          }
+        }
+      } label: {
+        HStack {
+          Image(systemName: "arrow.up.forward.app")
+          Text("Open in...")
+          Spacer()
+          Image(systemName: "chevron.down")
+        }
+        .font(.system(size: 11))
+        .padding(10)
+        .background(appCardColor)
+        .cornerRadius(8)
+      }
+      .menuStyle(.borderlessButton)
+      .frame(maxWidth: .infinity, alignment: .leading)
+    }
   }
 }
 
