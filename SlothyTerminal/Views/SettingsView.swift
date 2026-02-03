@@ -280,7 +280,7 @@ struct AgentSettingsSection: View {
       }
 
       HStack {
-        TextField("Path", text: $pathText, prompt: Text(agent.command).foregroundColor(.secondary))
+        TextField("Path", text: $pathText, prompt: Text(agent.command).foregroundStyle(.secondary))
           .textFieldStyle(.roundedBorder)
 
         Button("Browse...") {

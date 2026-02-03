@@ -102,8 +102,8 @@ struct TerminalViewRepresentable: NSViewRepresentable {
       nsView.font = configuredFont
     }
 
-    /// Focus terminal when tab becomes active.
-    if isActive {
+    /// Focus terminal when tab becomes active (only if not already focused).
+    if isActive && nsView.window?.firstResponder !== nsView {
       DispatchQueue.main.async {
         nsView.window?.makeFirstResponder(nsView)
       }
@@ -250,6 +250,16 @@ class OutputCapturingTerminalView: LocalProcessTerminalView {
   private var keyEventMonitor: Any?
   private var mouseEventMonitor: Any?
 
+  /// Handle Cmd+V for paste.
+  override func performKeyEquivalent(with event: NSEvent) -> Bool {
+    if event.modifierFlags.contains(.command) && event.charactersIgnoringModifiers == "v" {
+      paste(self)
+      return true
+    }
+
+    return super.performKeyEquivalent(with: event)
+  }
+
   override func dataReceived(slice: ArraySlice<UInt8>) {
     /// Call the parent implementation to display the data.
     super.dataReceived(slice: slice)
@@ -266,11 +276,11 @@ class OutputCapturingTerminalView: LocalProcessTerminalView {
       return
     }
 
-    /// Set up event monitors when view is added to window.
+    /// Set up event monitor for Enter key to track command count.
     if keyEventMonitor == nil {
       keyEventMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
         guard let self,
-              self.window?.firstResponder === self || self.isDescendant(of: self.window?.firstResponder as? NSView ?? NSView())
+              self.window?.firstResponder === self
         else {
           return event
         }
