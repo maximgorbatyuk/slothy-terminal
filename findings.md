@@ -454,7 +454,7 @@ Logger.config.info("Config loaded successfully")
 | High | GLM-003 | Unsafe concurrency access | PTYController.swift:38 | ✅ FIXED |
 | High | GLM-013 | Force unwrap in StatsParser | StatsParser.swift:135 | ✅ FIXED |
 | High | GLM-023 | Command injection potential | TerminalView.swift:30-38 | ✅ FIXED |
-| High | GLM-029 | No unit tests | Project-wide | TODO |
+| High | GLM-029 | No unit tests | Project-wide | ✅ FIXED (86 tests via SwiftPM) |
 | Medium | GLM-011 | Silent error handling | PTYController.swift:134-136 | ✅ FIXED |
 | Medium | GLM-019 | Recent folders not cleaned | RecentFoldersManager.swift:48-64 | ✅ FIXED |
 | Medium | GLM-014 | Missing accessibility labels | All views | TODO |
