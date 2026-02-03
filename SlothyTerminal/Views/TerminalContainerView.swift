@@ -13,7 +13,7 @@ struct TerminalContainerView: View {
         /// Render all terminal views but only show the active one.
         /// This keeps sessions alive when switching between tabs.
         ForEach(appState.tabs) { tab in
-          ActiveTerminalView(tab: tab)
+          ActiveTerminalView(tab: tab, isActive: tab.id == appState.activeTabID)
             .opacity(tab.id == appState.activeTabID ? 1 : 0)
             .allowsHitTesting(tab.id == appState.activeTabID)
         }
@@ -25,6 +25,7 @@ struct TerminalContainerView: View {
 /// Displays the terminal for an active tab.
 struct ActiveTerminalView: View {
   let tab: Tab
+  let isActive: Bool
   @State private var isReady: Bool = false
   @State private var agentUnavailableError: String?
 
@@ -43,6 +44,7 @@ struct ActiveTerminalView: View {
             tab.processOutput(output)
           },
           shouldAutoRunCommand: tab.agentType.showsUsageStats,
+          isActive: isActive,
           onTerminalReady: { sendFunc in
             tab.sendToTerminal = sendFunc
           },
@@ -145,7 +147,7 @@ struct EmptyTerminalView: View {
           .font(.system(size: 48))
           .foregroundColor(.secondary)
 
-        Text("SlothyTerminal")
+        Text("Slothy Terminal")
           .font(.title)
           .fontWeight(.semibold)
 

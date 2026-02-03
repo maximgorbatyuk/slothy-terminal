@@ -12,6 +12,9 @@ struct TerminalViewRepresentable: NSViewRepresentable {
   /// Whether to auto-run the command after the shell starts.
   let shouldAutoRunCommand: Bool
 
+  /// Whether this terminal tab is currently active/visible.
+  var isActive: Bool = true
+
   /// Callback that provides a function to send text to the terminal.
   var onTerminalReady: ((@escaping (String) -> Void) -> Void)?
 
@@ -97,6 +100,13 @@ struct TerminalViewRepresentable: NSViewRepresentable {
     let configuredFont = ConfigManager.shared.terminalFont
     if nsView.font != configuredFont {
       nsView.font = configuredFont
+    }
+
+    /// Focus terminal when tab becomes active (only if not already focused).
+    if isActive && nsView.window?.firstResponder !== nsView {
+      DispatchQueue.main.async {
+        nsView.window?.makeFirstResponder(nsView)
+      }
     }
   }
 
@@ -237,7 +247,18 @@ struct TerminalViewRepresentable: NSViewRepresentable {
 class OutputCapturingTerminalView: LocalProcessTerminalView {
   var onDataReceived: ((Data) -> Void)?
   var onCommandEntered: (() -> Void)?
-  private var eventMonitor: Any?
+  private var keyEventMonitor: Any?
+  private var mouseEventMonitor: Any?
+
+  /// Handle Cmd+V for paste.
+  override func performKeyEquivalent(with event: NSEvent) -> Bool {
+    if event.modifierFlags.contains(.command) && event.charactersIgnoringModifiers == "v" {
+      paste(self)
+      return true
+    }
+
+    return super.performKeyEquivalent(with: event)
+  }
 
   override func dataReceived(slice: ArraySlice<UInt8>) {
     /// Call the parent implementation to display the data.
@@ -251,11 +272,15 @@ class OutputCapturingTerminalView: LocalProcessTerminalView {
   override func viewDidMoveToWindow() {
     super.viewDidMoveToWindow()
 
-    /// Set up event monitor when view is added to window.
-    if window != nil && eventMonitor == nil {
-      eventMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+    guard let window else {
+      return
+    }
+
+    /// Set up event monitor for Enter key to track command count.
+    if keyEventMonitor == nil {
+      keyEventMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
         guard let self,
-              self.window?.firstResponder === self || self.isDescendant(of: self.window?.firstResponder as? NSView ?? NSView())
+              self.window?.firstResponder === self
         else {
           return event
         }
@@ -268,19 +293,60 @@ class OutputCapturingTerminalView: LocalProcessTerminalView {
         return event
       }
     }
+
+    /// Set up mouse event monitor to make terminal first responder on click.
+    /// This enables text selection and copy functionality.
+    if mouseEventMonitor == nil {
+      mouseEventMonitor = NSEvent.addLocalMonitorForEvents(matching: .leftMouseDown) { [weak self] event in
+        guard let self,
+              let eventWindow = event.window,
+              eventWindow === self.window
+        else {
+          return event
+        }
+
+        /// Check if click is within this view's bounds.
+        let locationInView = self.convert(event.locationInWindow, from: nil)
+        if self.bounds.contains(locationInView) {
+          self.window?.makeFirstResponder(self)
+        }
+
+        return event
+      }
+    }
+
+    /// Auto-focus terminal when view is added to window.
+    /// Use a small delay to ensure the view is fully ready.
+    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
+      guard let self else {
+        return
+      }
+
+      self.window?.makeFirstResponder(self)
+    }
   }
 
   override func removeFromSuperview() {
-    /// Clean up event monitor.
-    if let monitor = eventMonitor {
+    /// Clean up event monitors.
+    if let monitor = keyEventMonitor {
       NSEvent.removeMonitor(monitor)
-      eventMonitor = nil
+      keyEventMonitor = nil
     }
+
+    if let monitor = mouseEventMonitor {
+      NSEvent.removeMonitor(monitor)
+      mouseEventMonitor = nil
+    }
+
     super.removeFromSuperview()
   }
 
   deinit {
-    if let monitor = eventMonitor {
+    if let monitor = keyEventMonitor {
+      NSEvent.removeMonitor(monitor)
+    }
+
+    if let monitor = mouseEventMonitor {
       NSEvent.removeMonitor(monitor)
     }
   }
@@ -295,6 +361,9 @@ struct StandaloneTerminalView: View {
 
   /// Whether to auto-run the command (true for AI agents, false for plain terminal).
   var shouldAutoRunCommand: Bool = true
+
+  /// Whether this terminal tab is currently active/visible.
+  var isActive: Bool = true
 
   /// Callback that provides a function to send text to the terminal.
   var onTerminalReady: ((@escaping (String) -> Void) -> Void)? = nil
@@ -312,6 +381,7 @@ struct StandaloneTerminalView: View {
       arguments: arguments,
       onOutput: onOutput,
       shouldAutoRunCommand: shouldAutoRunCommand,
+      isActive: isActive,
       onTerminalReady: onTerminalReady,
       onCommandEntered: onCommandEntered,
       onDirectoryChanged: onDirectoryChanged

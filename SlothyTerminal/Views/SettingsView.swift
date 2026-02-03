@@ -117,7 +117,7 @@ struct GeneralSettingsTab: View {
             ForEach(recentFoldersManager.recentFolders.prefix(5), id: \.path) { folder in
               HStack {
                 Text(shortenedPath(folder))
-                  .font(.system(size: 11))
+                  .font(.system(size: 11, design: .monospaced))
                   .lineLimit(1)
                   .truncationMode(.middle)
 
@@ -131,6 +131,10 @@ struct GeneralSettingsTab: View {
                 }
                 .buttonStyle(.plain)
               }
+              .padding(.horizontal, 8)
+              .padding(.vertical, 4)
+              .background(appCardColor)
+              .cornerRadius(4)
             }
           }
 
@@ -141,6 +145,7 @@ struct GeneralSettingsTab: View {
       }
     }
     .formStyle(.grouped)
+    .scrollContentBackground(.hidden)
     .padding()
     .background(appBackgroundColor)
   }
@@ -183,6 +188,7 @@ struct AgentsSettingsTab: View {
       }
     }
     .formStyle(.grouped)
+    .scrollContentBackground(.hidden)
     .padding()
     .background(appBackgroundColor)
     .task {
@@ -210,14 +216,17 @@ enum AgentStatus {
   case connected
   case notFound
 
+  /// Muted status colors that work with the dark theme.
   var color: Color {
     switch self {
     case .checking:
-      return .orange
+      return Color(red: 0.85, green: 0.65, blue: 0.35)
+
     case .connected:
-      return .green
+      return Color(red: 0.45, green: 0.75, blue: 0.55)
+
     case .notFound:
-      return .red
+      return Color(red: 0.85, green: 0.45, blue: 0.45)
     }
   }
 
@@ -225,8 +234,10 @@ enum AgentStatus {
     switch self {
     case .checking:
       return "Checking..."
+
     case .connected:
       return "Connected"
+
     case .notFound:
       return "Not Found"
     }
@@ -269,7 +280,7 @@ struct AgentSettingsSection: View {
       }
 
       HStack {
-        TextField("Path", text: $pathText, prompt: Text(agent.command))
+        TextField("Path", text: $pathText, prompt: Text(agent.command).foregroundStyle(.secondary))
           .textFieldStyle(.roundedBorder)
 
         Button("Browse...") {
@@ -280,8 +291,10 @@ struct AgentSettingsSection: View {
       if !pathText.isEmpty || customPath != nil {
         HStack {
           Text("Using: \(customPath ?? agent.command)")
-            .font(.caption)
+            .font(.system(size: 11, design: .monospaced))
             .foregroundColor(.secondary)
+            .lineLimit(1)
+            .truncationMode(.middle)
 
           Spacer()
 
@@ -294,6 +307,10 @@ struct AgentSettingsSection: View {
             .font(.caption)
           }
         }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 4)
+        .background(appCardColor)
+        .cornerRadius(4)
       }
 
       Button("Verify Installation") {
@@ -370,7 +387,11 @@ struct AppearanceSettingsTab: View {
         }
 
         /// Font preview.
-        GroupBox("Preview") {
+        VStack(alignment: .leading, spacing: 4) {
+          Text("Preview")
+            .font(.caption)
+            .foregroundColor(.secondary)
+
           Text("claude ❯ Hello, this is a preview.\nABCDEFGHIJKLMNOPQRSTUVWXYZ\nabcdefghijklmnopqrstuvwxyz\n0123456789 !@#$%^&*()")
             .font(.custom(
               configManager.config.terminalFontName,
@@ -378,6 +399,8 @@ struct AppearanceSettingsTab: View {
             ))
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(8)
+            .background(appCardColor)
+            .cornerRadius(6)
         }
       }
 
@@ -394,6 +417,7 @@ struct AppearanceSettingsTab: View {
       }
     }
     .formStyle(.grouped)
+    .scrollContentBackground(.hidden)
     .padding()
     .background(appBackgroundColor)
   }
@@ -452,6 +476,7 @@ struct ShortcutsSettingsTab: View {
       }
     }
     .formStyle(.grouped)
+    .scrollContentBackground(.hidden)
     .padding()
     .background(appBackgroundColor)
   }

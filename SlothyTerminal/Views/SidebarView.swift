@@ -50,9 +50,13 @@ struct EmptySidebarView: View {
   }
 }
 
-/// Sidebar view for plain terminal tabs (no stats).
+/// Sidebar view for plain terminal tabs.
 struct TerminalSidebarView: View {
   let tab: Tab
+  @State private var currentTime = Date()
+
+  /// Timer to update duration every second.
+  private let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
   var body: some View {
     VStack(spacing: 16) {
@@ -65,26 +69,28 @@ struct TerminalSidebarView: View {
       /// Directory tree.
       DirectoryTreeView(rootDirectory: tab.workingDirectory)
 
-      Spacer()
-
-      /// Info text.
-      VStack(spacing: 8) {
-        Image(systemName: "info.circle")
-          .font(.system(size: 24))
-          .foregroundColor(.secondary)
-
-        Text("Plain terminal session")
-          .font(.system(size: 11))
-          .foregroundColor(.secondary)
-
-        Text("Usage statistics are available for AI agent tabs")
-          .font(.system(size: 10))
-          .foregroundColor(.secondary)
-          .multilineTextAlignment(.center)
+      /// Session info section.
+      StatsSection(title: "Session Info") {
+        StatRow(label: "Duration", value: formattedDuration)
+        StatRow(label: "Commands", value: "\(tab.usageStats.commandCount)")
       }
-      .padding()
+    }
+    .onReceive(timer) { _ in
+      currentTime = Date()
+    }
+  }
 
-      Spacer()
+  /// Formatted duration that updates with the timer.
+  private var formattedDuration: String {
+    let totalSeconds = Int(currentTime.timeIntervalSince(tab.usageStats.startTime))
+    let hours = totalSeconds / 3600
+    let minutes = (totalSeconds % 3600) / 60
+    let seconds = totalSeconds % 60
+
+    if hours > 0 {
+      return String(format: "%dh %02dm %02ds", hours, minutes, seconds)
+    } else {
+      return String(format: "%dm %02ds", minutes, seconds)
     }
   }
 }

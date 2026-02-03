@@ -126,10 +126,12 @@ struct SlothyTerminalApp: App {
     Settings {
       SettingsView()
         .environment(appState)
+        .preferredColorScheme(.dark)
     }
 
     Window("About \(BuildConfig.current.appName)", id: "about") {
       AboutView()
+        .preferredColorScheme(.dark)
     }
     .windowStyle(.hiddenTitleBar)
     .windowResizability(.contentSize)
