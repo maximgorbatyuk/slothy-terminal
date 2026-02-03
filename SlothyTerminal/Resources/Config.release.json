@@ -1,6 +1,6 @@
 {
   "environment": "production",
-  "appName": "SlothyTerminal",
+  "appName": "Slothy Terminal",
   "logLevel": "error",
   "developerName": "Maxim Gorbatyuk",
   "githubUrl": "https://github.com/maximgorbatyuk/slothy-terminal",

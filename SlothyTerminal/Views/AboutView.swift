@@ -25,6 +25,7 @@ struct AboutView: View {
         Text(BuildConfig.current.appName)
           .font(.title)
           .fontWeight(.semibold)
+          .foregroundColor(.primary)
 
         Text("Version \(appVersion) (\(buildNumber))")
           .font(.subheadline)
@@ -53,6 +54,7 @@ struct AboutView: View {
         Text(BuildConfig.developerName)
           .font(.body)
           .fontWeight(.medium)
+          .foregroundColor(.primary)
       }
 
       /// GitHub link.
