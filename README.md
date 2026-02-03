@@ -17,11 +17,15 @@ SlothyTerminal provides a unified terminal environment for working with AI codin
 - **Claude** - Claude CLI integration for AI-assisted coding
 - **OpenCode** - OpenCode CLI integration
 
+![](/docs/assets/main_window.png)
+
 ### Tabbed Interface
 - Multiple concurrent sessions
 - Quick tab switching with `Cmd+1-9`
 - Visual agent indicators with accent colors
 - Close tabs with `Cmd+W`
+
+![](/docs/assets/open_new_tab.png)
 
 ### Session Statistics Sidebar
 - Current working directory display
@@ -50,6 +54,8 @@ SlothyTerminal provides a unified terminal environment for working with AI codin
   - Rider, IntelliJ, Fleet
   - Sublime Text, Nova, BBEdit, TextMate
 
+![](/docs/assets/open_in.png)
+
 ### Settings
 - **General** - Default agent, sidebar preferences, recent folders
 - **Agents** - Custom paths for Claude and OpenCode CLIs
@@ -62,33 +68,13 @@ SlothyTerminal provides a unified terminal environment for working with AI codin
 - Dark mode optimized
 - Native macOS integration
 
+![](/docs/assets/select_working_folder.png)
+
 ## Screenshot
 
-```
-┌─────────────────────────────────────────────────────────────────────────┐
-│ ● ● ●                        SlothyTerminal                            │
-├─────────────────────────────────────────────────────────────────────────┤
-│ [C] ~/projects/app  │ [O] ~/api  │ [T] ~/scripts  │        [+]         │
-├───────────────────────────────────────────────────┬─────────────────────┤
-│                                                   │  Working Directory  │
-│                                                   │  ~/projects/app     │
-│  claude ❯ help me refactor the auth module       │                     │
-│                                                   │  [Open in...     v] │
-│  I'll analyze the authentication code...         │                     │
-│                                                   │  📁 Files           │
-│  Reading: src/auth/index.ts                      │  ├── .github/       │
-│  Reading: src/auth/middleware.ts                 │  ├── src/           │
-│                                                   │  ├── tests/         │
-│  claude ❯ █                                      │  ├── package.json   │
-│                                                   │  └── README.md      │
-│                                                   │                     │
-│                                                   │  SESSION INFO       │
-│                                                   │  Duration  12m 34s  │
-│                                                   │  Commands       8   │
-├───────────────────────────────────────────────────┴─────────────────────┤
-│                                                            v2026.2.2    │
-└─────────────────────────────────────────────────────────────────────────┘
-```
+![](/docs/assets/claude.png)
+
+![](/docs/assets/opencode.png)
 
 ## Installation
 
