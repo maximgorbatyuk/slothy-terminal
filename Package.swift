@@ -4,6 +4,10 @@ import PackageDescription
 /// This Package.swift is used for running unit tests via SwiftPM.
 /// The main app is still built via the Xcode project.
 /// Run tests with: swift test
+///
+/// Note: External dependencies (SwiftTerm, Sparkle) are excluded here
+/// since the tested code doesn't require them. Views and UpdateManager
+/// are excluded from the test target.
 
 let package = Package(
   name: "SlothyTerminal",
@@ -16,23 +20,16 @@ let package = Package(
       targets: ["SlothyTerminalLib"]
     )
   ],
-  dependencies: [
-    .package(url: "https://github.com/migueldeicaza/SwiftTerm.git", from: "1.5.1"),
-    .package(url: "https://github.com/sparkle-project/Sparkle", from: "2.8.0")
-  ],
   targets: [
     .target(
       name: "SlothyTerminalLib",
-      dependencies: [
-        "SwiftTerm",
-        .product(name: "Sparkle", package: "Sparkle")
-      ],
       path: "SlothyTerminal",
       exclude: [
         "Resources",
         "App/SlothyTerminalApp.swift",
         "App/AppDelegate.swift",
-        "Views"
+        "Views",
+        "Services/UpdateManager.swift"
       ],
       sources: [
         "Services/StatsParser.swift",
@@ -40,7 +37,6 @@ let package = Package(
         "Services/ConfigManager.swift",
         "Services/BuildConfig.swift",
         "Services/Logger.swift",
-        "Services/UpdateManager.swift",
         "Models/UsageStats.swift",
         "Models/AgentType.swift",
         "Models/Tab.swift",
