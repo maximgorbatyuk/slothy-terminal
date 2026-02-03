@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Slothy Terminal — Take it slow, ship it fast</title>
+  <meta name="description"
+    content="A native macOS terminal for AI coding assistants. Tabbed interface for Claude CLI, OpenCode, and plain terminal sessions.">
+  <meta name="theme-color" content="#1C1612">
+
+  <!-- Open Graph -->
+  <meta property="og:title" content="Slothy Terminal">
+  <meta property="og:description"
+    content="Take it slow, ship it fast. A native macOS terminal for AI coding assistants.">
+  <meta property="og:image" content="assets/SlothyTerminalIcon.jpg">
+  <meta property="og:type" content="website">
+
+  <!-- Favicon -->
+  <link rel="icon" type="image/jpeg" href="assets/SlothyTerminalIcon.jpg">
+
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300..900;1,9..144,300..900&family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,400&family=JetBrains+Mono:wght@400;500&display=swap"
+    rel="stylesheet">
+
+  <link rel="stylesheet" href="styles.css">
+</head>
+
+<body>
+  <!-- Ambient background -->
+  <div class="ambient-bg"></div>
+
+  <!-- Navigation -->
+  <nav class="nav">
+    <div class="nav-content">
+      <a href="#" class="nav-logo">
+        <img src="assets/SlothyTerminalIcon.jpg" alt="SlothyTerminal" class="nav-logo-img">
+        <span class="nav-logo-text">Slothy Terminal</span>
+      </a>
+      <div class="nav-links">
+        <a href="#features">Features</a>
+        <a href="#screenshot">Preview</a>
+        <a href="#install">Install</a>
+        <a href="https://github.com/anthropics/claude-code" target="_blank" rel="noopener" class="nav-github">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+            <path
+              d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z" />
+          </svg>
+        </a>
+        <button class="theme-toggle" id="themeToggle" aria-label="Toggle theme">
+          <svg class="icon-sun" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+            stroke-width="2">
+            <circle cx="12" cy="12" r="5"></circle>
+            <line x1="12" y1="1" x2="12" y2="3"></line>
+            <line x1="12" y1="21" x2="12" y2="23"></line>
+            <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+            <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+            <line x1="1" y1="12" x2="3" y2="12"></line>
+            <line x1="21" y1="12" x2="23" y2="12"></line>
+            <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+            <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+          </svg>
+          <svg class="icon-moon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+            stroke-width="2">
+            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+          </svg>
+        </button>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Hero Section -->
+  <section class="hero">
+    <div class="hero-content">
+      <div class="hero-icon-wrapper">
+        <img src="assets/SlothyTerminalIcon.jpg" alt="Slothy Terminal - A cute sloth with coffee at a retro computer"
+          class="hero-icon">
+        <div class="hero-icon-glow"></div>
+      </div>
+      <h1 class="hero-title">Slothy Terminal</h1>
+      <p class="hero-tagline">Take it slow, ship it fast.</p>
+      <p class="hero-description">
+        A native macOS terminal for AI coding assistants.<br>
+        Tabbed sessions for Claude CLI, OpenCode, and more.
+      </p>
+      <div class="hero-actions">
+        <a href="#install" class="btn btn-primary">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+            <polyline points="7 10 12 15 17 10"></polyline>
+            <line x1="12" y1="15" x2="12" y2="3"></line>
+          </svg>
+          Download for macOS
+        </a>
+        <a href="https://github.com/maximgorbatyuk/slothy-terminal" target="_blank" rel="noopener"
+          class="btn btn-secondary">
+          View on GitHub
+        </a>
+      </div>
+      <p class="hero-platform">
+        <span class="platform-badge">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+            <path
+              d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.81-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z" />
+          </svg>
+          macOS 13.0+
+        </span>
+      </p>
+    </div>
+    <div class="hero-decoration">
+      <div class="floating-terminal">
+        <span class="prompt">❯</span> claude
+        <span class="cursor"></span>
+      </div>
+    </div>
+  </section>
+
+  <!-- Features Section -->
+  <section class="features" id="features">
+    <div class="container">
+      <h2 class="section-title">Everything you need, nothing you don't</h2>
+      <p class="section-subtitle">Built for developers who love AI coding assistants</p>
+
+      <div class="features-grid">
+        <div class="feature-card">
+          <div class="feature-icon">
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+              <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+              <line x1="3" y1="9" x2="21" y2="9"></line>
+              <line x1="9" y1="21" x2="9" y2="9"></line>
+            </svg>
+          </div>
+          <h3 class="feature-title">Tabbed Sessions</h3>
+          <p class="feature-description">
+            Run multiple AI assistants side by side. Switch between Claude, OpenCode, and plain terminal tabs
+            effortlessly.
+          </p>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon">
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+              <path d="M12 2L2 7l10 5 10-5-10-5z"></path>
+              <path d="M2 17l10 5 10-5"></path>
+              <path d="M2 12l10 5 10-5"></path>
+            </svg>
+          </div>
+          <h3 class="feature-title">Multi-Agent Support</h3>
+          <p class="feature-description">
+            Native support for Claude CLI, OpenCode, and any terminal-based AI assistant. One app to rule them all.
+          </p>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon">
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+              <line x1="18" y1="20" x2="18" y2="10"></line>
+              <line x1="12" y1="20" x2="12" y2="4"></line>
+              <line x1="6" y1="20" x2="6" y2="14"></line>
+            </svg>
+          </div>
+          <h3 class="feature-title">Real-time Stats</h3>
+          <p class="feature-description">
+            Track token usage, costs, and session metrics in real-time. Know exactly what your AI assistants are doing.
+          </p>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon">
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+              <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
+              <line x1="8" y1="21" x2="16" y2="21"></line>
+              <line x1="12" y1="17" x2="12" y2="21"></line>
+            </svg>
+          </div>
+          <h3 class="feature-title">Native macOS</h3>
+          <p class="feature-description">
+            Built with SwiftUI for a true native experience. Fast, lightweight, and feels right at home on your Mac.
+          </p>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon">
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+              <polyline points="4 17 10 11 4 5"></polyline>
+              <line x1="12" y1="19" x2="20" y2="19"></line>
+            </svg>
+          </div>
+          <h3 class="feature-title">Full Terminal Power</h3>
+          <p class="feature-description">
+            Complete PTY support means your AI agents have full access to your development environment. No limitations.
+          </p>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon">
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+              <circle cx="12" cy="12" r="3"></circle>
+              <path
+                d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z">
+              </path>
+            </svg>
+          </div>
+          <h3 class="feature-title">Auto Updates</h3>
+          <p class="feature-description">
+            Stay current with Sparkle integration. Get the latest features and fixes without lifting a finger.
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Screenshot Section -->
+  <section class="screenshot" id="screenshot">
+    <div class="container">
+      <h2 class="section-title">See it in action</h2>
+      <p class="section-subtitle">Clean, focused, and ready for your AI workflows</p>
+
+      <!-- Screenshot Carousel -->
+      <div class="carousel" id="screenshotCarousel">
+        <div class="carousel-viewport">
+          <div class="carousel-track">
+            <div class="carousel-slide active">
+              <img src="assets/main_window.png" alt="Slothy Terminal main window" class="carousel-img">
+              <p class="carousel-caption">Main window with tab selector</p>
+            </div>
+            <div class="carousel-slide">
+              <img src="assets/claude.png" alt="Claude AI assistant session" class="carousel-img">
+              <p class="carousel-caption">Claude CLI session</p>
+            </div>
+            <div class="carousel-slide">
+              <img src="assets/opencode.png" alt="OpenCode session" class="carousel-img">
+              <p class="carousel-caption">OpenCode session</p>
+            </div>
+            <div class="carousel-slide">
+              <img src="assets/open_new_tab.png" alt="Opening a new tab" class="carousel-img">
+              <p class="carousel-caption">New tab options</p>
+            </div>
+            <div class="carousel-slide">
+              <img src="assets/select_working_folder.png" alt="Selecting working folder" class="carousel-img">
+              <p class="carousel-caption">Select working folder</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Navigation arrows -->
+        <button class="carousel-btn carousel-btn-prev" aria-label="Previous screenshot">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="15 18 9 12 15 6"></polyline>
+          </svg>
+        </button>
+        <button class="carousel-btn carousel-btn-next" aria-label="Next screenshot">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="9 18 15 12 9 6"></polyline>
+          </svg>
+        </button>
+
+        <!-- Dot indicators -->
+        <div class="carousel-dots">
+          <button class="carousel-dot active" aria-label="Go to slide 1"></button>
+          <button class="carousel-dot" aria-label="Go to slide 2"></button>
+          <button class="carousel-dot" aria-label="Go to slide 3"></button>
+          <button class="carousel-dot" aria-label="Go to slide 4"></button>
+          <button class="carousel-dot" aria-label="Go to slide 5"></button>
+        </div>
+
+        <div class="carousel-glow"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Install Section -->
+  <section class="install" id="install">
+    <div class="container">
+      <h2 class="section-title">Get started in seconds</h2>
+      <p class="section-subtitle">Download and run — it's that simple</p>
+
+      <div class="install-options">
+        <div class="install-card install-card-primary">
+          <div class="install-card-badge">Recommended</div>
+          <h3 class="install-card-title">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+              <polyline points="7 10 12 15 17 10"></polyline>
+              <line x1="12" y1="15" x2="12" y2="3"></line>
+            </svg>
+            Direct Download
+          </h3>
+          <p class="install-card-description">
+            Download the latest DMG, drag to Applications, and you're ready to go.
+          </p>
+          <a href="https://github.com/maximgorbatyuk/slothy-terminal/releases/latest" class="btn btn-primary btn-large"
+            target="_blank" rel="noopener">
+            Download .dmg
+          </a>
+        </div>
+
+        <div class="install-card">
+          <h3 class="install-card-title">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="16 18 22 12 16 6"></polyline>
+              <polyline points="8 6 2 12 8 18"></polyline>
+            </svg>
+            Build from Source
+          </h3>
+          <p class="install-card-description">
+            Clone the repo and build with Xcode for the latest development version.
+          </p>
+          <div class="code-block">
+            <code>
+              <span class="prompt">❯</span> git clone https://github.com/maximgorbatyuk/slothy-terminal.git<br>
+              <span class="prompt">❯</span> cd SlothyTerminal<br>
+              <span class="prompt">❯</span> open SlothyTerminal.xcodeproj
+            </code>
+          </div>
+        </div>
+      </div>
+
+      <div class="requirements">
+        <h4 class="requirements-title">Requirements</h4>
+        <ul class="requirements-list">
+          <li>macOS 13.0 (Ventura) or later</li>
+          <li>Claude CLI or OpenCode installed for AI features</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer class="footer">
+    <div class="container">
+      <div class="footer-columns">
+        <!-- Column 1: Brand -->
+        <div class="footer-column footer-brand">
+          <img src="assets/SlothyTerminalIcon.jpg" alt="Slothy Terminal" class="footer-logo">
+          <p class="footer-tagline">Take it slow, ship it fast.</p>
+        </div>
+
+        <!-- Column 2: Our Projects -->
+        <div class="footer-column">
+          <h4 class="footer-heading">Our Projects</h4>
+          <ul class="footer-list">
+            <li><a href="https://techinterview.space" target="_blank">Techinterview.space</a></li>
+            <li><a href="https://mgorbatyuk.dev/ev-charging-tracker" target="_blank">EV Charge Tracker (iOS)</a></li>
+            <li><a href="https://mgorbatyuk.dev/journey-wallet" target="_blank">Journey Wallet (iOS)</a></li>
+          </ul>
+        </div>
+
+        <!-- Column 3: GitHub -->
+        <div class="footer-column">
+          <h4 class="footer-heading">GitHub</h4>
+          <ul class="footer-list">
+            <li><a href="https://github.com/maximgorbatyuk/slothy-terminal" target="_blank"
+                rel="noopener">Repository</a></li>
+            <li><a href="https://github.com/maximgorbatyuk/slothy-terminal/releases" target="_blank"
+                rel="noopener">Releases</a></li>
+            <li><a href="https://github.com/maximgorbatyuk/slothy-terminal/issues" target="_blank"
+                rel="noopener">Issues</a></li>
+            <li><a href="https://github.com/maximgorbatyuk/slothy-terminal/blob/main/PRIVACY.md" target="_blank"
+                rel="noopener">Privacy</a></li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="footer-bottom">
+        <p>Made with <span class="heart">♥</span> and plenty of coffee breaks by <a class="footer-author-link"
+            href="https://mgorbatyuk.dev" target="_blank" rel="noopener">Maxim
+            Gorbatyuk</a></p>
+        <p class="footer-license">MIT License</p>
+      </div>
+    </div>
+  </footer>
+
+  <script src="script.js"></script>
+</body>
+
+</html>
