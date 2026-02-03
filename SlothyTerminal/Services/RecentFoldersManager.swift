@@ -45,10 +45,13 @@ class RecentFoldersManager {
   }
 
   /// Loads recent folders from UserDefaults.
+  /// Filters out non-existent directories and saves the cleaned list.
   private func loadRecentFolders() {
     guard let paths = userDefaults.stringArray(forKey: recentFoldersKey) else {
       return
     }
+
+    let originalCount = paths.count
 
     recentFolders = paths.compactMap { path in
       let url = URL(fileURLWithPath: path)
@@ -61,6 +64,11 @@ class RecentFoldersManager {
         return url
       }
       return nil
+    }
+
+    /// Save cleaned list if any invalid paths were removed.
+    if recentFolders.count < originalCount {
+      saveRecentFolders()
     }
   }
 

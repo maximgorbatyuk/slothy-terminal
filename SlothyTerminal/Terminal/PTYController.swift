@@ -7,20 +7,62 @@ enum PTYError: Error, LocalizedError {
   case writeFailed
   case invalidFileDescriptor
   case processNotRunning
+  case encodingFailed
 
   var errorDescription: String? {
     switch self {
     case .forkFailed:
       return "Failed to create pseudo-terminal"
+
     case .execFailed:
       return "Failed to execute command"
+
     case .writeFailed:
       return "Failed to write to terminal"
+
     case .invalidFileDescriptor:
       return "Invalid file descriptor"
+
     case .processNotRunning:
       return "Process is not running"
+
+    case .encodingFailed:
+      return "Failed to encode string as UTF-8"
     }
+  }
+}
+
+/// Thread-safe storage for AsyncStream continuation.
+/// Isolates the continuation from MainActor to allow safe access from detached tasks.
+private final class ContinuationHolder: @unchecked Sendable {
+  private let lock = NSLock()
+  private var continuation: AsyncStream<Data>.Continuation?
+
+  func set(_ newValue: AsyncStream<Data>.Continuation?) {
+    lock.lock()
+    defer { lock.unlock() }
+    continuation = newValue
+  }
+
+  func get() -> AsyncStream<Data>.Continuation? {
+    lock.lock()
+    defer { lock.unlock() }
+    return continuation
+  }
+
+  func finish() {
+    lock.lock()
+    let cont = continuation
+    continuation = nil
+    lock.unlock()
+    cont?.finish()
+  }
+
+  func yield(_ data: Data) {
+    lock.lock()
+    let cont = continuation
+    lock.unlock()
+    cont?.yield(data)
   }
 }
 
@@ -34,8 +76,8 @@ class PTYController {
   private var readTask: Task<Void, Never>?
   private(set) var isRunning: Bool = false
 
-  /// Stream of data received from the PTY.
-  private nonisolated(unsafe) var outputContinuation: AsyncStream<Data>.Continuation?
+  /// Thread-safe holder for the output continuation.
+  private let continuationHolder = ContinuationHolder()
 
   /// Spawns a new process in a pseudo-terminal.
   /// - Parameters:
@@ -133,7 +175,7 @@ class PTYController {
   /// - Parameter string: The string to write.
   func write(_ string: String) throws {
     guard let data = string.data(using: .utf8) else {
-      return
+      throw PTYError.encodingFailed
     }
 
     try write(data)
@@ -141,11 +183,13 @@ class PTYController {
 
   /// Returns an async stream of data from the PTY.
   func read() -> AsyncStream<Data> {
-    AsyncStream { continuation in
-      self.outputContinuation = continuation
+    let holder = continuationHolder
 
-      continuation.onTermination = { [weak self] _ in
-        self?.outputContinuation = nil
+    return AsyncStream { continuation in
+      holder.set(continuation)
+
+      continuation.onTermination = { _ in
+        holder.set(nil)
       }
     }
   }
@@ -174,8 +218,7 @@ class PTYController {
     readTask?.cancel()
     readTask = nil
 
-    outputContinuation?.finish()
-    outputContinuation = nil
+    continuationHolder.finish()
 
     if childPID > 0 {
       kill(childPID, SIGTERM)
@@ -203,6 +246,8 @@ class PTYController {
 
   /// Starts the background task for reading PTY output.
   private func startReading() {
+    let holder = continuationHolder
+
     readTask = Task.detached { [weak self] in
       guard let self else {
         return
@@ -222,22 +267,20 @@ class PTYController {
 
         if bytesRead > 0 {
           let data = Data(buffer[0..<bytesRead])
-          _ = await MainActor.run {
-            self.outputContinuation?.yield(data)
-          }
+          holder.yield(data)
         } else if bytesRead == 0 {
           /// EOF - process has exited.
           await MainActor.run {
             self.isRunning = false
-            self.outputContinuation?.finish()
           }
+          holder.finish()
           break
         } else if errno != EAGAIN && errno != EWOULDBLOCK {
           /// Real error occurred.
           await MainActor.run {
             self.isRunning = false
-            self.outputContinuation?.finish()
           }
+          holder.finish()
           break
         }
 

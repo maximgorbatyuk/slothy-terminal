@@ -32,10 +32,25 @@ struct TerminalViewRepresentable: NSViewRepresentable {
       return command
     } else {
       let escapedArgs = arguments.map { arg in
-        arg.contains(" ") ? "\"\(arg)\"" : arg
+        escapeShellArgument(arg)
       }
       return "\(command) \(escapedArgs.joined(separator: " "))"
     }
+  }
+
+  /// Escapes a string for safe use as a shell argument.
+  /// Handles spaces, quotes, and shell metacharacters.
+  private func escapeShellArgument(_ arg: String) -> String {
+    /// If the argument contains no special characters, return as-is.
+    let specialChars = CharacterSet(charactersIn: " \t\n\"'`$\\!#&|;<>(){}[]?*~")
+    if arg.unicodeScalars.allSatisfy({ !specialChars.contains($0) }) {
+      return arg
+    }
+
+    /// Use single quotes for safety - only need to escape single quotes themselves.
+    /// Replace ' with '\'' (end quote, escaped quote, start quote).
+    let escaped = arg.replacingOccurrences(of: "'", with: "'\\''")
+    return "'\(escaped)'"
   }
 
   func makeNSView(context: Context) -> OutputCapturingTerminalView {
