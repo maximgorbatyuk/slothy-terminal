@@ -102,12 +102,8 @@ struct TerminalViewRepresentable: NSViewRepresentable {
       nsView.font = configuredFont
     }
 
-    /// Focus terminal when tab becomes active (only if not already focused).
-    if isActive && nsView.window?.firstResponder !== nsView {
-      DispatchQueue.main.async {
-        nsView.window?.makeFirstResponder(nsView)
-      }
-    }
+    /// Update active state - this manages event monitors and focus.
+    nsView.setActive(isActive)
   }
 
   func makeCoordinator() -> Coordinator {
@@ -250,8 +246,15 @@ class OutputCapturingTerminalView: LocalProcessTerminalView {
   private var keyEventMonitor: Any?
   private var mouseEventMonitor: Any?
 
-  /// Handle Cmd+V for paste.
+  /// Tracks whether this terminal view is currently active (visible tab).
+  private(set) var isActive: Bool = false
+
+  /// Handle Cmd+V for paste - only when this view is active.
   override func performKeyEquivalent(with event: NSEvent) -> Bool {
+    guard isActive else {
+      return super.performKeyEquivalent(with: event)
+    }
+
     if event.modifierFlags.contains(.command) && event.charactersIgnoringModifiers == "v" {
       paste(self)
       return true
@@ -260,19 +263,26 @@ class OutputCapturingTerminalView: LocalProcessTerminalView {
     return super.performKeyEquivalent(with: event)
   }
 
-  override func dataReceived(slice: ArraySlice<UInt8>) {
-    /// Call the parent implementation to display the data.
-    super.dataReceived(slice: slice)
+  /// Sets the active state of this terminal view.
+  /// Registers event monitors when active, removes them when inactive.
+  func setActive(_ active: Bool) {
+    guard isActive != active else {
+      return
+    }
 
-    /// Forward the data to our callback.
-    let data = Data(slice)
-    onDataReceived?(data)
+    isActive = active
+
+    if active {
+      registerEventMonitors()
+      window?.makeFirstResponder(self)
+    } else {
+      removeEventMonitors()
+    }
   }
 
-  override func viewDidMoveToWindow() {
-    super.viewDidMoveToWindow()
-
-    guard let window else {
+  /// Registers key and mouse event monitors for this terminal view.
+  private func registerEventMonitors() {
+    guard window != nil else {
       return
     }
 
@@ -280,6 +290,7 @@ class OutputCapturingTerminalView: LocalProcessTerminalView {
     if keyEventMonitor == nil {
       keyEventMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
         guard let self,
+              self.isActive,
               self.window?.firstResponder === self
         else {
           return event
@@ -299,6 +310,7 @@ class OutputCapturingTerminalView: LocalProcessTerminalView {
     if mouseEventMonitor == nil {
       mouseEventMonitor = NSEvent.addLocalMonitorForEvents(matching: .leftMouseDown) { [weak self] event in
         guard let self,
+              self.isActive,
               let eventWindow = event.window,
               eventWindow === self.window
         else {
@@ -314,20 +326,10 @@ class OutputCapturingTerminalView: LocalProcessTerminalView {
         return event
       }
     }
-
-    /// Auto-focus terminal when view is added to window.
-    /// Use a small delay to ensure the view is fully ready.
-    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
-      guard let self else {
-        return
-      }
-
-      self.window?.makeFirstResponder(self)
-    }
   }
 
-  override func removeFromSuperview() {
-    /// Clean up event monitors.
+  /// Removes event monitors when this terminal becomes inactive.
+  private func removeEventMonitors() {
     if let monitor = keyEventMonitor {
       NSEvent.removeMonitor(monitor)
       keyEventMonitor = nil
@@ -337,7 +339,30 @@ class OutputCapturingTerminalView: LocalProcessTerminalView {
       NSEvent.removeMonitor(monitor)
       mouseEventMonitor = nil
     }
+  }
 
+  override func dataReceived(slice: ArraySlice<UInt8>) {
+    /// Call the parent implementation to display the data.
+    super.dataReceived(slice: slice)
+
+    /// Forward the data to our callback.
+    let data = Data(slice)
+    onDataReceived?(data)
+  }
+
+  override func viewDidMoveToWindow() {
+    super.viewDidMoveToWindow()
+
+    /// If the view is added to window and is active, register event monitors.
+    /// Otherwise, monitors will be registered when setActive(true) is called.
+    if window != nil && isActive {
+      registerEventMonitors()
+    }
+  }
+
+  override func removeFromSuperview() {
+    /// Clean up event monitors.
+    removeEventMonitors()
     super.removeFromSuperview()
   }
 

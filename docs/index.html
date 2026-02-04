@@ -7,7 +7,7 @@
   <title>Slothy Terminal — Take it slow, ship it fast</title>
   <meta name="description"
     content="A native macOS terminal for AI coding assistants. Tabbed interface for Claude CLI, OpenCode, and plain terminal sessions.">
-  <meta name="theme-color" content="#1C1612">
+  <meta name="theme-color" content="#0F172A">
 
   <!-- Open Graph -->
   <meta property="og:title" content="Slothy Terminal">
@@ -30,8 +30,8 @@
 </head>
 
 <body>
-  <!-- Ambient background -->
-  <div class="ambient-bg"></div>
+  <!-- Dots pattern background -->
+  <div class="dots-bg"></div>
 
   <!-- Navigation -->
   <nav class="nav">
@@ -78,7 +78,6 @@
       <div class="hero-icon-wrapper">
         <img src="assets/SlothyTerminalIcon.jpg" alt="Slothy Terminal - A cute sloth with coffee at a retro computer"
           class="hero-icon">
-        <div class="hero-icon-glow"></div>
       </div>
       <h1 class="hero-title">Slothy Terminal</h1>
       <p class="hero-tagline">Take it slow, ship it fast.</p>
@@ -266,8 +265,6 @@
           <button class="carousel-dot" aria-label="Go to slide 4"></button>
           <button class="carousel-dot" aria-label="Go to slide 5"></button>
         </div>
-
-        <div class="carousel-glow"></div>
       </div>
     </div>
   </section>
@@ -373,6 +370,27 @@
       </div>
     </div>
   </footer>
+
+  <!-- Image Lightbox -->
+  <div class="lightbox" id="lightbox">
+    <button class="lightbox-close" aria-label="Close lightbox">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <line x1="18" y1="6" x2="6" y2="18"></line>
+        <line x1="6" y1="6" x2="18" y2="18"></line>
+      </svg>
+    </button>
+    <button class="lightbox-btn lightbox-btn-prev" aria-label="Previous image">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <polyline points="15 18 9 12 15 6"></polyline>
+      </svg>
+    </button>
+    <img class="lightbox-img" id="lightboxImg" src="" alt="">
+    <button class="lightbox-btn lightbox-btn-next" aria-label="Next image">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <polyline points="9 18 15 12 9 6"></polyline>
+      </svg>
+    </button>
+  </div>
 
   <script src="script.js"></script>
 </body>
