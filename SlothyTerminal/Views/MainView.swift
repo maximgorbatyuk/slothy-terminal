@@ -57,6 +57,11 @@ struct MainView: View {
 
 /// Status bar at the bottom of the window.
 struct StatusBarView: View {
+  @Environment(AppState.self) private var appState
+
+  /// Current git branch for the active tab's directory.
+  @State private var gitBranch: String?
+
   /// App version from bundle.
   private var appVersion: String {
     Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.0.0"
@@ -72,8 +77,24 @@ struct StatusBarView: View {
     BuildConfig.isDevelopment
   }
 
+  /// The working directory of the active tab.
+  private var activeDirectory: URL? {
+    appState.activeTab?.workingDirectory
+  }
+
   var body: some View {
     HStack(spacing: 8) {
+      /// Git branch on the left.
+      if let branch = gitBranch {
+        HStack(spacing: 4) {
+          Image(systemName: "arrow.triangle.branch")
+            .font(.system(size: 9))
+          Text(branch)
+            .font(.system(size: 10))
+        }
+        .foregroundColor(.secondary)
+      }
+
       Spacer()
 
       /// Version info on the right.
@@ -96,6 +117,19 @@ struct StatusBarView: View {
     .padding(.horizontal, 12)
     .padding(.vertical, 4)
     .background(appCardColor)
+    .task(id: activeDirectory) {
+      updateGitBranch()
+    }
+  }
+
+  /// Updates the git branch for the current directory.
+  private func updateGitBranch() {
+    guard let directory = activeDirectory else {
+      gitBranch = nil
+      return
+    }
+
+    gitBranch = GitService.shared.getCurrentBranch(in: directory)
   }
 }
 
