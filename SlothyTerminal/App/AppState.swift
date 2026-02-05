@@ -110,4 +110,12 @@ class AppState {
   func toggleSidebar() {
     isSidebarVisible.toggle()
   }
+
+  /// Terminates all active PTY sessions.
+  /// Called during app quit to ensure child processes are cleaned up.
+  func terminateAllSessions() {
+    for tab in tabs {
+      tab.ptyController?.terminate()
+    }
+  }
 }

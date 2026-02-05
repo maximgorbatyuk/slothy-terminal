@@ -75,10 +75,10 @@ final class ExternalAppManager {
     }
 
     let configuration = NSWorkspace.OpenConfiguration()
-    configuration.arguments = [url.path]
 
-    NSWorkspace.shared.openApplication(
-      at: appURL,
+    NSWorkspace.shared.open(
+      [url],
+      withApplicationAt: appURL,
       configuration: configuration
     ) { _, error in
       if let error {

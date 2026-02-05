@@ -24,6 +24,9 @@ struct SlothyTerminalApp: App {
             appState.createTab(agent: agentType, directory: folder)
           }
         }
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.willTerminateNotification)) { _ in
+          appState.terminateAllSessions()
+        }
     }
     .windowStyle(.hiddenTitleBar)
     .commands {
