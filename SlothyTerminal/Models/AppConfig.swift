@@ -46,6 +46,11 @@ struct AppConfig: Codable, Equatable {
   /// Custom accent color for OpenCode (nil uses default).
   var opencodeAccentColor: CodableColor?
 
+  // MARK: - Saved Prompts
+
+  /// Saved reusable prompts for AI agent sessions.
+  var savedPrompts: [SavedPrompt] = []
+
   // MARK: - Keyboard Shortcuts
 
   /// Custom keyboard shortcuts.

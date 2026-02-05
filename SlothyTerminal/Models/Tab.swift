@@ -10,6 +10,9 @@ class Tab: Identifiable {
   var isActive: Bool = false
   var usageStats: UsageStats
 
+  /// The saved prompt to pass as the first message to the AI agent.
+  let initialPrompt: SavedPrompt?
+
   /// The AI agent for this tab.
   let agent: AIAgent
 
@@ -28,12 +31,14 @@ class Tab: Identifiable {
     id: UUID = UUID(),
     agentType: AgentType,
     workingDirectory: URL,
-    title: String? = nil
+    title: String? = nil,
+    initialPrompt: SavedPrompt? = nil
   ) {
     self.id = id
     self.agentType = agentType
     self.workingDirectory = workingDirectory
     self.title = title ?? workingDirectory.lastPathComponent
+    self.initialPrompt = initialPrompt
     self.usageStats = UsageStats()
     self.agent = AgentFactory.createAgent(for: agentType)
 
@@ -52,8 +57,13 @@ class Tab: Identifiable {
   }
 
   /// The arguments to pass to the agent command.
+  /// Delegates prompt formatting to the agent to ensure safe flag termination.
   var arguments: [String] {
-    agent.defaultArgs
+    if let prompt = initialPrompt {
+      return agent.argsWithPrompt(prompt.promptText)
+    }
+
+    return agent.defaultArgs
   }
 
   /// The environment variables for the agent process.

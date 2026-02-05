@@ -28,4 +28,9 @@ struct TerminalAgent: AIAgent {
   func isAvailable() -> Bool {
     true
   }
+
+  /// Terminal does not support initial prompts.
+  func argsWithPrompt(_ promptText: String) -> [String] {
+    defaultArgs
+  }
 }
