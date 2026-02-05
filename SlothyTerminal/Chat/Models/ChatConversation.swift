@@ -22,6 +22,11 @@ class ChatConversation {
     messages.append(message)
   }
 
+  /// Removes the last message if it matches the given message.
+  func removeMessage(_ message: ChatMessage) {
+    messages.removeAll { $0.id == message.id }
+  }
+
   /// Clears all messages and resets token counts.
   func clear() {
     messages.removeAll()

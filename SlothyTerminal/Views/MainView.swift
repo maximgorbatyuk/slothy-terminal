@@ -149,8 +149,8 @@ struct ModalRouter: View {
       }
 
     case .chatFolderSelector:
-      FolderSelectorModal(agent: .claude) { selectedDirectory, _ in
-        appState.createChatTab(directory: selectedDirectory)
+      FolderSelectorModal(agent: .claude) { selectedDirectory, selectedPrompt in
+        appState.createChatTab(directory: selectedDirectory, initialPrompt: selectedPrompt?.promptText)
       }
 
     case .settings:

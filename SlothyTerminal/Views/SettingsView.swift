@@ -172,7 +172,7 @@ struct GeneralSettingsTab: View {
         HStack(spacing: 8) {
           ForEach(editorApps) { app in
             Button {
-              ExternalAppManager.shared.openDirectory(URL(fileURLWithPath: configManager.configFilePath), in: app)
+              ExternalAppManager.shared.openFile(URL(fileURLWithPath: configManager.configFilePath), in: app)
             } label: {
               HStack(spacing: 4) {
                 if let icon = app.appIcon {

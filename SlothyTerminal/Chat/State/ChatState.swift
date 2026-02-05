@@ -100,7 +100,12 @@ class ChatState {
     guard let executablePath = resolveClaudePath() else {
       error = .claudeNotFound
       isLoading = false
-      currentMessage?.isStreaming = false
+
+      if let placeholder = currentMessage {
+        placeholder.isStreaming = false
+        conversation.removeMessage(placeholder)
+      }
+
       currentMessage = nil
       return
     }
@@ -129,7 +134,12 @@ class ChatState {
     } catch {
       self.error = .processFailure(error.localizedDescription)
       isLoading = false
-      currentMessage?.isStreaming = false
+
+      if let placeholder = currentMessage {
+        placeholder.isStreaming = false
+        conversation.removeMessage(placeholder)
+      }
+
       currentMessage = nil
       return
     }
