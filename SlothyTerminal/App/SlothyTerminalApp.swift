@@ -62,6 +62,11 @@ struct SlothyTerminalApp: App {
         }
         .keyboardShortcut("t", modifiers: [.command, .option])
 
+        Button("New Claude Chat (Beta)") {
+          appState.showChatFolderSelector()
+        }
+        .keyboardShortcut("t", modifiers: [.command, .shift, .option])
+
         Divider()
 
         Button("Open Folder...") {

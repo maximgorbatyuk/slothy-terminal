@@ -51,6 +51,11 @@ struct AppConfig: Codable, Equatable {
   /// Saved reusable prompts for AI agent sessions.
   var savedPrompts: [SavedPrompt] = []
 
+  // MARK: - Chat Settings
+
+  /// Which key sends a chat message (the other key inserts a newline).
+  var chatSendKey: ChatSendKey = .enter
+
   // MARK: - Keyboard Shortcuts
 
   /// Custom keyboard shortcuts.
@@ -70,6 +75,25 @@ struct AppConfig: Codable, Equatable {
 }
 
 // MARK: - Supporting Types
+
+/// Which key sends a chat message.
+enum ChatSendKey: String, Codable, CaseIterable {
+  case enter = "Enter"
+  case shiftEnter = "Shift+Enter"
+
+  var displayName: String { rawValue }
+
+  /// The key combination that inserts a newline (the opposite of sendKey).
+  var newlineHint: String {
+    switch self {
+    case .enter:
+      return "Shift+Return for new line"
+
+    case .shiftEnter:
+      return "Return for new line"
+    }
+  }
+}
 
 /// Sidebar position options.
 enum SidebarPosition: String, Codable, CaseIterable {

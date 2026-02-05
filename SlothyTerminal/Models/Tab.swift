@@ -1,10 +1,17 @@
 import Foundation
 
+/// The mode a tab operates in.
+enum TabMode {
+  case terminal
+  case chat
+}
+
 /// Represents a single terminal tab with an AI agent session.
 @Observable
 class Tab: Identifiable {
   let id: UUID
   let agentType: AgentType
+  let mode: TabMode
   var workingDirectory: URL
   var title: String
   var isActive: Bool = false
@@ -15,6 +22,9 @@ class Tab: Identifiable {
 
   /// The AI agent for this tab.
   let agent: AIAgent
+
+  /// The chat state for chat-mode tabs.
+  var chatState: ChatState?
 
   /// The PTY controller managing this tab's terminal session.
   /// Set after the tab is created and the terminal is initialized.
@@ -32,10 +42,12 @@ class Tab: Identifiable {
     agentType: AgentType,
     workingDirectory: URL,
     title: String? = nil,
-    initialPrompt: SavedPrompt? = nil
+    initialPrompt: SavedPrompt? = nil,
+    mode: TabMode = .terminal
   ) {
     self.id = id
     self.agentType = agentType
+    self.mode = mode
     self.workingDirectory = workingDirectory
     self.title = title ?? workingDirectory.lastPathComponent
     self.initialPrompt = initialPrompt
@@ -44,11 +56,16 @@ class Tab: Identifiable {
 
     /// Set context window limit from agent.
     self.usageStats.contextWindowLimit = agent.contextWindowLimit
+
+    if mode == .chat {
+      self.chatState = ChatState(workingDirectory: workingDirectory)
+    }
   }
 
   /// Creates a display title combining agent type and directory.
   var displayTitle: String {
-    "\(agent.displayName): \(title)"
+    let prefix = mode == .chat ? "Chat (Beta)" : agent.displayName
+    return "\(prefix): \(title)"
   }
 
   /// The command to execute for this tab's agent.

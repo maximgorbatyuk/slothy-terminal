@@ -84,6 +84,19 @@ struct GeneralSettingsTab: View {
         }
       }
 
+      Section("Chat") {
+        Picker("Send message with", selection: Bindable(configManager).config.chatSendKey) {
+          ForEach(ChatSendKey.allCases, id: \.self) { key in
+            Text(key.displayName).tag(key)
+          }
+        }
+        .pickerStyle(.segmented)
+
+        Text(configManager.config.chatSendKey.newlineHint)
+          .font(.caption)
+          .foregroundColor(.secondary)
+      }
+
       Section("Updates") {
         Toggle(
           "Check for updates automatically",

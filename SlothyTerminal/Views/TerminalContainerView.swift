@@ -22,7 +22,7 @@ struct TerminalContainerView: View {
   }
 }
 
-/// Displays the terminal for an active tab.
+/// Displays the terminal or chat for an active tab.
 struct ActiveTerminalView: View {
   let tab: Tab
   let isActive: Bool
@@ -33,7 +33,9 @@ struct ActiveTerminalView: View {
     ZStack {
       appCardColor
 
-      if let error = agentUnavailableError {
+      if tab.mode == .chat, let chatState = tab.chatState {
+        ChatView(chatState: chatState)
+      } else if let error = agentUnavailableError {
         AgentUnavailableView(agentName: tab.agent.displayName, error: error)
       } else if isReady {
         StandaloneTerminalView(
@@ -60,6 +62,12 @@ struct ActiveTerminalView: View {
       }
     }
     .task {
+      /// Chat mode doesn't need PTY availability checks.
+      if tab.mode == .chat {
+        tab.usageStats.startSession()
+        return
+      }
+
       /// Check if agent is available.
       if !tab.isAgentAvailable {
         agentUnavailableError = "The \(tab.agent.displayName) CLI was not found at: \(tab.command)"
@@ -162,6 +170,11 @@ struct EmptyTerminalView: View {
             appState.showFolderSelector(for: agentType)
           }
         }
+
+        /// Chat mode button.
+        ChatTabTypeButton {
+          appState.showChatFolderSelector()
+        }
       }
       .frame(maxWidth: 320)
     }
@@ -203,6 +216,64 @@ struct TabTypeButton: View {
         Spacer()
 
         if !isAvailable && agentType != .terminal {
+          Text("Not installed")
+            .font(.system(size: 10))
+            .foregroundColor(.orange)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 2)
+            .background(Color.orange.opacity(0.1))
+            .cornerRadius(4)
+        }
+      }
+      .padding(.horizontal, 16)
+      .padding(.vertical, 12)
+      .frame(maxWidth: .infinity, alignment: .leading)
+      .background(appCardColor)
+      .cornerRadius(8)
+    }
+    .buttonStyle(.plain)
+    .opacity(isAvailable ? 1.0 : 0.7)
+  }
+}
+
+/// Button for creating a new Claude Chat tab.
+struct ChatTabTypeButton: View {
+  let action: () -> Void
+
+  private var isAvailable: Bool {
+    ClaudeAgent().isAvailable()
+  }
+
+  var body: some View {
+    Button(action: action) {
+      HStack(spacing: 12) {
+        Image(systemName: "bubble.left.and.bubble.right")
+          .font(.system(size: 20))
+          .foregroundColor(AgentType.claude.accentColor)
+          .frame(width: 32)
+
+        VStack(alignment: .leading, spacing: 2) {
+          HStack(spacing: 6) {
+            Text("New Claude Chat")
+              .font(.system(size: 14, weight: .medium))
+
+            Text("Beta")
+              .font(.system(size: 9, weight: .semibold))
+              .foregroundColor(.orange)
+              .padding(.horizontal, 5)
+              .padding(.vertical, 1)
+              .background(Color.orange.opacity(0.15))
+              .cornerRadius(3)
+          }
+
+          Text("Chat interface for Claude")
+            .font(.system(size: 11))
+            .foregroundColor(.secondary)
+        }
+
+        Spacer()
+
+        if !isAvailable {
           Text("Not installed")
             .font(.system(size: 10))
             .foregroundColor(.orange)

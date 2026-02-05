@@ -5,6 +5,7 @@ import SwiftUI
 enum ModalType: Identifiable {
   case newTab(AgentType?)
   case folderSelector(AgentType)
+  case chatFolderSelector
   case settings
 
   var id: String {
@@ -13,6 +14,8 @@ enum ModalType: Identifiable {
       return "newTab-\(agent?.rawValue ?? "none")"
     case .folderSelector(let agent):
       return "folderSelector-\(agent.rawValue)"
+    case .chatFolderSelector:
+      return "chatFolderSelector"
     case .settings:
       return "settings"
     }
@@ -52,6 +55,29 @@ class AppState {
     switchToTab(id: tab.id)
   }
 
+  /// Creates a new chat tab with the specified working directory.
+  func createChatTab(directory: URL, initialPrompt: String? = nil) {
+    let tab = Tab(
+      agentType: .claude,
+      workingDirectory: directory,
+      mode: .chat
+    )
+    tabs.append(tab)
+    switchToTab(id: tab.id)
+
+    /// Send initial prompt if provided.
+    if let prompt = initialPrompt,
+       !prompt.isEmpty
+    {
+      tab.chatState?.sendMessage(prompt)
+    }
+  }
+
+  /// Shows the chat folder selector modal.
+  func showChatFolderSelector() {
+    activeModal = .chatFolderSelector
+  }
+
   /// Closes the tab with the specified ID.
   func closeTab(id: UUID) {
     guard let index = tabs.firstIndex(where: { $0.id == id }) else {
@@ -60,6 +86,10 @@ class AppState {
 
     /// Terminate the PTY session if active.
     tabs[index].ptyController?.terminate()
+
+    /// Terminate chat process if active.
+    tabs[index].chatState?.terminateProcess()
+
     tabs.remove(at: index)
 
     /// If we closed the active tab, switch to another one.
@@ -111,11 +141,12 @@ class AppState {
     isSidebarVisible.toggle()
   }
 
-  /// Terminates all active PTY sessions.
+  /// Terminates all active PTY sessions and chat responses.
   /// Called during app quit to ensure child processes are cleaned up.
   func terminateAllSessions() {
     for tab in tabs {
       tab.ptyController?.terminate()
+      tab.chatState?.terminateProcess()
     }
   }
 }
