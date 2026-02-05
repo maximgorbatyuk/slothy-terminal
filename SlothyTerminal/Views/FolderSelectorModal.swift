@@ -4,14 +4,28 @@ import SwiftUI
 /// Shows recent folders and provides access to the system folder picker.
 struct FolderSelectorModal: View {
   let agent: AgentType
-  let onSelect: (URL) -> Void
+  let onSelect: (URL, SavedPrompt?) -> Void
 
   @Environment(\.dismiss) private var dismiss
   private let recentFoldersManager = RecentFoldersManager.shared
+  private let configManager = ConfigManager.shared
+  @State private var selectedPromptID: UUID?
 
-  init(agent: AgentType, onSelect: @escaping (URL) -> Void) {
+  private var savedPrompts: [SavedPrompt] {
+    configManager.config.savedPrompts
+  }
+
+  private var selectedPrompt: SavedPrompt? {
+    savedPrompts.find(by: selectedPromptID)
+  }
+
+  init(agent: AgentType, onSelect: @escaping (URL, SavedPrompt?) -> Void) {
     self.agent = agent
     self.onSelect = onSelect
+  }
+
+  private var showPromptPicker: Bool {
+    agent.supportsInitialPrompt && !savedPrompts.isEmpty
   }
 
   var body: some View {
@@ -41,6 +55,14 @@ struct FolderSelectorModal: View {
       .padding(20)
 
       Divider()
+
+      if showPromptPicker {
+        PromptPicker(selectedPromptID: $selectedPromptID, savedPrompts: savedPrompts)
+          .padding(.horizontal, 20)
+          .padding(.vertical, 12)
+
+        Divider()
+      }
 
       /// Recent folders section.
       if !recentFoldersManager.recentFolders.isEmpty {
@@ -142,7 +164,7 @@ struct FolderSelectorModal: View {
   /// Selects a folder and closes the modal.
   private func selectFolder(_ url: URL) {
     recentFoldersManager.addRecentFolder(url)
-    onSelect(url)
+    onSelect(url, selectedPrompt)
     dismiss()
   }
 }
@@ -222,14 +244,40 @@ struct RecentFolderButton: View {
   }
 }
 
+// MARK: - Prompt Picker
+
+/// A reusable picker for selecting a saved prompt.
+struct PromptPicker: View {
+  @Binding var selectedPromptID: UUID?
+  let savedPrompts: [SavedPrompt]
+
+  var body: some View {
+    VStack(alignment: .leading, spacing: 8) {
+      Text("PROMPT")
+        .font(.system(size: 11, weight: .semibold))
+        .foregroundColor(.secondary)
+
+      Picker("Prompt", selection: $selectedPromptID) {
+        Text("No prompt").tag(nil as UUID?)
+
+        ForEach(savedPrompts) { prompt in
+          Text(prompt.name).tag(prompt.id as UUID?)
+        }
+      }
+      .labelsHidden()
+      .pickerStyle(.menu)
+    }
+  }
+}
+
 #Preview("With Recent") {
-  FolderSelectorModal(agent: .claude) { url in
-    print("Selected: \(url)")
+  FolderSelectorModal(agent: .claude) { url, prompt in
+    print("Selected: \(url), prompt: \(prompt?.name ?? "none")")
   }
 }
 
 #Preview("Empty") {
-  FolderSelectorModal(agent: .opencode) { url in
-    print("Selected: \(url)")
+  FolderSelectorModal(agent: .opencode) { url, prompt in
+    print("Selected: \(url), prompt: \(prompt?.name ?? "none")")
   }
 }

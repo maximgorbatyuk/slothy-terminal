@@ -38,6 +38,11 @@ struct OpenCodeAgent: AIAgent {
     return parser.parseClaudeOutput(output)
   }
 
+  /// OpenCode TUI uses `--prompt` to prefill the input field.
+  func argsWithPrompt(_ promptText: String) -> [String] {
+    defaultArgs + ["--prompt", promptText]
+  }
+
   func isAvailable() -> Bool {
     /// Check if OPENCODE_PATH is set and valid.
     if let envPath = ProcessInfo.processInfo.environment["OPENCODE_PATH"] {

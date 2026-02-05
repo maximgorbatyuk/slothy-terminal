@@ -66,6 +66,72 @@ private final class ContinuationHolder: @unchecked Sendable {
   }
 }
 
+/// Thread-safe holder for the child process ID and master file descriptor.
+/// Allows `deinit` (which is nonisolated) to clean up process resources
+/// that would otherwise be inaccessible behind MainActor isolation.
+private final class ProcessResourceHolder: @unchecked Sendable {
+  private let lock = NSLock()
+  private var masterFD: Int32 = -1
+  private var childPID: pid_t = 0
+
+  func set(fd: Int32, pid: pid_t) {
+    lock.lock()
+    defer { lock.unlock() }
+    masterFD = fd
+    childPID = pid
+  }
+
+  func setFD(_ fd: Int32) {
+    lock.lock()
+    defer { lock.unlock() }
+    masterFD = fd
+  }
+
+  func setPID(_ pid: pid_t) {
+    lock.lock()
+    defer { lock.unlock() }
+    childPID = pid
+  }
+
+  func getFD() -> Int32 {
+    lock.lock()
+    defer { lock.unlock() }
+    return masterFD
+  }
+
+  func getPID() -> pid_t {
+    lock.lock()
+    defer { lock.unlock() }
+    return childPID
+  }
+
+  /// Terminates the child process (if alive) and closes the master FD.
+  /// Safe to call from any isolation context, including `deinit`.
+  func cleanup() {
+    lock.lock()
+    let fd = masterFD
+    let pid = childPID
+    masterFD = -1
+    childPID = 0
+    lock.unlock()
+
+    if pid > 0 {
+      if fd >= 0 {
+        close(fd)
+      }
+      kill(-pid, SIGTERM)
+
+      var status: Int32 = 0
+      if waitpid(pid, &status, WNOHANG) == 0 {
+        kill(-pid, SIGKILL)
+        waitpid(pid, &status, 0)
+      }
+    } else if fd >= 0 {
+      close(fd)
+    }
+  }
+}
+
 /// Controller for managing a pseudo-terminal (PTY) session.
 /// Wraps POSIX forkpty() to spawn and communicate with child processes.
 @Observable
@@ -78,6 +144,19 @@ class PTYController {
 
   /// Thread-safe holder for the output continuation.
   private let continuationHolder = ContinuationHolder()
+
+  /// Thread-safe holder for process resources, enabling cleanup from `deinit`.
+  private let processResources = ProcessResourceHolder()
+
+  /// Safety net: clean up child process and file descriptor if the controller
+  /// is deallocated without an explicit `terminate()` call.
+  /// Note: readTask is not cancelled here because it is MainActor-isolated.
+  /// It will exit on its own — the [weak self] reference becomes nil, and
+  /// cleanup() closes the FD which breaks the read loop.
+  deinit {
+    continuationHolder.finish()
+    processResources.cleanup()
+  }
 
   /// Spawns a new process in a pseudo-terminal.
   /// - Parameters:
@@ -143,6 +222,7 @@ class PTYController {
       /// Parent process.
       childPID = pid
       isRunning = true
+      processResources.set(fd: masterFD, pid: pid)
 
       /// Set non-blocking mode on master file descriptor.
       let flags = fcntl(masterFD, F_GETFL)
@@ -221,18 +301,32 @@ class PTYController {
     continuationHolder.finish()
 
     if childPID > 0 {
-      kill(childPID, SIGTERM)
-
-      /// Give the process a moment to terminate gracefully.
-      var status: Int32 = 0
-      let waitResult = waitpid(childPID, &status, WNOHANG)
-
-      if waitResult == 0 {
-        /// Process hasn't exited yet, force kill.
-        kill(childPID, SIGKILL)
-        waitpid(childPID, &status, 0)
+      /// Close master FD first — the kernel sends SIGHUP to the child's
+      /// session when the master side of the PTY is closed.
+      if masterFD >= 0 {
+        close(masterFD)
+        masterFD = -1
       }
 
+      /// Send SIGTERM to the entire process group so sub-processes
+      /// spawned by the agent (e.g. language servers) are also signaled.
+      kill(-childPID, SIGTERM)
+
+      /// Poll for up to ~100 ms to let the process exit gracefully.
+      var status: Int32 = 0
+      for _ in 0..<10 {
+        if waitpid(childPID, &status, WNOHANG) != 0 {
+          childPID = 0
+          processResources.set(fd: -1, pid: 0)
+          isRunning = false
+          return
+        }
+        usleep(10_000)
+      }
+
+      /// Still alive — force kill the process group and reap.
+      kill(-childPID, SIGKILL)
+      waitpid(childPID, &status, 0)
       childPID = 0
     }
 
@@ -241,12 +335,15 @@ class PTYController {
       masterFD = -1
     }
 
+    /// Mark process resources as cleaned up so deinit won't double-close.
+    processResources.set(fd: -1, pid: 0)
     isRunning = false
   }
 
   /// Starts the background task for reading PTY output.
   private func startReading() {
     let holder = continuationHolder
+    let resources = processResources
 
     readTask = Task.detached { [weak self] in
       guard let self else {
@@ -269,15 +366,27 @@ class PTYController {
           let data = Data(buffer[0..<bytesRead])
           holder.yield(data)
         } else if bytesRead == 0 {
-          /// EOF - process has exited.
+          /// EOF — process has exited. Reap to avoid zombies.
+          resources.setPID(0)
           await MainActor.run {
+            if self.childPID > 0 {
+              var status: Int32 = 0
+              waitpid(self.childPID, &status, WNOHANG)
+              self.childPID = 0
+            }
             self.isRunning = false
           }
           holder.finish()
           break
         } else if errno != EAGAIN && errno != EWOULDBLOCK {
-          /// Real error occurred.
+          /// Real error — reap to avoid zombies.
+          resources.setPID(0)
           await MainActor.run {
+            if self.childPID > 0 {
+              var status: Int32 = 0
+              waitpid(self.childPID, &status, WNOHANG)
+              self.childPID = 0
+            }
             self.isRunning = false
           }
           holder.finish()

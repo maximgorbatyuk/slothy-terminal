@@ -2,6 +2,49 @@
 
 All notable changes to SlothyTerminal will be documented in this file.
 
+## [2026.2.3] - 2026-02-05
+
+### Added
+- **Chat UI (Beta)** - Native SwiftUI chat interface communicating with Claude CLI via persistent `Foundation.Process` with bidirectional `stream-json`
+  - Streaming message display with thinking, tool use, and tool result content blocks
+  - Markdown rendering toggle (Markdown / Plain text) in status bar
+  - Configurable send key: Enter or Shift+Enter (the other inserts a newline)
+  - Smart Claude path resolution preferring standalone binary over npm wrapper
+  - Session persistence across messages via `--include-partial-messages`
+  - Auto-scroll to latest content during streaming
+  - Expandable/collapsible tool use and tool result blocks
+  - Empty state with usage hints, error banner with dismiss
+  - Chat sidebar showing message count, session duration, and token usage (input/output)
+  - Dedicated tab icon and "Chat β" prefix in tab bar
+  - Beta labels on all chat UI entry points
+  - Menu item "New Claude Chat (Beta)" with keyboard shortcut `Cmd+Shift+Option+T`
+  - `ChatTabTypeButton` on the empty terminal welcome screen
+- **Saved Prompts** - Reusable prompts that can be attached when opening AI agent tabs
+  - Create, edit, and delete prompts in the new Prompts settings tab
+  - Prompt picker in folder selector and agent selection modals
+  - Safe flag termination with `--` to prevent prompt text from being parsed as CLI flags
+  - Agent-specific prompt passing: Claude uses `--`, OpenCode uses `--prompt`, Terminal ignores prompts
+  - 10,000-character limit enforced in the editor
+- **Configuration File section in General settings** - Shows the config file path and quick-open buttons for installed editors (VS Code, Cursor, Antigravity)
+- `PROMPTS.md` documentation for built-in reusable prompts
+
+### Fixed
+- **PTY process cleanup on app quit** - Added `terminateAllSessions()` called via `NSApplication.willTerminateNotification` to ensure all child processes are terminated
+- **PTY resource management overhaul**
+  - Added `ProcessResourceHolder` for thread-safe access to child PID and master FD from any isolation context
+  - Added `deinit` safety net on `PTYController` to clean up leaked processes
+  - `terminate()` now closes the master FD first (triggering kernel SIGHUP), signals the entire process group (`kill(-pid, ...)`), and polls up to 100 ms before force-killing
+  - Fixed zombie processes: added `waitpid` reaping on EOF and read-error paths in the read loop
+- **External app opening** - Fixed `ExternalAppManager` to use `NSWorkspace.shared.open(_:withApplicationAt:)` instead of `openApplication(at:)`, correctly passing the target URL
+- **Text selection in terminal** - Disabled mouse reporting (`allowMouseReporting = false`) so text selection works instead of forwarding mouse events to the child process (e.g., Claude CLI)
+
+### Changed
+- Version bumped to 2026.2.3
+- `Tab` model now supports a `TabMode` (`.terminal` / `.chat`) and holds an optional `ChatState`
+- `AppState` terminates chat processes alongside PTY sessions on tab close and app quit
+- `shortenedPath()` helper refactored to accept `String` instead of `URL`
+- Removed `claude-custom-ui.md` planning document (superseded by implementation)
+
 ## [2026.2.2] - 2026-02-03
 
 ### Added
