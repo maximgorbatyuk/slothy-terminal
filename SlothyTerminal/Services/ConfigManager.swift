@@ -40,6 +40,11 @@ class ConfigManager {
     return appFolder.appendingPathComponent("config.json")
   }
 
+  /// The file path for the config file, for display purposes.
+  var configFilePath: String {
+    configFileURL.path
+  }
+
   private init() {
     self.config = AppConfig.default
     load()

@@ -24,6 +24,9 @@ struct SlothyTerminalApp: App {
             appState.createTab(agent: agentType, directory: folder)
           }
         }
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.willTerminateNotification)) { _ in
+          appState.terminateAllSessions()
+        }
     }
     .windowStyle(.hiddenTitleBar)
     .commands {
@@ -58,6 +61,11 @@ struct SlothyTerminalApp: App {
           appState.showFolderSelector(for: .opencode)
         }
         .keyboardShortcut("t", modifiers: [.command, .option])
+
+        Button("New Claude Chat (Beta)") {
+          appState.showChatFolderSelector()
+        }
+        .keyboardShortcut("t", modifiers: [.command, .shift, .option])
 
         Divider()
 

@@ -144,8 +144,13 @@ struct ModalRouter: View {
       AgentSelectionView(preselectedAgent: preselectedAgent)
 
     case .folderSelector(let agent):
-      FolderSelectorModal(agent: agent) { selectedDirectory in
-        appState.createTab(agent: agent, directory: selectedDirectory)
+      FolderSelectorModal(agent: agent) { selectedDirectory, selectedPrompt in
+        appState.createTab(agent: agent, directory: selectedDirectory, initialPrompt: selectedPrompt)
+      }
+
+    case .chatFolderSelector:
+      FolderSelectorModal(agent: .claude) { selectedDirectory, selectedPrompt in
+        appState.createChatTab(directory: selectedDirectory, initialPrompt: selectedPrompt?.promptText)
       }
 
     case .settings:
@@ -162,9 +167,17 @@ struct AgentSelectionView: View {
   @Environment(\.dismiss) private var dismiss
 
   private let recentFoldersManager = RecentFoldersManager.shared
+  private let configManager = ConfigManager.shared
 
   /// The currently selected directory.
   @State private var selectedDirectory: URL?
+
+  /// The selected saved prompt ID.
+  @State private var selectedPromptID: UUID?
+
+  private var savedPrompts: [SavedPrompt] {
+    configManager.config.savedPrompts
+  }
 
   /// The directory that will be used for the new tab.
   private var currentDirectory: URL {
@@ -243,6 +256,10 @@ struct AgentSelectionView: View {
         .cornerRadius(8)
       }
 
+      if !savedPrompts.isEmpty {
+        PromptPicker(selectedPromptID: $selectedPromptID, savedPrompts: savedPrompts)
+      }
+
       Button("Cancel") {
         dismiss()
       }
@@ -256,7 +273,10 @@ struct AgentSelectionView: View {
   /// Creates a tab with the selected agent and directory.
   private func createTab(agent: AgentType) {
     recentFoldersManager.addRecentFolder(currentDirectory)
-    appState.createTab(agent: agent, directory: currentDirectory)
+    let prompt = agent.supportsInitialPrompt
+      ? savedPrompts.find(by: selectedPromptID)
+      : nil
+    appState.createTab(agent: agent, directory: currentDirectory, initialPrompt: prompt)
     dismiss()
   }
 

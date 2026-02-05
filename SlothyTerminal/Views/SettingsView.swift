@@ -26,6 +26,11 @@ struct SettingsView: View {
         .tabItem {
           Label("Shortcuts", systemImage: "keyboard")
         }
+
+      PromptsSettingsTab()
+        .tabItem {
+          Label("Prompts", systemImage: "text.bubble")
+        }
     }
     .frame(width: 550, height: 450)
     .background(appBackgroundColor)
@@ -79,6 +84,19 @@ struct GeneralSettingsTab: View {
         }
       }
 
+      Section("Chat") {
+        Picker("Send message with", selection: Bindable(configManager).config.chatSendKey) {
+          ForEach(ChatSendKey.allCases, id: \.self) { key in
+            Text(key.displayName).tag(key)
+          }
+        }
+        .pickerStyle(.segmented)
+
+        Text(configManager.config.chatSendKey.newlineHint)
+          .font(.caption)
+          .foregroundColor(.secondary)
+      }
+
       Section("Updates") {
         Toggle(
           "Check for updates automatically",
@@ -116,7 +134,7 @@ struct GeneralSettingsTab: View {
 
             ForEach(recentFoldersManager.recentFolders.prefix(5), id: \.path) { folder in
               HStack {
-                Text(shortenedPath(folder))
+                Text(shortenedPath(folder.path))
                   .font(.system(size: 11, design: .monospaced))
                   .lineLimit(1)
                   .truncationMode(.middle)
@@ -143,6 +161,43 @@ struct GeneralSettingsTab: View {
           }
         }
       }
+
+      Section("Configuration File") {
+        Text(shortenedPath(configManager.configFilePath))
+          .font(.system(size: 11, design: .monospaced))
+          .foregroundColor(.secondary)
+          .lineLimit(1)
+          .truncationMode(.middle)
+
+        HStack(spacing: 8) {
+          ForEach(editorApps) { app in
+            Button {
+              ExternalAppManager.shared.openFile(URL(fileURLWithPath: configManager.configFilePath), in: app)
+            } label: {
+              HStack(spacing: 4) {
+                if let icon = app.appIcon {
+                  Image(nsImage: icon)
+                    .resizable()
+                    .frame(width: 16, height: 16)
+                } else {
+                  Image(systemName: app.icon)
+                    .font(.system(size: 12))
+                }
+
+                Text(app.name)
+                  .font(.system(size: 12))
+              }
+            }
+            .buttonStyle(.bordered)
+          }
+        }
+
+        if editorApps.isEmpty {
+          Text("No supported editors found. Install VS Code, Cursor, or Antigravity.")
+            .font(.caption)
+            .foregroundColor(.secondary)
+        }
+      }
     }
     .formStyle(.grouped)
     .scrollContentBackground(.hidden)
@@ -150,9 +205,19 @@ struct GeneralSettingsTab: View {
     .background(appBackgroundColor)
   }
 
-  private func shortenedPath(_ url: URL) -> String {
+  private var editorApps: [ExternalApp] {
+    let editorBundleIDs = [
+      "com.google.antigravity",
+      "com.todesktop.230313mzl4w4u92",
+      "com.microsoft.VSCode",
+    ]
+    return ExternalAppManager.shared.knownApps.filter { app in
+      editorBundleIDs.contains(app.id) && app.isInstalled
+    }
+  }
+
+  private func shortenedPath(_ path: String) -> String {
     let homeDir = FileManager.default.homeDirectoryForCurrentUser.path
-    let path = url.path
     if path.hasPrefix(homeDir) {
       return "~" + path.dropFirst(homeDir.count)
     }
@@ -508,6 +573,294 @@ struct ShortcutRow: View {
         .background(appCardColor)
         .cornerRadius(4)
     }
+  }
+}
+
+// MARK: - Prompts Settings Tab
+
+struct PromptsSettingsTab: View {
+  private var configManager = ConfigManager.shared
+  @State private var editingPrompt: SavedPrompt?
+  @State private var isAddingNew = false
+  @State private var promptToDelete: SavedPrompt?
+
+  var body: some View {
+    Form {
+      Section("Saved Prompts") {
+        if configManager.config.savedPrompts.isEmpty {
+          VStack(spacing: 12) {
+            Image(systemName: "text.bubble")
+              .font(.system(size: 32))
+              .foregroundColor(.secondary)
+
+            Text("No saved prompts")
+              .font(.subheadline)
+              .foregroundColor(.secondary)
+
+            Text("Create reusable prompts to attach when opening AI agent tabs.")
+              .font(.caption)
+              .foregroundColor(.secondary)
+              .multilineTextAlignment(.center)
+          }
+          .frame(maxWidth: .infinity)
+          .padding(.vertical, 16)
+        } else {
+          ForEach(configManager.config.savedPrompts) { prompt in
+            SavedPromptRow(
+              prompt: prompt,
+              onEdit: {
+                editingPrompt = prompt
+              },
+              onDelete: {
+                promptToDelete = prompt
+              }
+            )
+          }
+        }
+      }
+
+      Section {
+        Button {
+          isAddingNew = true
+        } label: {
+          HStack {
+            Image(systemName: "plus")
+            Text("Add Prompt")
+          }
+        }
+      }
+    }
+    .formStyle(.grouped)
+    .scrollContentBackground(.hidden)
+    .padding()
+    .background(appBackgroundColor)
+    .sheet(isPresented: $isAddingNew) {
+      PromptEditorSheet(prompt: nil) { newPrompt in
+        configManager.config.savedPrompts.append(newPrompt)
+      }
+    }
+    .sheet(item: $editingPrompt) { prompt in
+      PromptEditorSheet(prompt: prompt) { updatedPrompt in
+        if let index = configManager.config.savedPrompts.firstIndex(where: { $0.id == updatedPrompt.id }) {
+          configManager.config.savedPrompts[index] = updatedPrompt
+        }
+      }
+    }
+    .alert(
+      "Delete Prompt",
+      isPresented: Binding(
+        get: { promptToDelete != nil },
+        set: { if !$0 { promptToDelete = nil } }
+      )
+    ) {
+      Button("Cancel", role: .cancel) {
+        promptToDelete = nil
+      }
+
+      Button("Delete", role: .destructive) {
+        if let prompt = promptToDelete {
+          configManager.config.savedPrompts.removeAll { $0.id == prompt.id }
+        }
+        promptToDelete = nil
+      }
+    } message: {
+      if let prompt = promptToDelete {
+        Text("Are you sure you want to delete \"\(prompt.name)\"? This cannot be undone.")
+      }
+    }
+  }
+}
+
+/// A row displaying a saved prompt with edit and delete actions.
+struct SavedPromptRow: View {
+  let prompt: SavedPrompt
+  let onEdit: () -> Void
+  let onDelete: () -> Void
+
+  var body: some View {
+    VStack(alignment: .leading, spacing: 6) {
+      HStack {
+        Text(prompt.name)
+          .font(.system(size: 13, weight: .medium))
+
+        Spacer()
+
+        Button {
+          onEdit()
+        } label: {
+          Image(systemName: "pencil")
+            .font(.system(size: 12))
+        }
+        .buttonStyle(.plain)
+        .foregroundColor(.secondary)
+
+        Button {
+          onDelete()
+        } label: {
+          Image(systemName: "trash")
+            .font(.system(size: 12))
+        }
+        .buttonStyle(.plain)
+        .foregroundColor(.secondary)
+      }
+
+      if !prompt.promptDescription.isEmpty {
+        Text(prompt.promptDescription)
+          .font(.system(size: 11))
+          .foregroundColor(.secondary)
+          .lineLimit(1)
+      }
+
+      Text(prompt.promptText)
+        .font(.system(size: 11, design: .monospaced))
+        .foregroundColor(.secondary)
+        .lineLimit(2)
+        .padding(6)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(appCardColor)
+        .cornerRadius(4)
+    }
+    .padding(.vertical, 4)
+  }
+}
+
+/// A sheet for creating or editing a saved prompt.
+struct PromptEditorSheet: View {
+  let prompt: SavedPrompt?
+  let onSave: (SavedPrompt) -> Void
+
+  @Environment(\.dismiss) private var dismiss
+  @State private var name: String = ""
+  @State private var promptDescription: String = ""
+  @State private var promptText: String = ""
+
+  /// Maximum allowed length for prompt text to stay within CLI argument limits.
+  private let maxPromptLength = 10_000
+
+  private var isValid: Bool {
+    !name.trimmingCharacters(in: .whitespaces).isEmpty
+    && !promptText.trimmingCharacters(in: .whitespaces).isEmpty
+    && promptText.count <= maxPromptLength
+  }
+
+  var body: some View {
+    VStack(spacing: 0) {
+      /// Header.
+      HStack {
+        Text(prompt == nil ? "New Prompt" : "Edit Prompt")
+          .font(.headline)
+
+        Spacer()
+
+        Button {
+          dismiss()
+        } label: {
+          Image(systemName: "xmark.circle.fill")
+            .font(.system(size: 20))
+            .foregroundColor(.secondary)
+        }
+        .buttonStyle(.plain)
+      }
+      .padding(20)
+
+      Divider()
+
+      /// Form fields.
+      VStack(alignment: .leading, spacing: 16) {
+        VStack(alignment: .leading, spacing: 6) {
+          Text("Name")
+            .font(.system(size: 11, weight: .semibold))
+            .foregroundColor(.secondary)
+
+          TextField("e.g. Code Reviewer", text: $name)
+            .textFieldStyle(.roundedBorder)
+        }
+
+        VStack(alignment: .leading, spacing: 6) {
+          Text("Description (optional)")
+            .font(.system(size: 11, weight: .semibold))
+            .foregroundColor(.secondary)
+
+          TextField("Brief description of this prompt", text: $promptDescription)
+            .textFieldStyle(.roundedBorder)
+        }
+
+        VStack(alignment: .leading, spacing: 6) {
+          Text("Prompt Text")
+            .font(.system(size: 11, weight: .semibold))
+            .foregroundColor(.secondary)
+
+          TextEditor(text: $promptText)
+            .font(.system(size: 12, design: .monospaced))
+            .frame(minHeight: 120)
+            .scrollContentBackground(.hidden)
+            .padding(8)
+            .background(appCardColor)
+            .cornerRadius(6)
+
+          HStack {
+            Spacer()
+
+            Text("\(promptText.count) / \(maxPromptLength)")
+              .font(.system(size: 10))
+              .foregroundColor(promptText.count > maxPromptLength ? .red : .secondary)
+          }
+        }
+      }
+      .padding(20)
+
+      Divider()
+
+      /// Footer with action buttons.
+      HStack {
+        Button("Cancel") {
+          dismiss()
+        }
+        .keyboardShortcut(.escape)
+
+        Spacer()
+
+        Button("Save") {
+          save()
+        }
+        .buttonStyle(.borderedProminent)
+        .disabled(!isValid)
+        .keyboardShortcut(.return, modifiers: .command)
+      }
+      .padding(16)
+    }
+    .frame(width: 450)
+    .fixedSize(horizontal: false, vertical: true)
+    .background(appBackgroundColor)
+    .onAppear {
+      if let prompt {
+        name = prompt.name
+        promptDescription = prompt.promptDescription
+        promptText = prompt.promptText
+      }
+    }
+  }
+
+  private func save() {
+    let trimmedName = name.trimmingCharacters(in: .whitespaces)
+    let trimmedText = promptText.trimmingCharacters(in: .whitespaces)
+
+    guard !trimmedName.isEmpty,
+          !trimmedText.isEmpty
+    else {
+      return
+    }
+
+    let saved = SavedPrompt(
+      id: prompt?.id ?? UUID(),
+      name: trimmedName,
+      promptDescription: promptDescription.trimmingCharacters(in: .whitespaces),
+      promptText: trimmedText,
+      createdAt: prompt?.createdAt ?? Date(),
+      updatedAt: Date()
+    )
+    onSave(saved)
+    dismiss()
   }
 }
 

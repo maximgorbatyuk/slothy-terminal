@@ -38,6 +38,13 @@ protocol AIAgent {
   /// Validates that the agent's command is available.
   /// - Returns: true if the command exists and is executable.
   func isAvailable() -> Bool
+
+  /// Returns arguments with an initial prompt safely appended.
+  /// Uses `--` to terminate flag parsing so the prompt text cannot be
+  /// misinterpreted as a CLI flag (e.g. `--dangerously-skip-permissions`).
+  /// - Parameter promptText: The prompt text to pass to the agent.
+  /// - Returns: The full argument array including the prompt.
+  func argsWithPrompt(_ promptText: String) -> [String]
 }
 
 // MARK: - Default Implementations
@@ -61,6 +68,11 @@ extension AIAgent {
   /// Default args (empty).
   var defaultArgs: [String] {
     []
+  }
+
+  /// Default implementation uses `--` to terminate flags before the prompt.
+  func argsWithPrompt(_ promptText: String) -> [String] {
+    defaultArgs + ["--", promptText]
   }
 }
 

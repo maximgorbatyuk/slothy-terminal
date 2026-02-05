@@ -70,15 +70,31 @@ final class ExternalAppManager {
       return
     }
 
+    openURL(url, in: app)
+  }
+
+  /// Opens a file in the specified application.
+  func openFile(_ url: URL, in app: ExternalApp) {
+    /// Finder needs special handling - reveal the file in its parent directory.
+    if app.id == "com.apple.finder" {
+      NSWorkspace.shared.selectFile(url.path, inFileViewerRootedAtPath: url.deletingLastPathComponent().path)
+      return
+    }
+
+    openURL(url, in: app)
+  }
+
+  /// Opens a URL in the specified application.
+  private func openURL(_ url: URL, in app: ExternalApp) {
     guard let appURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: app.id) else {
       return
     }
 
     let configuration = NSWorkspace.OpenConfiguration()
-    configuration.arguments = [url.path]
 
-    NSWorkspace.shared.openApplication(
-      at: appURL,
+    NSWorkspace.shared.open(
+      [url],
+      withApplicationAt: appURL,
       configuration: configuration
     ) { _, error in
       if let error {

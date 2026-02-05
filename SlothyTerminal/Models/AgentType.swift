@@ -42,6 +42,27 @@ enum AgentType: String, CaseIterable, Identifiable, Codable {
     }
   }
 
+  /// Whether this agent type supports receiving an initial prompt.
+  var supportsInitialPrompt: Bool {
+    switch self {
+    case .terminal:
+      return false
+    case .claude, .opencode:
+      return true
+    }
+  }
+
+  /// Whether this agent type supports the chat UI mode.
+  var supportsChatMode: Bool {
+    switch self {
+    case .claude:
+      return true
+
+    case .terminal, .opencode:
+      return false
+    }
+  }
+
   /// Description for the tab type.
   var description: String {
     switch self {

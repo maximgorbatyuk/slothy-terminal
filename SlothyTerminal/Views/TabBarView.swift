@@ -43,13 +43,13 @@ struct TabItemView: View {
 
   var body: some View {
     HStack(spacing: 6) {
-      /// Agent icon.
-      Image(systemName: tab.agentType.iconName)
+      /// Agent icon — chat mode uses a chat bubble icon.
+      Image(systemName: tab.mode == .chat ? "bubble.left.and.bubble.right" : tab.agentType.iconName)
         .foregroundColor(isActive ? tab.agentType.accentColor : .gray)
         .font(.system(size: 12))
 
       /// Tab title.
-      Text(tab.title)
+      Text(tab.mode == .chat ? "Chat β: \(tab.title)" : tab.title)
         .font(.system(size: 12))
         .foregroundColor(isActive ? .primary : .gray)
         .lineLimit(1)

@@ -10,7 +10,11 @@ struct SidebarView: View {
     VStack(alignment: .leading, spacing: 16) {
 
       if let tab = appState.activeTab {
-        if tab.agentType.showsUsageStats {
+        if tab.mode == .chat, let chatState = tab.chatState {
+          ScrollView {
+            ChatSidebarView(tab: tab, chatState: chatState)
+          }
+        } else if tab.agentType.showsUsageStats {
           ScrollView {
             AgentStatsView(tab: tab)
           }
@@ -584,6 +588,71 @@ struct ContextWindowProgress: View {
       .background(appCardColor)
       .cornerRadius(8)
     }
+  }
+}
+
+/// Sidebar view for chat-mode tabs.
+struct ChatSidebarView: View {
+  let tab: Tab
+  let chatState: ChatState
+  @State private var currentTime = Date()
+
+  private let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
+
+  var body: some View {
+    VStack(alignment: .leading, spacing: 16) {
+      /// Working directory.
+      WorkingDirectoryCard(path: tab.workingDirectory)
+
+      /// Open in external app button.
+      OpenInAppButton(directory: tab.workingDirectory)
+
+      /// Directory tree.
+      DirectoryTreeView(rootDirectory: tab.workingDirectory)
+
+      /// Chat stats section.
+      StatsSection(title: "Chat Info") {
+        StatRow(label: "Messages", value: "\(chatState.conversation.messages.count)")
+        StatRow(label: "Duration", value: formattedDuration)
+      }
+
+      /// Token usage section.
+      StatsSection(title: "Token Usage") {
+        StatRow(
+          label: "Input",
+          value: formatNumber(chatState.conversation.totalInputTokens),
+          isHighlighted: chatState.conversation.totalInputTokens > 0
+        )
+        StatRow(
+          label: "Output",
+          value: formatNumber(chatState.conversation.totalOutputTokens),
+          isHighlighted: chatState.conversation.totalOutputTokens > 0
+        )
+      }
+    }
+    .onReceive(timer) { _ in
+      currentTime = Date()
+    }
+  }
+
+  private var formattedDuration: String {
+    let totalSeconds = Int(currentTime.timeIntervalSince(tab.usageStats.startTime))
+    let hours = totalSeconds / 3600
+    let minutes = (totalSeconds % 3600) / 60
+    let seconds = totalSeconds % 60
+
+    if hours > 0 {
+      return String(format: "%dh %02dm %02ds", hours, minutes, seconds)
+    } else {
+      return String(format: "%dm %02ds", minutes, seconds)
+    }
+  }
+
+  private func formatNumber(_ value: Int) -> String {
+    let formatter = NumberFormatter()
+    formatter.numberStyle = .decimal
+    formatter.groupingSeparator = ","
+    return formatter.string(from: NSNumber(value: value)) ?? "\(value)"
   }
 }
 

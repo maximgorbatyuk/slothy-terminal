@@ -63,6 +63,10 @@ struct TerminalViewRepresentable: NSViewRepresentable {
     terminalView.configureNativeColors()
     terminalView.font = ConfigManager.shared.terminalFont
 
+    /// Disable mouse reporting so text selection works instead of
+    /// forwarding mouse events to the child process (e.g. Claude CLI).
+    terminalView.allowMouseReporting = false
+
     /// Set up output callback.
     terminalView.onDataReceived = { [onOutput] data in
       if let string = String(data: data, encoding: .utf8) {
