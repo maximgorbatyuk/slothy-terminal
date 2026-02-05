@@ -30,6 +30,44 @@
     -->
 
     <item>
+      <title>Version 2026.2.3</title>
+      <pubDate>Tue, 05 Feb 2026 12:00:00 +0000</pubDate>
+      <sparkle:version>1</sparkle:version>
+      <sparkle:shortVersionString>2026.2.3</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>13.0</sparkle:minimumSystemVersion>
+      <description><![CDATA[
+        <h2>What's New</h2>
+        <h3>Chat UI (Beta)</h3>
+        <ul>
+          <li>Native SwiftUI chat interface for Claude CLI with streaming responses</li>
+          <li>Markdown rendering toggle, configurable send key (Enter / Shift+Enter)</li>
+          <li>Expandable tool use and tool result blocks</li>
+          <li>Chat sidebar with message count, session duration, and token usage</li>
+          <li>New menu item "New Claude Chat (Beta)" (Cmd+Shift+Option+T)</li>
+        </ul>
+        <h3>Saved Prompts</h3>
+        <ul>
+          <li>Create, edit, and delete reusable prompts in Settings</li>
+          <li>Attach prompts when opening AI agent tabs</li>
+          <li>Agent-specific prompt passing for Claude, OpenCode, and Terminal</li>
+        </ul>
+        <h3>Bug Fixes</h3>
+        <ul>
+          <li>PTY process cleanup on app quit — all child processes now terminated properly</li>
+          <li>PTY resource management overhaul — fixed zombie processes and leaked file descriptors</li>
+          <li>Fixed text selection in terminal (mouse reporting disabled)</li>
+          <li>Fixed opening files in external apps</li>
+        </ul>
+      ]]></description>
+      <enclosure
+        url="https://github.com/maximgorbatyuk/slothy-terminal/releases/download/v2026.2.3/SlothyTerminal-2026.2.3.dmg"
+        type="application/octet-stream"
+        sparkle:edSignature="tRHiaNFjznDStOzycCtSdg2maKekxshQVLR85sgKzkS/O//deV3kVspQSixhVqDEEHc6QwqpH7j6DxcTT4F/AA=="
+        length="3721000"
+      />
+    </item>
+
+    <item>
       <title>Version 2026.2.2</title>
       <pubDate>Tue, 04 Feb 2026 12:00:00 +0000</pubDate>
       <sparkle:version>3</sparkle:version>
