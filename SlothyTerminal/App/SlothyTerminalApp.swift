@@ -17,8 +17,9 @@ struct SlothyTerminalApp: App {
             appState.showFolderSelector(for: agentType)
           }
         }
-        .onReceive(NotificationCenter.default.publisher(for: .newChatTabRequested)) { _ in
-          appState.showChatFolderSelector()
+        .onReceive(NotificationCenter.default.publisher(for: .newChatTabRequested)) { notification in
+          let agent = notification.userInfo?["agentType"] as? AgentType ?? .claude
+          appState.showChatFolderSelector(for: agent)
         }
         .onReceive(NotificationCenter.default.publisher(for: .openFolderRequested)) { notification in
           if let folder = notification.userInfo?["folder"] as? URL,
@@ -60,10 +61,16 @@ struct SlothyTerminalApp: App {
         }
         .keyboardShortcut("t", modifiers: [.command, .shift])
 
-        Button("New OpenCode Tab") {
-          appState.showFolderSelector(for: .opencode)
+        Button("New OpenCode Chat Tab") {
+          appState.showChatFolderSelector(for: .opencode)
         }
         .keyboardShortcut("t", modifiers: [.command, .option])
+
+        Divider()
+
+        Button("New OpenCode TUI Tab") {
+          appState.showFolderSelector(for: .opencode)
+        }
 
         Button("New Terminal Tab") {
           appState.showFolderSelector(for: .terminal)

@@ -168,10 +168,12 @@ struct EmptyTerminalView: View {
       }
 
       VStack(spacing: 12) {
-        /// Chat mode button — primary entry.
-        TabTypeButton(chatAction: {
-          appState.showChatFolderSelector()
-        })
+        /// Chat mode buttons — primary entries.
+        ForEach(AgentType.allCases.filter(\.supportsChatMode)) { agentType in
+          TabTypeButton(chatAgent: agentType) {
+            appState.showChatFolderSelector(for: agentType)
+          }
+        }
 
         Divider()
           .padding(.horizontal, 16)

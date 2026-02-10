@@ -72,18 +72,52 @@ class Tab: Identifiable {
       if let resumeSessionId {
         self.chatState = ChatState(
           workingDirectory: workingDirectory,
+          agentType: agentType,
           resumeSessionId: resumeSessionId
         )
       } else {
-        self.chatState = ChatState(workingDirectory: workingDirectory)
+        self.chatState = ChatState(
+          workingDirectory: workingDirectory,
+          agentType: agentType
+        )
       }
     }
   }
 
   /// Creates a display title combining agent type and directory.
   var displayTitle: String {
-    let prefix = mode == .chat ? "Chat" : agent.displayName
-    return "\(prefix): \(title)"
+    tabName
+  }
+
+  /// Stable tab label shown in the tab bar.
+  /// Examples: "Claude | chat", "Opencode | cli".
+  var tabName: String {
+    "\(agentNameForTab) | \(modeNameForTab)"
+  }
+
+  /// Agent label used in tab/window titles.
+  private var agentNameForTab: String {
+    switch agentType {
+    case .claude:
+      return "Claude"
+
+    case .opencode:
+      return "Opencode"
+
+    case .terminal:
+      return "Terminal"
+    }
+  }
+
+  /// Mode label used in tab/window titles.
+  private var modeNameForTab: String {
+    switch mode {
+    case .chat:
+      return "chat"
+
+    case .terminal:
+      return "cli"
+    }
   }
 
   /// The command to execute for this tab's agent.

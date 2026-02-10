@@ -5,8 +5,6 @@ struct CodeBlockView: View {
   let language: String?
   let code: String
 
-  @State private var copied = false
-
   var body: some View {
     VStack(alignment: .leading, spacing: 0) {
       header
@@ -26,15 +24,7 @@ struct CodeBlockView: View {
 
       Spacer()
 
-      Button {
-        copyToClipboard()
-      } label: {
-        Image(systemName: copied ? "checkmark" : "doc.on.doc")
-          .font(.system(size: 11))
-          .foregroundColor(copied ? .green : .secondary)
-          .contentTransition(.symbolEffect(.replace))
-      }
-      .buttonStyle(.plain)
+      CopyButton(text: code, iconSize: 11)
     }
     .padding(.horizontal, 12)
     .padding(.vertical, 6)
@@ -48,17 +38,6 @@ struct CodeBlockView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
-    }
-  }
-
-  private func copyToClipboard() {
-    NSPasteboard.general.clearContents()
-    NSPasteboard.general.setString(code, forType: .string)
-    copied = true
-
-    Task {
-      try? await Task.sleep(for: .seconds(2))
-      copied = false
     }
   }
 }

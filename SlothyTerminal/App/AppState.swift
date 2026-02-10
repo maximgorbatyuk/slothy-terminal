@@ -5,7 +5,7 @@ import SwiftUI
 enum ModalType: Identifiable {
   case newTab(AgentType?)
   case folderSelector(AgentType)
-  case chatFolderSelector
+  case chatFolderSelector(AgentType)
   case settings
 
   var id: String {
@@ -14,8 +14,8 @@ enum ModalType: Identifiable {
       return "newTab-\(agent?.rawValue ?? "none")"
     case .folderSelector(let agent):
       return "folderSelector-\(agent.rawValue)"
-    case .chatFolderSelector:
-      return "chatFolderSelector"
+    case .chatFolderSelector(let agent):
+      return "chatFolderSelector-\(agent.rawValue)"
     case .settings:
       return "settings"
     }
@@ -55,14 +55,15 @@ class AppState {
     switchToTab(id: tab.id)
   }
 
-  /// Creates a new chat tab with the specified working directory.
+  /// Creates a new chat tab with the specified working directory and agent.
   func createChatTab(
+    agent: AgentType = .claude,
     directory: URL,
     initialPrompt: String? = nil,
     resumeSessionId: String? = nil
   ) {
     let tab = Tab(
-      agentType: .claude,
+      agentType: agent,
       workingDirectory: directory,
       mode: .chat,
       resumeSessionId: resumeSessionId
@@ -78,9 +79,9 @@ class AppState {
     }
   }
 
-  /// Shows the chat folder selector modal.
-  func showChatFolderSelector() {
-    activeModal = .chatFolderSelector
+  /// Shows the chat folder selector modal for the specified agent.
+  func showChatFolderSelector(for agent: AgentType = .claude) {
+    activeModal = .chatFolderSelector(agent)
   }
 
   /// Closes the tab with the specified ID.

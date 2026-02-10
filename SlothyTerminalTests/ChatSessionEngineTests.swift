@@ -236,6 +236,71 @@ final class ChatSessionEngineTests: XCTestCase {
     }
   }
 
+  // MARK: - Cancel Tests
+
+  func testCancelIgnoresSubsequentStreamEvents() {
+    /// Set up a streaming turn.
+    _ = engine.handle(.userSendMessage("Hello"))
+    _ = engine.handle(.transportReady(sessionId: "test-session"))
+    _ = engine.handle(.transportStreamEvent(
+      .contentBlockStart(index: 0, blockType: "text", id: nil, name: nil)
+    ))
+    _ = engine.handle(.transportStreamEvent(
+      .contentBlockDelta(index: 0, deltaType: "text_delta", text: "Hi")
+    ))
+
+    /// Cancel the response.
+    _ = engine.handle(.userCancel)
+    XCTAssertEqual(engine.sessionState, .cancelling)
+
+    /// Stream events arriving after cancel should be ignored.
+    let commands = engine.handle(.transportStreamEvent(
+      .contentBlockDelta(index: 0, deltaType: "text_delta", text: " more text")
+    ))
+    XCTAssertTrue(commands.isEmpty)
+    XCTAssertEqual(engine.sessionState, .cancelling)
+  }
+
+  func testCancelThenTerminatedTransitionsToReady() {
+    /// Set up streaming.
+    _ = engine.handle(.userSendMessage("Hello"))
+    _ = engine.handle(.transportReady(sessionId: "test-session"))
+    _ = engine.handle(.transportStreamEvent(
+      .contentBlockStart(index: 0, blockType: "text", id: nil, name: nil)
+    ))
+    _ = engine.handle(.transportStreamEvent(
+      .contentBlockDelta(index: 0, deltaType: "text_delta", text: "Hi")
+    ))
+
+    /// Cancel and then transport confirms termination.
+    _ = engine.handle(.userCancel)
+    let commands = engine.handle(.transportTerminated(reason: .cancelled))
+
+    XCTAssertEqual(engine.sessionState, .ready)
+    XCTAssertTrue(containsCommand(commands, .persistSnapshot))
+  }
+
+  func testCancelPersistsPartialResponse() {
+    /// Set up streaming with content.
+    _ = engine.handle(.userSendMessage("Hello"))
+    _ = engine.handle(.transportReady(sessionId: "test-session"))
+    _ = engine.handle(.transportStreamEvent(
+      .contentBlockStart(index: 0, blockType: "text", id: nil, name: nil)
+    ))
+    _ = engine.handle(.transportStreamEvent(
+      .contentBlockDelta(index: 0, deltaType: "text_delta", text: "Partial response")
+    ))
+
+    /// Cancel should emit persistSnapshot.
+    let commands = engine.handle(.userCancel)
+    XCTAssertTrue(containsCommand(commands, .persistSnapshot))
+
+    /// Partial content should be preserved.
+    let lastAssistant = engine.conversation.messages.last(where: { $0.role == .assistant })
+    XCTAssertEqual(lastAssistant?.textContent, "Partial response")
+    XCTAssertFalse(lastAssistant?.isStreaming ?? true)
+  }
+
   // MARK: - Invalid Transition Tests
 
   func testSendInStreamingStateIsRejected() {

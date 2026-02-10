@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 /// The main application view containing the tab bar, terminal, and sidebar.
@@ -51,6 +52,32 @@ struct MainView: View {
     .background(appBackgroundColor)
     .sheet(item: $appState.activeModal) { modal in
       ModalRouter(modal: modal)
+    }
+    .onAppear {
+      updateWindowTitle()
+    }
+    .onChange(of: appState.activeTabID) {
+      updateWindowTitle()
+    }
+    .onChange(of: appState.tabs.count) {
+      updateWindowTitle()
+    }
+  }
+
+  /// Window title pattern:
+  /// `<current directory last section> | <active tab name> - Slothy Terminal`.
+  private func updateWindowTitle() {
+    let title: String
+
+    if let activeTab = appState.activeTab {
+      let directory = activeTab.workingDirectory.lastPathComponent
+      title = "\(directory) | \(activeTab.tabName) - Slothy Terminal"
+    } else {
+      title = "Slothy Terminal"
+    }
+
+    if let window = NSApplication.shared.mainWindow ?? NSApplication.shared.windows.first {
+      window.title = title
     }
   }
 }
@@ -148,9 +175,9 @@ struct ModalRouter: View {
         appState.createTab(agent: agent, directory: selectedDirectory, initialPrompt: selectedPrompt)
       }
 
-    case .chatFolderSelector:
-      FolderSelectorModal(agent: .claude) { selectedDirectory, selectedPrompt in
-        appState.createChatTab(directory: selectedDirectory, initialPrompt: selectedPrompt?.promptText)
+    case .chatFolderSelector(let agent):
+      FolderSelectorModal(agent: agent) { selectedDirectory, selectedPrompt in
+        appState.createChatTab(agent: agent, directory: selectedDirectory, initialPrompt: selectedPrompt?.promptText)
       }
 
     case .settings:
@@ -264,10 +291,14 @@ struct AgentSelectionView: View {
 
       /// Tab type list.
       VStack(spacing: 8) {
-        TabTypeButton(chatAction: {
-          createChatTab()
-        })
+        /// Chat mode buttons for agents that support it.
+        ForEach(AgentType.allCases.filter(\.supportsChatMode)) { agent in
+          TabTypeButton(chatAgent: agent) {
+            createChatTab(agent: agent)
+          }
+        }
 
+        /// TUI/terminal mode buttons.
         ForEach(AgentType.allCases) { agent in
           TabTypeButton(agentType: agent) {
             createTab(agent: agent)
@@ -280,11 +311,11 @@ struct AgentSelectionView: View {
     .background(appBackgroundColor)
   }
 
-  /// Creates a chat tab with the selected directory.
-  private func createChatTab() {
+  /// Creates a chat tab with the selected directory and agent.
+  private func createChatTab(agent: AgentType = .claude) {
     recentFoldersManager.addRecentFolder(currentDirectory)
     let prompt = savedPrompts.find(by: selectedPromptID)
-    appState.createChatTab(directory: currentDirectory, initialPrompt: prompt?.promptText)
+    appState.createChatTab(agent: agent, directory: currentDirectory, initialPrompt: prompt?.promptText)
     dismiss()
   }
 
@@ -382,14 +413,14 @@ struct TabTypeButton: View {
     self.action = action
   }
 
-  /// Creates a button for the Claude Chat tab.
-  init(chatAction action: @escaping () -> Void) {
+  /// Creates a button for a chat tab with the specified agent.
+  init(chatAgent agent: AgentType, action: @escaping () -> Void) {
     self.icon = "bubble.left.and.bubble.right"
-    self.title = "New Claude Chat"
-    self.subtitle = "Chat interface for Claude"
-    self.accentColor = AgentType.claude.accentColor
+    self.title = "New \(agent.rawValue) Chat"
+    self.subtitle = "Chat interface for \(agent.rawValue)"
+    self.accentColor = agent.accentColor
     self.showBadge = true
-    self.checkAvailability = { ClaudeAgent().isAvailable() }
+    self.checkAvailability = { AgentFactory.createAgent(for: agent).isAvailable() }
     self.action = action
   }
 }

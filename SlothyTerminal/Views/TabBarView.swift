@@ -65,7 +65,7 @@ struct TabItemView: View {
         .font(.system(size: 12))
 
       /// Tab title.
-      Text(tab.mode == .chat ? "Chat: \(tab.title)" : tab.title)
+      Text(tab.tabName)
         .font(.system(size: 12))
         .foregroundColor(isActive ? .primary : .gray)
         .lineLimit(1)

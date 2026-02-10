@@ -59,6 +59,14 @@ struct AppConfig: Codable, Equatable {
   /// Which key sends a chat message (the other key inserts a newline).
   var chatSendKey: ChatSendKey = .enter
 
+  /// Last explicitly selected model for OpenCode chat.
+  /// Used to preselect model in new OpenCode chat tabs.
+  var lastUsedOpenCodeModel: ChatModelSelection?
+
+  /// Last explicitly selected mode for OpenCode chat.
+  /// Used to preselect Build/Plan in new OpenCode chat tabs.
+  var lastUsedOpenCodeMode: ChatMode?
+
   // MARK: - Keyboard Shortcuts
 
   /// Custom keyboard shortcuts.

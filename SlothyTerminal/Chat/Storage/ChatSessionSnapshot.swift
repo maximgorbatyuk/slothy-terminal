@@ -85,6 +85,10 @@ struct ChatSessionSnapshot: Codable, Equatable {
   let totalInputTokens: Int
   let totalOutputTokens: Int
   let savedAt: Date
+
+  /// Optional model/mode selections — backward compatible with older snapshots.
+  var selectedMode: ChatMode?
+  var selectedModel: ChatModelSelection?
 }
 
 /// A single entry in the session index.

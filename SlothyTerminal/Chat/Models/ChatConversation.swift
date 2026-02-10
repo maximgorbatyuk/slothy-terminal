@@ -37,14 +37,20 @@ class ChatConversation {
   // MARK: - Snapshot serialization
 
   /// Creates a persistable snapshot of this conversation.
-  func toSnapshot(sessionId: String) -> ChatSessionSnapshot {
+  func toSnapshot(
+    sessionId: String,
+    selectedMode: ChatMode? = nil,
+    selectedModel: ChatModelSelection? = nil
+  ) -> ChatSessionSnapshot {
     ChatSessionSnapshot(
       sessionId: sessionId,
       workingDirectory: workingDirectory.path,
       messages: messages.map { SerializedMessage.from($0) },
       totalInputTokens: totalInputTokens,
       totalOutputTokens: totalOutputTokens,
-      savedAt: Date()
+      savedAt: Date(),
+      selectedMode: selectedMode,
+      selectedModel: selectedModel
     )
   }
 

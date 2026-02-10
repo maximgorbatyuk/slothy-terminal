@@ -55,10 +55,10 @@ enum AgentType: String, CaseIterable, Identifiable, Codable {
   /// Whether this agent type supports the chat UI mode.
   var supportsChatMode: Bool {
     switch self {
-    case .claude:
+    case .claude, .opencode:
       return true
 
-    case .terminal, .opencode:
+    case .terminal:
       return false
     }
   }

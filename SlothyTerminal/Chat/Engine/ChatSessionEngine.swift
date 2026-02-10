@@ -1,4 +1,5 @@
 import Foundation
+import OSLog
 
 /// Pure state machine and turn orchestrator for chat sessions.
 ///
@@ -37,6 +38,13 @@ class ChatSessionEngine {
 
   init(workingDirectory: URL) {
     self.conversation = ChatConversation(workingDirectory: workingDirectory)
+  }
+
+  /// Transitions to a new state with logging.
+  private func transitionTo(_ newState: ChatSessionState) {
+    let oldState = sessionState
+    sessionState = newState
+    Logger.chat.info("Engine: \(String(describing: oldState)) → \(String(describing: newState))")
   }
 
   /// Restores a session ID from a persisted snapshot.
@@ -110,7 +118,7 @@ class ChatSessionEngine {
     /// Determine whether transport needs starting.
     let needsTransportStart = sessionState == .idle
 
-    sessionState = .sending
+    transitionTo(.sending)
 
     var commands: [ChatSessionCommand] = []
 
@@ -130,7 +138,7 @@ class ChatSessionEngine {
       return []
     }
 
-    sessionState = .cancelling
+    transitionTo(.cancelling)
 
     /// Finalize the current streaming message.
     if let message = currentMessage {
@@ -140,7 +148,7 @@ class ChatSessionEngine {
     currentMessage = nil
     currentToolName = nil
 
-    return [.interruptTransport]
+    return [.interruptTransport, .persistSnapshot]
   }
 
   private func handleUserClear() -> [ChatSessionCommand] {
@@ -150,7 +158,7 @@ class ChatSessionEngine {
     currentToolName = nil
     lastUserMessageText = nil
     recoveryAttempts = 0
-    sessionState = .idle
+    transitionTo(.idle)
 
     return [.terminateTransport]
   }
@@ -183,7 +191,7 @@ class ChatSessionEngine {
       /// If we were starting, move to ready. If sending, stay in sending
       /// (the message will be sent once transport is ready).
       if sessionState == .starting {
-        sessionState = .ready
+        transitionTo(.ready)
       }
     }
 
@@ -192,6 +200,12 @@ class ChatSessionEngine {
   }
 
   private func handleStreamEvent(_ event: StreamEvent) -> [ChatSessionCommand] {
+    /// Ignore stream events while cancelling — they're remnants from
+    /// the interrupted stream before the process exits.
+    if sessionState == .cancelling {
+      return []
+    }
+
     switch event {
     case .system(let sid):
       sessionId = sid
@@ -213,7 +227,7 @@ class ChatSessionEngine {
       }
 
       if sessionState == .sending {
-        sessionState = .streaming
+        transitionTo(.streaming)
       }
       currentMessage?.inputTokens = inputTokens
 
@@ -245,7 +259,7 @@ class ChatSessionEngine {
        recoveryAttempts < maxRecoveryAttempts
     {
       recoveryAttempts += 1
-      sessionState = .recovering(attempt: recoveryAttempts)
+      transitionTo(.recovering(attempt: recoveryAttempts))
 
       if let message = currentMessage {
         message.isStreaming = false
@@ -259,7 +273,7 @@ class ChatSessionEngine {
 
     /// Unrecoverable.
     let sessionError = ChatSessionError.transportStartFailed(error.localizedDescription)
-    sessionState = .failed(sessionError)
+    transitionTo(.failed(sessionError))
 
     if let message = currentMessage {
       message.isStreaming = false
@@ -279,7 +293,7 @@ class ChatSessionEngine {
       }
       currentMessage = nil
       currentToolName = nil
-      sessionState = .idle
+      transitionTo(.idle)
       return []
 
     case .crash(let exitCode, let stderr):
@@ -288,7 +302,7 @@ class ChatSessionEngine {
          recoveryAttempts < maxRecoveryAttempts
       {
         recoveryAttempts += 1
-        sessionState = .recovering(attempt: recoveryAttempts)
+        transitionTo(.recovering(attempt: recoveryAttempts))
 
         if let message = currentMessage {
           message.isStreaming = false
@@ -302,7 +316,7 @@ class ChatSessionEngine {
 
       /// Unrecoverable crash.
       let sessionError = ChatSessionError.transportCrashed(exitCode: exitCode, stderr: stderr)
-      sessionState = .failed(sessionError)
+      transitionTo(.failed(sessionError))
 
       if let message = currentMessage {
         message.isStreaming = false
@@ -319,15 +333,15 @@ class ChatSessionEngine {
       }
       currentMessage = nil
       currentToolName = nil
-      sessionState = .ready
-      return []
+      transitionTo(.ready)
+      return [.persistSnapshot]
     }
   }
 
   // MARK: - Recovery event handlers
 
   private func handleRecoveryAttempt(_ attempt: Int) -> [ChatSessionCommand] {
-    sessionState = .recovering(attempt: attempt)
+    transitionTo(.recovering(attempt: attempt))
 
     guard let sessionId else {
       return handleRecoveryFailed()
@@ -338,7 +352,7 @@ class ChatSessionEngine {
 
   private func handleRecoveryFailed() -> [ChatSessionCommand] {
     let sessionError = ChatSessionError.maxRetriesExceeded(recoveryAttempts)
-    sessionState = .failed(sessionError)
+    transitionTo(.failed(sessionError))
     return [.surfaceError(sessionError)]
   }
 
@@ -354,7 +368,7 @@ class ChatSessionEngine {
     }
 
     if sessionState == .sending {
-      sessionState = .streaming
+      transitionTo(.streaming)
     }
 
     /// If streaming deltas already built the content, skip replacing
@@ -408,7 +422,7 @@ class ChatSessionEngine {
     }
 
     if sessionState == .sending {
-      sessionState = .streaming
+      transitionTo(.streaming)
     }
 
     let block: ChatContentBlock
@@ -440,7 +454,7 @@ class ChatSessionEngine {
     }
 
     if sessionState == .sending {
-      sessionState = .streaming
+      transitionTo(.streaming)
     }
 
     let existing = message.contentBlocks[index]
@@ -464,7 +478,7 @@ class ChatSessionEngine {
     let message = currentMessage ?? conversation.messages.last(where: { $0.role == .assistant })
 
     guard let message else {
-      sessionState = .ready
+      transitionTo(.ready)
       currentToolName = nil
       return [.turnComplete, .persistSnapshot]
     }
@@ -484,7 +498,7 @@ class ChatSessionEngine {
 
     currentMessage = nil
     currentToolName = nil
-    sessionState = .ready
+    transitionTo(.ready)
 
     return [.turnComplete, .persistSnapshot]
   }
@@ -502,7 +516,7 @@ class ChatSessionEngine {
     /// segments (e.g. tool_use -> tool_result -> final text). Keep the
     /// turn active and wait for `result` to mark completion.
     if sessionState.isProcessingTurn {
-      sessionState = .sending
+      transitionTo(.sending)
     }
 
     return []

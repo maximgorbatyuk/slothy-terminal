@@ -3,7 +3,10 @@ import SwiftUI
 /// Displays a single chat message with role indicator and content blocks.
 struct MessageBubbleView: View {
   let message: ChatMessage
+  var assistantName: String = "Claude"
   var renderAsMarkdown: Bool = true
+  var currentToolName: String?
+  var retryAction: (() -> Void)?
 
   private var toolResultByUseId: [String: String] {
     var result: [String: String] = [:]
@@ -35,7 +38,7 @@ struct MessageBubbleView: View {
       RoleAvatarView(role: message.role)
 
       VStack(alignment: .leading, spacing: 8) {
-        Text(message.role == .user ? "You" : "Claude")
+        Text(message.role == .user ? "You" : assistantName)
           .font(.system(size: 12, weight: .semibold))
           .foregroundColor(.secondary)
 
@@ -63,13 +66,66 @@ struct MessageBubbleView: View {
         }
 
         if message.isStreaming && message.contentBlocks.isEmpty {
-          StreamingIndicatorView()
+          StreamingIndicatorView(toolName: currentToolName)
+        }
+
+        /// Metadata row for completed assistant messages.
+        if message.role == .assistant && !message.isStreaming {
+          MessageMetadataRow(message: message, retryAction: retryAction)
         }
       }
       .frame(maxWidth: .infinity, alignment: .leading)
     }
     .padding(.horizontal, 16)
     .padding(.vertical, 12)
+  }
+}
+
+/// Timestamp, token counts, copy button, and optional retry for completed assistant messages.
+struct MessageMetadataRow: View {
+  let message: ChatMessage
+  var retryAction: (() -> Void)?
+
+  var body: some View {
+    HStack(spacing: 8) {
+      Text(message.timestamp, style: .time)
+        .font(.system(size: 10))
+        .foregroundColor(.secondary.opacity(0.5))
+
+      if message.inputTokens > 0 || message.outputTokens > 0 {
+        Text("\(message.inputTokens) in / \(message.outputTokens) out")
+          .font(.system(size: 10))
+          .foregroundColor(.secondary.opacity(0.5))
+      }
+
+      Spacer()
+
+      if let retryAction {
+        Button {
+          retryAction()
+        } label: {
+          HStack(spacing: 3) {
+            Image(systemName: "arrow.clockwise")
+              .font(.system(size: 10))
+
+            Text("Retry")
+              .font(.system(size: 10))
+          }
+          .foregroundColor(.secondary)
+          .padding(.horizontal, 6)
+          .padding(.vertical, 2)
+          .background(Color.secondary.opacity(0.1))
+          .cornerRadius(4)
+        }
+        .buttonStyle(.plain)
+        .help("Retry this message")
+      }
+
+      if !message.textContent.isEmpty {
+        CopyButton(text: message.textContent)
+      }
+    }
+    .padding(.top, 4)
   }
 }
 
@@ -180,23 +236,60 @@ struct ThinkingBlockView: View {
   }
 }
 
-/// Animated dots indicating streaming is in progress.
+/// Context-aware streaming indicator.
+/// Shows tool name when a tool is running, or animated dots otherwise.
 struct StreamingIndicatorView: View {
+  var toolName: String?
+
   @State private var dotCount = 0
 
   private let timer = Timer.publish(every: 0.4, on: .main, in: .common).autoconnect()
 
   var body: some View {
-    HStack(spacing: 4) {
-      ForEach(0..<3, id: \.self) { index in
-        Circle()
-          .fill(Color.secondary)
-          .frame(width: 6, height: 6)
-          .opacity(index <= dotCount ? 1.0 : 0.3)
+    HStack(spacing: 6) {
+      if let toolName,
+         !toolName.isEmpty
+      {
+        Image(systemName: toolIconName(for: toolName))
+          .font(.system(size: 10))
+          .foregroundColor(.secondary)
+
+        Text("Running \(toolName)...")
+          .font(.system(size: 11))
+          .foregroundColor(.secondary)
+      } else {
+        ForEach(0..<3, id: \.self) { index in
+          Circle()
+            .fill(Color.secondary)
+            .frame(width: 6, height: 6)
+            .opacity(index <= dotCount ? 1.0 : 0.3)
+        }
       }
     }
     .onReceive(timer) { _ in
       dotCount = (dotCount + 1) % 3
+    }
+  }
+
+  private func toolIconName(for tool: String) -> String {
+    switch tool.lowercased() {
+    case "bash":
+      return "terminal"
+
+    case "read", "file_read":
+      return "doc.text"
+
+    case "write", "file_write":
+      return "doc.badge.plus"
+
+    case "edit", "file_edit":
+      return "pencil"
+
+    case "glob", "grep", "search":
+      return "magnifyingglass"
+
+    default:
+      return "gearshape"
     }
   }
 }

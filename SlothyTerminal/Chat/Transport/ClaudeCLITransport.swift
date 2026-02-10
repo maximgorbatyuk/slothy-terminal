@@ -8,6 +8,7 @@ import OSLog
 class ClaudeCLITransport: ChatTransport {
   private let workingDirectory: URL
   private let resumeSessionId: String?
+  private let selectedModel: ChatModelSelection?
 
   private var process: Process?
   private var stdinPipe: Pipe?
@@ -19,9 +20,14 @@ class ClaudeCLITransport: ChatTransport {
   private var stderrBuffer = Data()
   private let stderrLock = NSLock()
 
-  init(workingDirectory: URL, resumeSessionId: String? = nil) {
+  init(
+    workingDirectory: URL,
+    resumeSessionId: String? = nil,
+    selectedModel: ChatModelSelection? = nil
+  ) {
     self.workingDirectory = workingDirectory
     self.resumeSessionId = resumeSessionId
+    self.selectedModel = selectedModel
   }
 
   func start(
@@ -216,6 +222,10 @@ class ClaudeCLITransport: ChatTransport {
 
     if let resumeSessionId {
       args.append(contentsOf: ["--resume", resumeSessionId])
+    }
+
+    if let selectedModel {
+      args.append(contentsOf: ["--model", selectedModel.modelID])
     }
 
     return args
