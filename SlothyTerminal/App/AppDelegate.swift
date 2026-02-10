@@ -30,6 +30,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
       return
     }
 
+    configureWindowAppearance(window)
+
     /// Validate the frame is on screen.
     let frame = windowState.frame
     if NSScreen.screens.contains(where: { $0.frame.intersects(frame) }) {
@@ -62,6 +64,23 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     ) { [weak self] _ in
       self?.saveWindowState()
     }
+
+    NotificationCenter.default.addObserver(
+      forName: NSWindow.didBecomeMainNotification,
+      object: nil,
+      queue: .main
+    ) { [weak self] notification in
+      guard let window = notification.object as? NSWindow else {
+        return
+      }
+
+      self?.configureWindowAppearance(window)
+    }
+  }
+
+  private func configureWindowAppearance(_ window: NSWindow) {
+    window.toolbarStyle = .unifiedCompact
+    window.titlebarAppearsTransparent = true
   }
 
   func applicationDockMenu(_ sender: NSApplication) -> NSMenu? {

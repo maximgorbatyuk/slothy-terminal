@@ -32,7 +32,7 @@ struct SlothyTerminalApp: App {
           appState.terminateAllSessions()
         }
     }
-    .windowStyle(.hiddenTitleBar)
+    .windowStyle(.titleBar)
     .commands {
       /// About menu.
       CommandGroup(replacing: .appInfo) {

@@ -67,18 +67,21 @@ struct MainView: View {
   /// Window title pattern:
   /// `<current directory last section> | <active tab name> - Slothy Terminal`.
   private func updateWindowTitle() {
-    let title: String
-
-    if let activeTab = appState.activeTab {
-      let directory = activeTab.workingDirectory.lastPathComponent
-      title = "\(directory) | \(activeTab.tabName) - Slothy Terminal"
-    } else {
-      title = "Slothy Terminal"
-    }
+    let title = windowTitleText
 
     if let window = NSApplication.shared.mainWindow ?? NSApplication.shared.windows.first {
       window.title = title
+      window.titleVisibility = .visible
     }
+  }
+
+  private var windowTitleText: String {
+    if let activeTab = appState.activeTab {
+      let directory = activeTab.workingDirectory.lastPathComponent
+      return "📁 \(directory) | Slothy Terminal"
+    }
+
+    return "Slothy Terminal"
   }
 }
 
