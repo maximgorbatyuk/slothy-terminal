@@ -47,7 +47,14 @@ struct GeneralSettingsTab: View {
   var body: some View {
     Form {
       Section("Startup") {
-        Picker("Default Agent", selection: Bindable(configManager).config.defaultAgent) {
+        Picker("Default tab mode", selection: Bindable(configManager).config.defaultTabMode) {
+          ForEach(TabMode.allCases, id: \.self) { mode in
+            Text(mode.displayName).tag(mode)
+          }
+        }
+        .pickerStyle(.segmented)
+
+        Picker("Default agent (TUI)", selection: Bindable(configManager).config.defaultAgent) {
           ForEach(AgentType.allCases) { agent in
             Text(agent.rawValue).tag(agent)
           }
@@ -402,10 +409,12 @@ struct AgentSettingsSection: View {
     panel.allowsMultipleSelection = false
     panel.message = "Select the \(agent.displayName) CLI executable"
 
-    if panel.runModal() == .OK, let url = panel.url {
-      pathText = url.path
-      customPath = url.path
-      verifyInstallation()
+    panel.begin { response in
+      if response == .OK, let url = panel.url {
+        pathText = url.path
+        customPath = url.path
+        verifyInstallation()
+      }
     }
   }
 

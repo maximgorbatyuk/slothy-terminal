@@ -291,8 +291,10 @@ struct AgentSelectionView: View {
     panel.prompt = "Select"
     panel.directoryURL = currentDirectory
 
-    if panel.runModal() == .OK, let url = panel.url {
-      selectedDirectory = url
+    panel.begin { response in
+      if response == .OK, let url = panel.url {
+        selectedDirectory = url
+      }
     }
   }
 }

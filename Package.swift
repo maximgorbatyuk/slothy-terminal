@@ -28,8 +28,15 @@ let package = Package(
         "Resources",
         "App/SlothyTerminalApp.swift",
         "App/AppDelegate.swift",
+        "App/AppState.swift",
         "Views",
-        "Services/UpdateManager.swift"
+        "Chat/Views",
+        "Assets.xcassets",
+        "Info.plist",
+        "Services/UpdateManager.swift",
+        "Services/ExternalAppManager.swift",
+        "Services/DirectoryTreeManager.swift",
+        "Services/GitService.swift"
       ],
       sources: [
         "Services/StatsParser.swift",
@@ -45,7 +52,25 @@ let package = Package(
         "Agents/ClaudeAgent.swift",
         "Agents/OpenCodeAgent.swift",
         "Agents/TerminalAgent.swift",
-        "Terminal/PTYController.swift"
+        "Terminal/PTYController.swift",
+        "Models/SavedPrompt.swift",
+
+        /// Chat core (non-UI) — Engine, Models, Parser, Transport, State adapter.
+        "Chat/Engine/ChatSessionState.swift",
+        "Chat/Engine/ChatSessionEvent.swift",
+        "Chat/Engine/ChatSessionError.swift",
+        "Chat/Engine/ChatSessionCommand.swift",
+        "Chat/Engine/ChatSessionEngine.swift",
+        "Chat/Models/ChatMessage.swift",
+        "Chat/Models/ChatConversation.swift",
+        "Chat/Models/ToolInput.swift",
+        "Chat/Parser/StreamEvent.swift",
+        "Chat/Parser/StreamEventParser.swift",
+        "Chat/Transport/ChatTransport.swift",
+        "Chat/Transport/ClaudeCLITransport.swift",
+        "Chat/Storage/ChatSessionSnapshot.swift",
+        "Chat/Storage/ChatSessionStore.swift",
+        "Chat/State/ChatState.swift",
       ]
     ),
     .testTarget(

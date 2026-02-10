@@ -68,4 +68,5 @@ class ChatMessage: Identifiable {
       return nil
     }.joined()
   }
+
 }

@@ -56,11 +56,16 @@ class AppState {
   }
 
   /// Creates a new chat tab with the specified working directory.
-  func createChatTab(directory: URL, initialPrompt: String? = nil) {
+  func createChatTab(
+    directory: URL,
+    initialPrompt: String? = nil,
+    resumeSessionId: String? = nil
+  ) {
     let tab = Tab(
       agentType: .claude,
       workingDirectory: directory,
-      mode: .chat
+      mode: .chat,
+      resumeSessionId: resumeSessionId
     )
     tabs.append(tab)
     switchToTab(id: tab.id)
@@ -146,6 +151,7 @@ class AppState {
   func terminateAllSessions() {
     for tab in tabs {
       tab.ptyController?.terminate()
+      /// terminateProcess() calls store.saveImmediately() internally.
       tab.chatState?.terminateProcess()
     }
   }

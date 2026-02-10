@@ -67,17 +67,17 @@ class AppDelegate: NSObject, NSApplicationDelegate {
   func applicationDockMenu(_ sender: NSApplication) -> NSMenu? {
     let menu = NSMenu()
 
-    /// New tab items.
-    let terminalItem = NSMenuItem(
-      title: "New Terminal Tab",
-      action: #selector(newTerminalTab),
+    /// New tab items — chat first as primary experience.
+    let chatItem = NSMenuItem(
+      title: "New Chat Tab",
+      action: #selector(newChatTab),
       keyEquivalent: ""
     )
-    terminalItem.target = self
-    menu.addItem(terminalItem)
+    chatItem.target = self
+    menu.addItem(chatItem)
 
     let claudeItem = NSMenuItem(
-      title: "New Claude Tab",
+      title: "New Claude TUI Tab",
       action: #selector(newClaudeTab),
       keyEquivalent: ""
     )
@@ -91,6 +91,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     )
     opencodeItem.target = self
     menu.addItem(opencodeItem)
+
+    let terminalItem = NSMenuItem(
+      title: "New Terminal Tab",
+      action: #selector(newTerminalTab),
+      keyEquivalent: ""
+    )
+    terminalItem.target = self
+    menu.addItem(terminalItem)
 
     /// Recent folders submenu.
     let recentFolders = recentFoldersManager.recentFolders
@@ -119,6 +127,13 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     return menu
+  }
+
+  @objc private func newChatTab() {
+    NotificationCenter.default.post(
+      name: .newChatTabRequested,
+      object: nil
+    )
   }
 
   @objc private func newTerminalTab() {
@@ -171,5 +186,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
 extension Notification.Name {
   static let newTabRequested = Notification.Name("newTabRequested")
+  static let newChatTabRequested = Notification.Name("newChatTabRequested")
   static let openFolderRequested = Notification.Name("openFolderRequested")
 }

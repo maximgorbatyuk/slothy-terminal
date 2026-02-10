@@ -17,6 +17,9 @@ struct SlothyTerminalApp: App {
             appState.showFolderSelector(for: agentType)
           }
         }
+        .onReceive(NotificationCenter.default.publisher(for: .newChatTabRequested)) { _ in
+          appState.showChatFolderSelector()
+        }
         .onReceive(NotificationCenter.default.publisher(for: .openFolderRequested)) { notification in
           if let folder = notification.userInfo?["folder"] as? URL,
              let agentType = notification.userInfo?["agentType"] as? AgentType
@@ -47,12 +50,12 @@ struct SlothyTerminalApp: App {
 
       /// File menu.
       CommandGroup(replacing: .newItem) {
-        Button("New Terminal Tab") {
-          appState.showFolderSelector(for: .terminal)
+        Button("New Chat Tab") {
+          appState.showChatFolderSelector()
         }
         .keyboardShortcut("t", modifiers: .command)
 
-        Button("New Claude Tab") {
+        Button("New Claude TUI Tab") {
           appState.showFolderSelector(for: .claude)
         }
         .keyboardShortcut("t", modifiers: [.command, .shift])
@@ -62,8 +65,8 @@ struct SlothyTerminalApp: App {
         }
         .keyboardShortcut("t", modifiers: [.command, .option])
 
-        Button("New Claude Chat (Beta)") {
-          appState.showChatFolderSelector()
+        Button("New Terminal Tab") {
+          appState.showFolderSelector(for: .terminal)
         }
         .keyboardShortcut("t", modifiers: [.command, .shift, .option])
 

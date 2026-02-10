@@ -165,15 +165,18 @@ struct EmptyTerminalView: View {
       }
 
       VStack(spacing: 12) {
+        /// Chat mode button — primary entry.
+        ChatTabTypeButton {
+          appState.showChatFolderSelector()
+        }
+
+        Divider()
+          .padding(.horizontal, 16)
+
         ForEach(AgentType.allCases) { agentType in
           TabTypeButton(agentType: agentType) {
             appState.showFolderSelector(for: agentType)
           }
-        }
-
-        /// Chat mode button.
-        ChatTabTypeButton {
-          appState.showChatFolderSelector()
         }
       }
       .frame(maxWidth: 320)
@@ -253,18 +256,8 @@ struct ChatTabTypeButton: View {
           .frame(width: 32)
 
         VStack(alignment: .leading, spacing: 2) {
-          HStack(spacing: 6) {
-            Text("New Claude Chat")
-              .font(.system(size: 14, weight: .medium))
-
-            Text("Beta")
-              .font(.system(size: 9, weight: .semibold))
-              .foregroundColor(.orange)
-              .padding(.horizontal, 5)
-              .padding(.vertical, 1)
-              .background(Color.orange.opacity(0.15))
-              .cornerRadius(3)
-          }
+          Text("New Claude Chat")
+            .font(.system(size: 14, weight: .medium))
 
           Text("Chat interface for Claude")
             .font(.system(size: 11))

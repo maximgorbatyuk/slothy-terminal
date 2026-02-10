@@ -15,7 +15,10 @@ struct AppConfig: Codable, Equatable {
 
   // MARK: - Startup Settings
 
-  /// The default agent to use when creating a new tab.
+  /// The default tab mode when creating a new tab via Cmd+T.
+  var defaultTabMode: TabMode = .chat
+
+  /// The default agent to use when creating a new terminal-mode tab.
   var defaultAgent: AgentType = .claude
 
   /// Maximum number of recent folders to remember.
@@ -182,6 +185,7 @@ struct CodableColor: Codable, Equatable {
 
 /// Actions that can have keyboard shortcuts assigned.
 enum ShortcutAction: String, Codable, CaseIterable {
+  case newChatTab
   case newTerminalTab
   case newClaudeTab
   case newOpencodeTab
@@ -194,10 +198,12 @@ enum ShortcutAction: String, Codable, CaseIterable {
 
   var displayName: String {
     switch self {
+    case .newChatTab:
+      return "New Chat Tab"
     case .newTerminalTab:
       return "New Terminal Tab"
     case .newClaudeTab:
-      return "New Claude Tab"
+      return "New Claude TUI Tab"
     case .newOpencodeTab:
       return "New OpenCode Tab"
     case .closeTab:
@@ -217,8 +223,10 @@ enum ShortcutAction: String, Codable, CaseIterable {
 
   var defaultShortcut: String {
     switch self {
-    case .newTerminalTab:
+    case .newChatTab:
       return "⌘T"
+    case .newTerminalTab:
+      return "⌘⇧⌥T"
     case .newClaudeTab:
       return "⌘⇧T"
     case .newOpencodeTab:
@@ -240,7 +248,7 @@ enum ShortcutAction: String, Codable, CaseIterable {
 
   var category: ShortcutCategory {
     switch self {
-    case .newTerminalTab, .newClaudeTab, .newOpencodeTab, .closeTab, .nextTab, .previousTab:
+    case .newChatTab, .newTerminalTab, .newClaudeTab, .newOpencodeTab, .closeTab, .nextTab, .previousTab:
       return .tabs
     case .toggleSidebar:
       return .view

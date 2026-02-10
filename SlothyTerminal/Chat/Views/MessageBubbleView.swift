@@ -5,6 +5,31 @@ struct MessageBubbleView: View {
   let message: ChatMessage
   var renderAsMarkdown: Bool = true
 
+  private var toolResultByUseId: [String: String] {
+    var result: [String: String] = [:]
+
+    for block in message.contentBlocks {
+      if case .toolResult(let toolUseId, let content) = block,
+         !toolUseId.isEmpty,
+         !result.keys.contains(toolUseId)
+      {
+        result[toolUseId] = content
+      }
+    }
+
+    return result
+  }
+
+  private var toolUseIds: Set<String> {
+    Set(message.contentBlocks.compactMap { block in
+      if case .toolUse(let toolUseId, _, _) = block, !toolUseId.isEmpty {
+        return toolUseId
+      }
+
+      return nil
+    })
+  }
+
   var body: some View {
     HStack(alignment: .top, spacing: 12) {
       RoleAvatarView(role: message.role)
@@ -15,7 +40,26 @@ struct MessageBubbleView: View {
           .foregroundColor(.secondary)
 
         ForEach(Array(message.contentBlocks.enumerated()), id: \.offset) { _, block in
-          ContentBlockView(block: block, renderAsMarkdown: renderAsMarkdown)
+          switch block {
+          case .toolUse(let id, let name, let input):
+            ToolBlockRouter(
+              name: name,
+              input: input,
+              resultContent: toolResultByUseId[id]
+            )
+
+          case .toolResult(let toolUseId, let content):
+            if !toolUseIds.contains(toolUseId), !content.isEmpty {
+              UnmatchedToolResultView(content: content)
+            }
+
+          case .text, .thinking:
+            ContentBlockView(
+              block: block,
+              renderAsMarkdown: renderAsMarkdown,
+              isStreaming: message.isStreaming
+            )
+          }
         }
 
         if message.isStreaming && message.contentBlocks.isEmpty {
@@ -26,6 +70,36 @@ struct MessageBubbleView: View {
     }
     .padding(.horizontal, 16)
     .padding(.vertical, 12)
+  }
+}
+
+/// Fallback rendering when a tool result is received without a matching tool use.
+struct UnmatchedToolResultView: View {
+  let content: String
+
+  var body: some View {
+    VStack(alignment: .leading, spacing: 4) {
+      HStack(spacing: 5) {
+        Image(systemName: "arrow.turn.down.right")
+          .font(.system(size: 10))
+
+        Text("Result")
+          .font(.system(size: 10, weight: .semibold))
+
+        Spacer()
+      }
+      .foregroundColor(.green.opacity(0.7))
+
+      Text(content)
+        .font(.system(size: 11, design: .monospaced))
+        .foregroundColor(.secondary)
+        .textSelection(.enabled)
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+    .padding(6)
+    .frame(maxWidth: .infinity, alignment: .leading)
+    .background(Color.green.opacity(0.03))
+    .cornerRadius(6)
   }
 }
 
@@ -46,18 +120,19 @@ struct RoleAvatarView: View {
   }
 }
 
-/// Routes to the appropriate view for a content block type.
+/// Routes text and thinking content blocks to the appropriate view.
+/// Tool blocks are handled separately by `ToolBlockRouter`.
 struct ContentBlockView: View {
   let block: ChatContentBlock
   var renderAsMarkdown: Bool = true
+  var isStreaming: Bool = false
 
   var body: some View {
     switch block {
     case .text(let text):
       if !text.isEmpty {
         if renderAsMarkdown {
-          MarkdownTextView(text: text)
-            .font(.system(size: 13))
+          MarkdownTextView(text: text, isStreaming: isStreaming)
         } else {
           Text(text)
             .font(.system(size: 13))
@@ -69,11 +144,8 @@ struct ContentBlockView: View {
     case .thinking(let text):
       ThinkingBlockView(text: text)
 
-    case .toolUse(_, let name, let input):
-      ToolUseBlockView(name: name, input: input)
-
-    case .toolResult(_, let content):
-      ToolResultBlockView(content: content)
+    case .toolUse, .toolResult:
+      EmptyView()
     }
   }
 }
@@ -105,131 +177,6 @@ struct ThinkingBlockView: View {
     return limit.count < compact.count
       ? limit + "..."
       : String(limit)
-  }
-}
-
-/// Displays a tool use block with compact raw preview.
-struct ToolUseBlockView: View {
-  let name: String
-  let input: String
-  @State private var isExpanded = false
-
-  private var preview: String {
-    let compact = input
-      .trimmingCharacters(in: .whitespacesAndNewlines)
-      .replacingOccurrences(of: "\n", with: " ")
-      .replacingOccurrences(of: "  ", with: " ")
-    let truncated = compact.prefix(80)
-    return truncated.count < compact.count
-      ? truncated + "..."
-      : String(truncated)
-  }
-
-  var body: some View {
-    Button {
-      withAnimation(.easeInOut(duration: 0.2)) {
-        isExpanded.toggle()
-      }
-    } label: {
-      VStack(alignment: .leading, spacing: 4) {
-        HStack(spacing: 5) {
-          Image(systemName: "wrench.and.screwdriver")
-            .font(.system(size: 10))
-
-          Text(name.isEmpty ? "Tool" : name)
-            .font(.system(size: 10, weight: .semibold))
-
-          Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
-            .font(.system(size: 8))
-
-          Spacer()
-        }
-        .foregroundColor(.blue.opacity(0.7))
-
-        if !isExpanded && !input.isEmpty {
-          Text(preview)
-            .font(.system(size: 11, design: .monospaced))
-            .foregroundColor(.secondary.opacity(0.6))
-            .lineLimit(1)
-        }
-
-        if isExpanded && !input.isEmpty {
-          Text(input)
-            .font(.system(size: 11, design: .monospaced))
-            .foregroundColor(.secondary)
-            .textSelection(.enabled)
-            .frame(maxWidth: .infinity, alignment: .leading)
-        }
-      }
-    }
-    .buttonStyle(.plain)
-    .padding(6)
-    .frame(maxWidth: .infinity, alignment: .leading)
-    .background(Color.blue.opacity(0.03))
-    .cornerRadius(6)
-  }
-}
-
-/// Displays a tool result block with compact raw preview.
-struct ToolResultBlockView: View {
-  let content: String
-  @State private var isExpanded = false
-
-  private var preview: String {
-    let compact = content
-      .trimmingCharacters(in: .whitespacesAndNewlines)
-      .replacingOccurrences(of: "\n", with: " ")
-      .replacingOccurrences(of: "  ", with: " ")
-    let truncated = compact.prefix(80)
-    return truncated.count < compact.count
-      ? truncated + "..."
-      : String(truncated)
-  }
-
-  var body: some View {
-    if !content.isEmpty {
-      Button {
-        withAnimation(.easeInOut(duration: 0.2)) {
-          isExpanded.toggle()
-        }
-      } label: {
-        VStack(alignment: .leading, spacing: 4) {
-          HStack(spacing: 5) {
-            Image(systemName: "arrow.turn.down.right")
-              .font(.system(size: 10))
-
-            Text("Result")
-              .font(.system(size: 10, weight: .semibold))
-
-            Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
-              .font(.system(size: 8))
-
-            Spacer()
-          }
-          .foregroundColor(.green.opacity(0.7))
-
-          if !isExpanded {
-            Text(preview)
-              .font(.system(size: 11, design: .monospaced))
-              .foregroundColor(.secondary.opacity(0.6))
-              .lineLimit(1)
-          }
-
-          if isExpanded {
-            Text(content)
-              .font(.system(size: 11, design: .monospaced))
-              .foregroundColor(.secondary)
-              .textSelection(.enabled)
-              .frame(maxWidth: .infinity, alignment: .leading)
-          }
-        }
-      }
-      .buttonStyle(.plain)
-      .padding(6)
-      .frame(maxWidth: .infinity, alignment: .leading)
-      .background(Color.green.opacity(0.03))
-      .cornerRadius(6)
-    }
   }
 }
 

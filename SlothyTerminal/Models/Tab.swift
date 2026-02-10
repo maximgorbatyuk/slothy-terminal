@@ -1,9 +1,19 @@
 import Foundation
 
 /// The mode a tab operates in.
-enum TabMode {
+enum TabMode: String, Codable, CaseIterable {
   case terminal
   case chat
+
+  var displayName: String {
+    switch self {
+    case .terminal:
+      return "Terminal"
+
+    case .chat:
+      return "Chat"
+    }
+  }
 }
 
 /// Represents a single terminal tab with an AI agent session.
@@ -43,7 +53,8 @@ class Tab: Identifiable {
     workingDirectory: URL,
     title: String? = nil,
     initialPrompt: SavedPrompt? = nil,
-    mode: TabMode = .terminal
+    mode: TabMode = .terminal,
+    resumeSessionId: String? = nil
   ) {
     self.id = id
     self.agentType = agentType
@@ -58,13 +69,20 @@ class Tab: Identifiable {
     self.usageStats.contextWindowLimit = agent.contextWindowLimit
 
     if mode == .chat {
-      self.chatState = ChatState(workingDirectory: workingDirectory)
+      if let resumeSessionId {
+        self.chatState = ChatState(
+          workingDirectory: workingDirectory,
+          resumeSessionId: resumeSessionId
+        )
+      } else {
+        self.chatState = ChatState(workingDirectory: workingDirectory)
+      }
     }
   }
 
   /// Creates a display title combining agent type and directory.
   var displayTitle: String {
-    let prefix = mode == .chat ? "Chat (Beta)" : agent.displayName
+    let prefix = mode == .chat ? "Chat" : agent.displayName
     return "\(prefix): \(title)"
   }
 

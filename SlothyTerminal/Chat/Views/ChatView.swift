@@ -106,7 +106,7 @@ struct ChatEmptyStateView: View {
 
 /// Banner showing an error message with dismiss button.
 struct ChatErrorBanner: View {
-  let error: ChatError
+  let error: ChatSessionError
   let onDismiss: () -> Void
 
   var body: some View {
