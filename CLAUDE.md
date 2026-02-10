@@ -26,23 +26,45 @@ open SlothyTerminal.xcodeproj
 ### Core Data Flow
 
 ```
-User Action → AppState.createTab() → Tab (with AIAgent)
+Terminal/CLI Tabs
+User Action → AppState.createTab() → Tab (with AIAgent + PTYController)
                                         ↓
                                    PTYController.spawn() via forkpty()
                                         ↓
                               Terminal output → StatsParser → UsageStats
                                         ↓
                               TerminalView renders via SwiftTerm
+
+Chat Tabs (Claude/OpenCode)
+User Action → AppState.createChatTab() → Tab(mode: .chat, ChatState)
+                                        ↓
+                                  ChatState.sendMessage()
+                                        ↓
+                          ChatSessionEngine handles lifecycle state
+                                        ↓
+                  Transport (ClaudeCLITransport/OpenCodeCLITransport)
+                                        ↓
+                         Stream parser → Engine events/commands
+                                        ↓
+                     ChatConversation update + snapshot persistence
+                                        ↓
+                        ChatView/MessageBubble render markdown/tools
 ```
 
 ### Key Components
 
 - **AppState** (`App/AppState.swift`) - @Observable global state: tabs, active tab, sidebar, modals
-- **Tab** (`Models/Tab.swift`) - Session model holding PTYController, UsageStats, and AIAgent
+- **Tab** (`Models/Tab.swift`) - Session model supporting `.terminal` and `.chat` modes; owns PTY or ChatState depending on mode
 - **PTYController** (`Terminal/PTYController.swift`) - PTY management via POSIX forkpty(), reads output in background Task
 - **AIAgent protocol** (`Agents/AIAgent.swift`) - Defines agent interface; implementations: ClaudeAgent, OpenCodeAgent, TerminalAgent
 - **AgentFactory** - Creates appropriate agent instance based on AgentType enum
 - **ConfigManager** (`Services/ConfigManager.swift`) - Singleton for persisting config to `~/Library/Application Support/SlothyTerminal/config.json`
+- **ChatState** (`Chat/State/ChatState.swift`) - View-facing coordinator: user intents, transport wiring, persistence triggers, model/mode UI state
+- **ChatSessionEngine** (`Chat/Engine/ChatSessionEngine.swift`) - Provider-agnostic chat state machine and event reducer
+- **ChatTransport** (`Chat/Transport/ChatTransport.swift`) - Transport protocol for provider backends
+- **ClaudeCLITransport** (`Chat/Transport/ClaudeCLITransport.swift`) - Claude stream-json process transport
+- **OpenCodeCLITransport** (`Chat/OpenCode/OpenCodeCLITransport.swift`) - OpenCode JSON event process transport
+- **ChatSessionStore** (`Chat/Storage/ChatSessionStore.swift`) - Snapshot persistence and restore for chat sessions
 
 ### Adding a New Agent
 
@@ -50,6 +72,19 @@ User Action → AppState.createTab() → Tab (with AIAgent)
 2. Implement: `command`, `defaultArgs`, `environmentVariables`, `contextWindowLimit`, `parseStats()`, `isAvailable()`
 3. Add case to `AgentType` enum
 4. Update `AgentFactory.createAgent()`
+
+## Core Architecture Notes for Agents
+
+- Keep **terminal agents** and **chat transports** conceptually separate:
+  - `AIAgent` is for PTY/CLI tab behavior.
+  - `ChatTransport` is for structured native chat mode.
+- For any new chat-capable provider, prefer this layering:
+  1. Provider event model/parser
+  2. Provider transport implementing `ChatTransport`
+  3. Mapper into `ChatSessionEngine` events
+  4. Reuse existing message/tool rendering blocks
+- Do not couple UI directly to provider JSON shapes; normalize through engine events first.
+- Persist session metadata early (session id, selected model/mode) to ensure recovery after crashes/relaunch.
 
 ## Swift Style Guidelines
 
@@ -82,10 +117,17 @@ Key rules:
   - top-level `type: "user"` events carrying `tool_result`
 - If these are mishandled, chat appears to "hang" after tool use even though Claude is still streaming valid events.
 
+### OpenCode chat specifics
+
+- OpenCode chat uses `opencode run --format json` per turn and maps events into engine-compatible events.
+- Do not treat intermediate completion (`tool-calls`) as final turn completion; finalize only on terminal stop.
+- OpenCode model catalog for UI should come from `opencode models` (dynamic), not hardcoded model lists.
+- OpenCode metadata reconciliation (resolved provider/model/mode) can be refreshed from `opencode export <sessionId>`.
+
 ## Known Issues (from findings.md)
 
 Critical items to be aware of:
 - `BuildConfig` uses `fatalError()` on missing config files - should degrade gracefully
 - Force unwraps in `ConfigManager` can crash in edge cases
 - `PTYController` uses `nonisolated(unsafe)` for outputContinuation, bypassing concurrency safety
-- No test coverage exists for critical components
+- PTY layer still has less direct test coverage than parser/engine/store chat layers

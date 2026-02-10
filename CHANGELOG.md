@@ -2,6 +2,51 @@
 
 All notable changes to SlothyTerminal will be documented in this file.
 
+## [2026.2.4] - 2026-02-10
+
+### Added
+- **Production chat engine architecture** with explicit state machine (`idle/sending/streaming/cancelling/recovering/...`), typed session commands/events, and transport abstraction.
+- **Native OpenCode Chat** (non-TUI) with structured JSON stream parsing, event mapping, tool-use rendering, and session continuity.
+- **Chat persistence layer** (`ChatSessionStore`) with per-session snapshots for restoring conversations, usage, selected model/mode, and metadata.
+- **Richer chat rendering**:
+  - Custom markdown block renderer (headings, lists, code blocks, inline markdown).
+  - Tool-specific views (bash, file, edit, search, generic fallback).
+  - Reusable copy button component and improved message block handling.
+- **Composer status bar** below chat input with provider-aware controls:
+  - Mode selection (Build/Plan).
+  - Model selection.
+  - Selected vs resolved metadata display.
+- **Searchable OpenCode model picker** populated dynamically from `opencode models`, grouped by provider prefix (for example `anthropic`, `openai`, `github-copilot`, `zai`).
+- **Extensive test coverage** for new chat stack:
+  - Engine transitions and tool-use flow.
+  - Claude/OpenCode parser behavior.
+  - Session storage roundtrip.
+  - Mock transport support.
+
+### Changed
+- Chat stack refactored from monolithic `ChatState` behavior to engine + transport + storage layering.
+- Tab labels now use mode-oriented naming:
+  - `Claude | chat`, `Opencode | chat`, `Claude | cli`, `Opencode | cli`.
+- Window title format updated to: `📁 <directory-name> | Slothy Terminal`.
+- Window chrome adjusted to a thinner, compact native title bar style (Ghostty-like direction) without custom rounded title blocks.
+- OpenCode chat remembers last used model and mode across new tabs and restarts.
+
+### Fixed
+- **Claude stream-json tool turn handling**:
+  - No longer finalizes turn on intermediate `message_stop`.
+  - Correctly handles multi-segment turns (`tool_use -> tool_result -> continued assistant output -> result`).
+- **Claude parser compatibility fixes**:
+  - Added support for `input_json_delta.delta.partial_json`.
+  - Added support for tool names from `content_block_start.content_block.name`.
+  - Added support for top-level `type: "user"` `tool_result` events.
+- OpenCode Build/Plan mode argument mapping corrected (Build now maps to `--agent build`).
+- OpenCode transport no longer emits empty session IDs on initial readiness.
+- Removed stale/invalid model IDs from chat model selection defaults.
+
+### Docs
+- Added `Chat Engine Notes` to `CLAUDE.md` documenting Claude stream-json multi-segment behavior and parser/state-machine requirements.
+- Added implementation planning docs for merged chat architecture and OpenCode support.
+
 ## [2026.2.3] - 2026-02-05
 
 ### Added
@@ -90,4 +135,3 @@ All notable changes to SlothyTerminal will be documented in this file.
 ### Changed
 - Build script now reads credentials from `.env` file
 - Updated release workflow documentation
-
