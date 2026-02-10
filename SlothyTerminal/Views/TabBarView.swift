@@ -1,10 +1,26 @@
 import SwiftUI
 
-/// App theme color (#282c34).
-let appBackgroundColor = Color(red: 40/255, green: 44/255, blue: 52/255)
+/// App theme color — adaptive for light/dark appearance.
+var appBackgroundColor: Color {
+  Color(nsColor: NSColor(name: nil) { appearance in
+    if appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua {
+      return NSColor(red: 40/255, green: 44/255, blue: 52/255, alpha: 1)
+    } else {
+      return NSColor(red: 246/255, green: 246/255, blue: 248/255, alpha: 1)
+    }
+  })
+}
 
-/// Slightly lighter variant for cards/controls.
-let appCardColor = Color(red: 50/255, green: 54/255, blue: 62/255)
+/// Slightly lighter variant for cards/controls — adaptive for light/dark appearance.
+var appCardColor: Color {
+  Color(nsColor: NSColor(name: nil) { appearance in
+    if appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua {
+      return NSColor(red: 50/255, green: 54/255, blue: 62/255, alpha: 1)
+    } else {
+      return NSColor(red: 255/255, green: 255/255, blue: 255/255, alpha: 1)
+    }
+  })
+}
 
 /// The tab bar displaying all open terminal tabs.
 struct TabBarView: View {

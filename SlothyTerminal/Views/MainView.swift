@@ -196,39 +196,35 @@ struct AgentSelectionView: View {
   }
 
   var body: some View {
-    VStack(spacing: 24) {
-      Text("Open new tab")
-        .font(.headline)
+    VStack(spacing: 0) {
+      /// Header.
+      HStack {
+        Text("Open new tab")
+          .font(.headline)
 
-      /// Agent selection row.
-      HStack(spacing: 16) {
-        ForEach(AgentType.allCases) { agent in
-          Button {
-            createTab(agent: agent)
-          } label: {
-            VStack(spacing: 8) {
-              Image(systemName: agent.iconName)
-                .font(.largeTitle)
-                .foregroundColor(agent.accentColor)
-              Text(agent.rawValue)
-                .font(.caption)
-            }
-            .frame(width: 100, height: 80)
-            .background(appCardColor)
-            .cornerRadius(8)
-          }
-          .buttonStyle(.plain)
+        Spacer()
+
+        Button {
+          dismiss()
+        } label: {
+          Image(systemName: "xmark.circle.fill")
+            .font(.system(size: 20))
+            .foregroundColor(.secondary)
         }
+        .buttonStyle(.plain)
+        .keyboardShortcut(.escape)
       }
+      .padding(20)
 
-      /// Directory selection row.
+      Divider()
+
+      /// Directory selection.
       VStack(alignment: .leading, spacing: 8) {
         Text("WORKING DIRECTORY")
           .font(.system(size: 10, weight: .semibold))
           .foregroundColor(.secondary)
 
         HStack(spacing: 12) {
-          /// Current directory display.
           HStack(spacing: 8) {
             Image(systemName: "folder.fill")
               .font(.system(size: 14))
@@ -242,7 +238,6 @@ struct AgentSelectionView: View {
           }
           .frame(maxWidth: .infinity, alignment: .leading)
 
-          /// Change directory button.
           Button {
             openFolderPicker()
           } label: {
@@ -255,19 +250,42 @@ struct AgentSelectionView: View {
         .background(appCardColor)
         .cornerRadius(8)
       }
+      .padding(.horizontal, 20)
+      .padding(.top, 16)
+      .padding(.bottom, 12)
 
       if !savedPrompts.isEmpty {
         PromptPicker(selectedPromptID: $selectedPromptID, savedPrompts: savedPrompts)
+          .padding(.horizontal, 20)
+          .padding(.bottom, 12)
       }
 
-      Button("Cancel") {
-        dismiss()
+      Divider()
+
+      /// Tab type list.
+      VStack(spacing: 8) {
+        TabTypeButton(chatAction: {
+          createChatTab()
+        })
+
+        ForEach(AgentType.allCases) { agent in
+          TabTypeButton(agentType: agent) {
+            createTab(agent: agent)
+          }
+        }
       }
-      .keyboardShortcut(.escape)
+      .padding(20)
     }
-    .padding(32)
     .frame(width: 400)
     .background(appBackgroundColor)
+  }
+
+  /// Creates a chat tab with the selected directory.
+  private func createChatTab() {
+    recentFoldersManager.addRecentFolder(currentDirectory)
+    let prompt = savedPrompts.find(by: selectedPromptID)
+    appState.createChatTab(directory: currentDirectory, initialPrompt: prompt?.promptText)
+    dismiss()
   }
 
   /// Creates a tab with the selected agent and directory.
@@ -296,6 +314,83 @@ struct AgentSelectionView: View {
         selectedDirectory = url
       }
     }
+  }
+}
+
+/// Button row for creating a new tab of a given type.
+struct TabTypeButton: View {
+  let icon: String
+  let title: String
+  let subtitle: String
+  let accentColor: Color
+  let showBadge: Bool
+  let checkAvailability: () -> Bool
+  let action: () -> Void
+
+  @State private var isAvailable = true
+
+  var body: some View {
+    Button(action: action) {
+      HStack(spacing: 12) {
+        Image(systemName: icon)
+          .font(.system(size: 20))
+          .foregroundColor(accentColor)
+          .frame(width: 32)
+
+        VStack(alignment: .leading, spacing: 2) {
+          Text(title)
+            .font(.system(size: 14, weight: .medium))
+
+          Text(subtitle)
+            .font(.system(size: 11))
+            .foregroundColor(.secondary)
+        }
+
+        Spacer()
+
+        if showBadge && !isAvailable {
+          Text("Not installed")
+            .font(.system(size: 10))
+            .foregroundColor(.orange)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 2)
+            .background(Color.orange.opacity(0.1))
+            .cornerRadius(4)
+        }
+      }
+      .padding(.horizontal, 16)
+      .padding(.vertical, 12)
+      .frame(maxWidth: .infinity, alignment: .leading)
+      .background(appCardColor)
+      .cornerRadius(8)
+    }
+    .buttonStyle(.plain)
+    .opacity(isAvailable ? 1.0 : 0.7)
+    .onAppear {
+      isAvailable = checkAvailability()
+    }
+  }
+
+  /// Creates a button for an agent-based tab.
+  init(agentType: AgentType, action: @escaping () -> Void) {
+    self.icon = agentType.iconName
+    self.title = "New \(agentType.rawValue) Tab"
+    self.subtitle = agentType.description
+    self.accentColor = agentType.accentColor
+    self.showBadge = agentType != .terminal
+    self.checkAvailability = { AgentFactory.createAgent(for: agentType).isAvailable() }
+    self.action = action
+  }
+
+  /// Creates a button for the Claude Chat tab.
+  init(chatAction action: @escaping () -> Void) {
+    self.icon = "bubble.left.and.bubble.right"
+    self.title = "New Claude Chat"
+    self.subtitle = "Chat interface for Claude"
+    self.accentColor = AgentType.claude.accentColor
+    self.showBadge = true
+    self.checkAvailability = { ClaudeAgent().isAvailable() }
+    self.action = action
   }
 }
 

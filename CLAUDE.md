@@ -71,6 +71,17 @@ Key rules:
 - **SwiftTerm** (1.5.1) - Terminal emulation and PTY handling
 - **Sparkle** (2.8.1) - Automatic updates framework
 
+## Chat Engine Notes
+
+- Claude `-p --input-format stream-json --output-format stream-json` can emit multiple assistant segments in one user turn:
+  `tool_use` -> `message_stop` -> top-level `user` `tool_result` -> more assistant output -> final `result`.
+- Do **not** treat `message_stop` as full turn completion. Only finalize the turn on terminal `result` (or explicit terminal error/cancel).
+- Parser must support:
+  - `content_block_delta.delta.partial_json` for `input_json_delta`
+  - `content_block_start.content_block.name` for tool names
+  - top-level `type: "user"` events carrying `tool_result`
+- If these are mishandled, chat appears to "hang" after tool use even though Claude is still streaming valid events.
+
 ## Known Issues (from findings.md)
 
 Critical items to be aware of:
