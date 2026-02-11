@@ -47,8 +47,8 @@
       <enclosure
         url="https://github.com/maximgorbatyuk/slothy-terminal/releases/download/v2026.2.4/SlothyTerminal-2026.2.4.dmg"
         type="application/octet-stream"
-        sparkle:edSignature="SIGNATURE_HERE"
-        length="FILE_SIZE_IN_BYTES"
+        sparkle:edSignature="pjPdkMjYmsi7oJAgt1yn2TWx2jlxFUU++ebO5jHZp7KlOc5q0dFXEzZ3YiQ1Anh94+LhPIffKMhTsubgr+uZBg=="
+        length="4132602"
       />
     </item>
 
