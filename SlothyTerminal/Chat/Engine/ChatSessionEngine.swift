@@ -175,6 +175,14 @@ class ChatSessionEngine {
       conversation.removeMessage(lastAssistant)
     }
 
+    /// Remove the previous user message to avoid duplication
+    /// since handleUserSendMessage will append a new one.
+    if let lastUser = conversation.messages.last,
+       lastUser.role == .user
+    {
+      conversation.removeMessage(lastUser)
+    }
+
     currentMessage = nil
     currentToolName = nil
 

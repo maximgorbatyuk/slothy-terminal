@@ -177,11 +177,9 @@ final class ChatSessionEngineTests: XCTestCase {
     /// Retry should remove the last assistant and re-send.
     _ = engine.handle(.userRetry)
 
-    /// Should have: user (original) + user (retry) + assistant (new placeholder).
-    /// The old assistant was removed, but original user stays.
-    /// Actually, retry removes last assistant then calls handleUserSendMessage
-    /// which adds user message + assistant placeholder.
-    XCTAssertEqual(engine.conversation.messages.count, 3)
+    /// Retry removes the last assistant and the previous user message,
+    /// then handleUserSendMessage appends a fresh user + assistant placeholder.
+    XCTAssertEqual(engine.conversation.messages.count, 2)
     XCTAssertEqual(engine.conversation.messages.last?.role, .assistant)
     XCTAssertTrue(engine.conversation.messages.last?.isStreaming == true)
   }
