@@ -79,6 +79,7 @@ struct QueuedTask: Codable, Identifiable, Equatable {
   var sessionId: String?
   var approvalState: TaskApprovalState
   var logArtifactPath: String?
+  var failureKind: FailureKind?
 
   /// Set on crash recovery when a running task is found during restore.
   var interruptedNote: String?

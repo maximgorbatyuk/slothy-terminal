@@ -32,6 +32,7 @@ class AppState {
   var sidebarWidth: CGFloat
   var activeModal: ModalType?
   var taskQueueState = TaskQueueState()
+  var taskOrchestrator: TaskOrchestrator?
   private var configManager = ConfigManager.shared
 
   init() {
@@ -39,6 +40,13 @@ class AppState {
     self.isSidebarVisible = config.showSidebarByDefault
     self.sidebarWidth = config.sidebarWidth
     taskQueueState.restoreFromDisk()
+
+    let orchestrator = TaskOrchestrator(queueState: taskQueueState)
+    self.taskOrchestrator = orchestrator
+    taskQueueState.onQueueChanged = { [weak orchestrator] in
+      orchestrator?.notifyQueueChanged()
+    }
+    orchestrator.start()
   }
 
   /// Returns the currently active tab, if any.
@@ -157,6 +165,7 @@ class AppState {
       /// terminateProcess() calls store.saveImmediately() internally.
       tab.chatState?.terminateProcess()
     }
+    taskOrchestrator?.stop()
     taskQueueState.saveImmediately()
   }
 }

@@ -77,11 +77,17 @@ let package = Package(
         "Chat/OpenCode/OpenCodeCLITransport.swift",
         "Chat/State/ChatState.swift",
 
-        /// Task Queue — Models, Storage, State.
+        /// Task Queue — Models, Storage, State, Runner, Orchestrator.
         "TaskQueue/Models/QueuedTask.swift",
         "TaskQueue/Storage/TaskQueueSnapshot.swift",
         "TaskQueue/Storage/TaskQueueStore.swift",
         "TaskQueue/State/TaskQueueState.swift",
+        "TaskQueue/Runner/TaskRunner.swift",
+        "TaskQueue/Runner/ClaudeTaskRunner.swift",
+        "TaskQueue/Runner/OpenCodeTaskRunner.swift",
+        "TaskQueue/Runner/TaskLogCollector.swift",
+        "TaskQueue/Orchestrator/TaskOrchestrator.swift",
+        "TaskQueue/Orchestrator/TaskPreflight.swift",
       ]
     ),
     .testTarget(
