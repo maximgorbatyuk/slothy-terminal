@@ -8,6 +8,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
   private var windowObserver: NSObjectProtocol?
 
   func applicationDidFinishLaunching(_ notification: Notification) {
+    /// Ignore SIGPIPE so a broken-pipe write returns an error instead
+    /// of terminating the process. This protects all FileHandle.write
+    /// calls (e.g., stdin pipes to CLI subprocesses).
+    signal(SIGPIPE, SIG_IGN)
+
     /// Restore window state after a short delay to allow window to be created.
     DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
       self?.restoreWindowState()

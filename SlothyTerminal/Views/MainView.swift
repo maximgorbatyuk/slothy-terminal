@@ -344,8 +344,10 @@ struct AgentSelectionView: View {
     panel.directoryURL = currentDirectory
 
     panel.begin { response in
-      if response == .OK, let url = panel.url {
-        selectedDirectory = url
+      Task { @MainActor in
+        if response == .OK, let url = panel.url {
+          selectedDirectory = url
+        }
       }
     }
   }

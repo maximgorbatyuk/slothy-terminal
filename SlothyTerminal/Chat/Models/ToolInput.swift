@@ -18,37 +18,38 @@ enum ToolInput {
       return .generic(name: name, rawJSON: jsonString)
     }
 
-    switch name {
-    case "Bash":
+    let key = name.lowercased()
+    switch key {
+    case "bash":
       return .bash(command: json["command"] as? String ?? jsonString)
 
-    case "Read":
+    case "read":
       return .read(
         filePath: json["file_path"] as? String ?? "",
         offset: json["offset"] as? Int,
         limit: json["limit"] as? Int
       )
 
-    case "Edit":
+    case "edit":
       return .edit(
         filePath: json["file_path"] as? String ?? "",
         oldString: json["old_string"] as? String ?? "",
         newString: json["new_string"] as? String ?? ""
       )
 
-    case "Write":
+    case "write":
       return .write(
         filePath: json["file_path"] as? String ?? "",
         content: json["content"] as? String ?? ""
       )
 
-    case "Glob":
+    case "glob":
       return .glob(
         pattern: json["pattern"] as? String ?? "",
         path: json["path"] as? String
       )
 
-    case "Grep":
+    case "grep":
       return .grep(
         pattern: json["pattern"] as? String ?? "",
         path: json["path"] as? String,
