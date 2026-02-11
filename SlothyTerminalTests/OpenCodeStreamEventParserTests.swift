@@ -106,6 +106,25 @@ final class OpenCodeStreamEventParserTests: XCTestCase {
     }
   }
 
+  // MARK: - error
+
+  func testParseErrorEvent() {
+    let line = """
+    {"type":"error","timestamp":1700000004,"sessionID":"ses_abc","error":{"name":"UnknownError","data":{"message":"Model not found: invalid/."}}}
+    """
+
+    let result = OpenCodeStreamEventParser.parse(line: line)
+    XCTAssertNotNil(result)
+    XCTAssertEqual(result?.sessionID, "ses_abc")
+
+    if case .error(let part) = result?.event {
+      XCTAssertEqual(part.name, "UnknownError")
+      XCTAssertEqual(part.message, "Model not found: invalid/.")
+    } else {
+      XCTFail("Expected error event, got \(String(describing: result?.event))")
+    }
+  }
+
   // MARK: - Edge Cases
 
   func testParseEmptyLine() {

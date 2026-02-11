@@ -56,6 +56,13 @@ struct ChatView: View {
         )
       }
 
+      if chatState.isLoading {
+        ChatActivityBar(
+          sessionState: chatState.sessionState,
+          toolName: chatState.currentToolName
+        )
+      }
+
       Divider()
 
       ChatInputView(
@@ -217,6 +224,51 @@ struct ChatStatusBar: View {
 
     case .terminated:
       return "Terminated"
+    }
+  }
+}
+
+/// Compact activity indicator shown between messages and input during processing.
+struct ChatActivityBar: View {
+  let sessionState: ChatSessionState
+  let toolName: String?
+
+  var body: some View {
+    HStack(spacing: 6) {
+      ProgressView()
+        .controlSize(.small)
+
+      Text(statusText)
+        .font(.system(size: 11))
+        .foregroundColor(.secondary)
+        .lineLimit(1)
+
+      Spacer()
+    }
+    .padding(.horizontal, 16)
+    .padding(.vertical, 4)
+    .background(Color.secondary.opacity(0.04))
+  }
+
+  private var statusText: String {
+    switch sessionState {
+    case .starting:
+      return "Connecting..."
+
+    case .sending:
+      return "Sending message..."
+
+    case .streaming:
+      if let toolName, !toolName.isEmpty {
+        return "Running \(toolName)..."
+      }
+      return "Generating response..."
+
+    case .recovering(let attempt):
+      return "Reconnecting (attempt \(attempt))..."
+
+    default:
+      return "Working..."
     }
   }
 }

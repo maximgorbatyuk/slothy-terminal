@@ -43,6 +43,9 @@ enum OpenCodeEventMapper {
     case .stepFinish(let part):
       return mapStepFinish(part, context: &context)
 
+    case .error:
+      return []
+
     case .unknown:
       return []
     }

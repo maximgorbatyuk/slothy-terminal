@@ -11,11 +11,20 @@ import OSLog
 class TaskQueueState {
   var tasks: [QueuedTask] = []
 
-  /// Live log lines from the currently executing task.
-  var liveLogLines: [String] = []
+  /// Identifiable wrapper for a live log line with a stable ID.
+  struct LiveLogEntry: Identifiable {
+    let id: Int
+    let text: String
+  }
+
+  /// Live log entries from the currently executing task.
+  var liveLogEntries: [LiveLogEntry] = []
 
   /// Last live log line for compact display.
-  var lastLiveLogLine: String? { liveLogLines.last }
+  var lastLiveLogLine: String? { liveLogEntries.last?.text }
+
+  /// Monotonic counter for stable log entry IDs.
+  private var nextLogEntryId = 0
 
   /// Called after every mutation so the orchestrator can wake up.
   var onQueueChanged: (() -> Void)?
@@ -68,7 +77,7 @@ class TaskQueueState {
     )
     tasks.append(task)
     Logger.taskQueue.info("Enqueued task: \(task.id) — \(title)")
-    persistAndNotify()
+    persistSnapshot()
   }
 
   /// Removes a pending task from the queue.
@@ -327,18 +336,21 @@ class TaskQueueState {
 
   // MARK: - Live Log
 
-  /// Appends a line to the live log buffer (capped at 500 lines).
+  /// Appends a line to the live log buffer (capped at 500 entries).
   func appendLiveLog(_ line: String) {
-    liveLogLines.append(line)
+    let entry = LiveLogEntry(id: nextLogEntryId, text: line)
+    nextLogEntryId += 1
+    liveLogEntries.append(entry)
 
-    if liveLogLines.count > 500 {
-      liveLogLines.removeFirst(liveLogLines.count - 500)
+    if liveLogEntries.count > 500 {
+      liveLogEntries.removeFirst(liveLogEntries.count - 500)
     }
   }
 
   /// Clears the live log buffer.
   func clearLiveLog() {
-    liveLogLines.removeAll()
+    liveLogEntries.removeAll()
+    nextLogEntryId = 0
   }
 
   /// Flushes any pending snapshot to disk immediately.

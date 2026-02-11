@@ -67,11 +67,12 @@ class ClaudeTaskRunner: TaskRunner {
             }
 
           case .contentBlockStop:
-            if let toolName = currentToolName,
-               let detection = RiskyToolDetector.check(toolName: toolName, input: currentToolInput)
-            {
-              riskyDetections.append(detection.reason)
-              logCollector.append("RISKY: \(detection.reason)")
+            if let toolName = currentToolName {
+              let detections = RiskyToolDetector.check(toolName: toolName, input: currentToolInput)
+              for detection in detections {
+                riskyDetections.append(detection.reason)
+                logCollector.append("RISKY: \(detection.reason)")
+              }
             }
             currentToolName = nil
             currentToolInput = ""
@@ -86,6 +87,7 @@ class ClaudeTaskRunner: TaskRunner {
             }
 
             resumed = true
+            transport.terminate()
             let logPath = logCollector.flush()
 
             continuation.resume(returning: TaskRunResult(

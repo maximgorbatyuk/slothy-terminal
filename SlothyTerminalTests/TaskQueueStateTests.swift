@@ -258,7 +258,7 @@ final class TaskQueueStateTests: XCTestCase {
 
   // MARK: - Queue Changed Callback
 
-  func testOnQueueChangedCallback() {
+  func testEnqueueDoesNotFireCallback() {
     var callbackCount = 0
     state.onQueueChanged = { callbackCount += 1 }
 
@@ -268,6 +268,31 @@ final class TaskQueueStateTests: XCTestCase {
       repoPath: "/tmp",
       agentType: .claude
     )
+
+    XCTAssertEqual(callbackCount, 0)
+  }
+
+  func testRetryFiresCallback() {
+    state.enqueueTask(
+      title: "T1",
+      prompt: "p",
+      repoPath: "/tmp",
+      agentType: .claude
+    )
+    let id = state.tasks[0].id
+    state.markRunning(id: id, attemptId: UUID())
+    state.markFailed(
+      id: id,
+      error: "err",
+      exitReason: .failed,
+      failureKind: .transient,
+      logArtifactPath: nil
+    )
+
+    var callbackCount = 0
+    state.onQueueChanged = { callbackCount += 1 }
+
+    state.retryTask(id: id)
 
     XCTAssertEqual(callbackCount, 1)
   }

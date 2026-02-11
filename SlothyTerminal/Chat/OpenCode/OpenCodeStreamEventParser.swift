@@ -44,6 +44,9 @@ enum OpenCodeStreamEventParser {
     case "step_finish":
       return (parseStepFinish(part), sessionID)
 
+    case "error":
+      return (parseError(json), sessionID)
+
     default:
       return (.unknown, sessionID)
     }
@@ -117,5 +120,20 @@ enum OpenCodeStreamEventParser {
       tokens: tokens
     )
     return .stepFinish(parsed)
+  }
+
+  private static func parseError(_ json: [String: Any]) -> OpenCodeStreamEvent {
+    let error = json["error"] as? [String: Any] ?? [:]
+    let data = error["data"] as? [String: Any] ?? [:]
+
+    let parsed = OpenCodeErrorPart(
+      name: error["name"] as? String ?? "UnknownError",
+      message: data["message"] as? String
+        ?? error["message"] as? String
+        ?? json["message"] as? String
+        ?? ""
+    )
+
+    return .error(parsed)
   }
 }

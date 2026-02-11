@@ -13,6 +13,11 @@ struct ChatComposerStatusBar: View {
       HStack(spacing: 12) {
         modeMenu
         modelMenu
+
+        if agentType == .opencode {
+          askModeToggle
+        }
+
         Spacer()
       }
 
@@ -94,6 +99,30 @@ struct ChatComposerStatusBar: View {
     .popover(isPresented: $isModelPickerPresented, arrowEdge: .top) {
       modelPickerPopover
     }
+  }
+
+  // MARK: - Ask mode
+
+  private var askModeToggle: some View {
+    Button {
+      chatState.isOpenCodeAskModeEnabled.toggle()
+    } label: {
+      HStack(spacing: 4) {
+        Image(systemName: chatState.isOpenCodeAskModeEnabled ? "bubble.left.and.bubble.right.fill" : "bubble.left.and.bubble.right")
+          .font(.system(size: 9))
+
+        Text(chatState.isOpenCodeAskModeEnabled ? "Ask: On" : "Ask: Off")
+          .font(.system(size: 10))
+      }
+      .foregroundColor(chatState.isOpenCodeAskModeEnabled ? .blue : .secondary)
+      .padding(.horizontal, 6)
+      .padding(.vertical, 2)
+      .background(Color.secondary.opacity(0.08))
+      .cornerRadius(4)
+    }
+    .buttonStyle(.plain)
+    .fixedSize()
+    .help("When enabled, OpenCode asks clarifying questions before implementing when requirements are unclear")
   }
 
   private var modelPickerPopover: some View {
@@ -276,7 +305,8 @@ struct ChatComposerStatusBar: View {
   private var selectedSummary: String {
     let mode = chatState.selectedMode.displayName
     let model = chatState.selectedModel?.cliModelString ?? "Default"
-    return "\(mode) · \(model)"
+    let askMode = (agentType == .opencode && chatState.isOpenCodeAskModeEnabled) ? " · Ask mode" : ""
+    return "\(mode) · \(model)\(askMode)"
   }
 
   private var resolvedSummary: String {

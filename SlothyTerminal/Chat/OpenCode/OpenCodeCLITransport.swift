@@ -12,11 +12,15 @@ import OSLog
 /// and marks the transport as finished.
 class OpenCodeCLITransport: ChatTransport {
   private let workingDirectory: URL
+  private let executablePathOverride: String?
   private var sessionId: String?
 
   /// Model and mode can change per-send (OpenCode spawns per message).
   var currentModel: ChatModelSelection?
   var currentMode: ChatMode?
+
+  /// Interactive guidance mode for clarifying-question-first behavior.
+  var askModeEnabled: Bool
 
   private var process: Process?
   private var readingTask: Task<Void, Never>?
@@ -29,6 +33,16 @@ class OpenCodeCLITransport: ChatTransport {
 
   /// Mapper context tracking block indices and text block state within a turn.
   private var mapperContext = OpenCodeMapperContext()
+
+  /// Tracks if the current turn reached terminal `result`.
+  private var didReceiveResultInCurrentTurn = false
+
+  /// Captures the latest explicit OpenCode `error` event message.
+  private var streamErrorMessage: String?
+
+  /// Captures non-JSON stdout lines (stack traces, warnings) for diagnostics.
+  private var stdoutDiagnostics: [String] = []
+  private let maxDiagnosticLines = 20
 
   /// Accumulated stderr output for crash diagnostics.
   private var stderrBuffer = Data()
@@ -43,12 +57,17 @@ class OpenCodeCLITransport: ChatTransport {
     workingDirectory: URL,
     resumeSessionId: String? = nil,
     currentModel: ChatModelSelection? = nil,
-    currentMode: ChatMode? = nil
+    currentMode: ChatMode? = nil,
+    askModeEnabled: Bool = false,
+    executablePathOverride: String? = nil
   ) {
     self.workingDirectory = workingDirectory
     self.sessionId = resumeSessionId
     self.currentModel = currentModel
     self.currentMode = currentMode
+    self.askModeEnabled = askModeEnabled
+    self.executablePathOverride = executablePathOverride?
+      .trimmingCharacters(in: .whitespacesAndNewlines)
   }
 
   func start(
@@ -86,7 +105,7 @@ class OpenCodeCLITransport: ChatTransport {
 
     Logger.chat.info("Spawning OpenCode process at: \(executablePath)")
 
-    let args = buildArguments(message: message)
+    let args = buildArguments(message: messageForCLI(message))
 
     Logger.chat.debug("→ OpenCode send (chars=\(message.count)): \(message.prefix(500))")
     Logger.chat.debug("→ OpenCode args: \(args.joined(separator: " "))")
@@ -104,6 +123,9 @@ class OpenCodeCLITransport: ChatTransport {
 
     /// Reset per-turn state.
     mapperContext = OpenCodeMapperContext()
+    didReceiveResultInCurrentTurn = false
+    streamErrorMessage = nil
+    stdoutDiagnostics = []
     stderrLock.lock()
     stderrBuffer = Data()
     stderrLock.unlock()
@@ -156,6 +178,7 @@ class OpenCodeCLITransport: ChatTransport {
           }
 
           guard let parsed = OpenCodeStreamEventParser.parse(line: line) else {
+            self.appendStdoutDiagnostic(line)
             Logger.chat.debug("← OpenCode (unparsed, skipped)")
             continue
           }
@@ -171,12 +194,23 @@ class OpenCodeCLITransport: ChatTransport {
             self.onReady?(newSessionId)
           }
 
+          if case .error(let part) = parsed.event {
+            let diagnostic = part.message.isEmpty ? part.name : part.message
+            self.streamErrorMessage = diagnostic
+            Logger.chat.error("OpenCode error event: \(diagnostic.prefix(500))")
+            continue
+          }
+
           let streamEvents = OpenCodeEventMapper.map(
             parsed.event,
             context: &self.mapperContext
           )
 
           for streamEvent in streamEvents {
+            if case .result = streamEvent {
+              self.didReceiveResultInCurrentTurn = true
+            }
+
             self.onEvent?(streamEvent)
           }
         }
@@ -214,18 +248,32 @@ class OpenCodeCLITransport: ChatTransport {
         .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
       self.stderrLock.unlock()
 
+      let diagnosticText = self.combinedDiagnosticMessage(stderrText: stderrText)
+
       if process.terminationStatus == 0 {
-        Logger.chat.info("OpenCode process exited normally")
-        /// Normal exit — transport stays alive for the next message.
-        /// Do NOT call onTerminated here.
+        if self.didReceiveResultInCurrentTurn {
+          Logger.chat.info("OpenCode process exited normally")
+          /// Normal exit — transport stays alive for the next message.
+          /// Do NOT call onTerminated here.
+        } else {
+          let message = diagnosticText.isEmpty
+            ? "OpenCode exited before producing a response"
+            : diagnosticText
+          Logger.chat.error("OpenCode turn failed without result: \(message.prefix(500))")
+          self.isRunning = false
+          self.onTerminated?(.crash(exitCode: 1, stderr: message))
+        }
       } else {
+        let message = diagnosticText.isEmpty
+          ? "OpenCode exited with status \(process.terminationStatus)"
+          : diagnosticText
         Logger.chat.error(
-          "OpenCode process crashed, exit=\(process.terminationStatus), stderr=\(stderrText.prefix(500))"
+          "OpenCode process crashed, exit=\(process.terminationStatus), detail=\(message.prefix(500))"
         )
         self.isRunning = false
         self.onTerminated?(.crash(
           exitCode: process.terminationStatus,
-          stderr: stderrText
+          stderr: message
         ))
       }
     }
@@ -271,12 +319,29 @@ class OpenCodeCLITransport: ChatTransport {
       args.append(contentsOf: ["--model", currentModel.cliModelString])
     }
 
-    if let currentMode {
-      args.append(contentsOf: ["--agent", currentMode == .plan ? "plan" : "build"])
+    if currentMode == .plan {
+      /// `build` is the OpenCode default; only pass explicit agent for `plan`
+      /// to keep compatibility with older CLI versions.
+      args.append(contentsOf: ["--agent", "plan"])
     }
 
     args.append(message)
     return args
+  }
+
+  private func messageForCLI(_ userMessage: String) -> String {
+    guard askModeEnabled else {
+      return userMessage
+    }
+
+    let directive = """
+    Ask mode is enabled for this conversation.
+    Ask clarifying questions before implementing when requirements are ambiguous or missing.
+    Wait for the user's reply before finalizing a plan or writing code.
+    If the user's message is answering your previous question, incorporate it and continue.
+    """
+
+    return "\(directive)\n\nUser message:\n\(userMessage)"
   }
 
   private func buildEnvironment() -> [String: String] {
@@ -299,26 +364,20 @@ class OpenCodeCLITransport: ChatTransport {
   }
 
   private func resolveOpenCodePath() -> String? {
+    if let executablePathOverride,
+       !executablePathOverride.isEmpty,
+       FileManager.default.isExecutableFile(atPath: executablePathOverride)
+    {
+      return executablePathOverride
+    }
+
     if let envPath = ProcessInfo.processInfo.environment["OPENCODE_PATH"],
        FileManager.default.isExecutableFile(atPath: envPath)
     {
       return envPath
     }
 
-    let commonPaths = [
-      "\(NSHomeDirectory())/.local/bin/opencode",
-      "\(NSHomeDirectory())/go/bin/opencode",
-      "/usr/local/bin/opencode",
-      "/opt/homebrew/bin/opencode",
-    ]
-
-    for path in commonPaths {
-      if FileManager.default.isExecutableFile(atPath: path) {
-        return path
-      }
-    }
-
-    /// Last resort: use `which`.
+    /// Prefer shell PATH resolution to match user expectations.
     let whichProcess = Process()
     let pipe = Pipe()
     whichProcess.executableURL = URL(fileURLWithPath: "/usr/bin/which")
@@ -342,6 +401,51 @@ class OpenCodeCLITransport: ChatTransport {
       }
     } catch {}
 
+    let commonPaths = [
+      "/opt/homebrew/bin/opencode",
+      "/usr/local/bin/opencode",
+      "\(NSHomeDirectory())/.local/bin/opencode",
+      "\(NSHomeDirectory())/go/bin/opencode",
+    ]
+
+    for path in commonPaths {
+      if FileManager.default.isExecutableFile(atPath: path) {
+        return path
+      }
+    }
+
     return nil
+  }
+
+  private func appendStdoutDiagnostic(_ line: String) {
+    let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
+
+    guard !trimmed.isEmpty else {
+      return
+    }
+
+    stdoutDiagnostics.append(trimmed)
+
+    if stdoutDiagnostics.count > maxDiagnosticLines {
+      stdoutDiagnostics.removeFirst(stdoutDiagnostics.count - maxDiagnosticLines)
+    }
+  }
+
+  private func combinedDiagnosticMessage(stderrText: String) -> String {
+    if let streamErrorMessage,
+       !streamErrorMessage.isEmpty
+    {
+      return streamErrorMessage
+    }
+
+    if !stderrText.isEmpty {
+      return stderrText
+    }
+
+    if !stdoutDiagnostics.isEmpty {
+      return stdoutDiagnostics.joined(separator: "\n")
+    }
+
+    return ""
   }
 }

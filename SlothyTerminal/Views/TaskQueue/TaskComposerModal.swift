@@ -70,7 +70,6 @@ struct TaskComposerModal: View {
           .foregroundColor(.secondary)
       }
       .buttonStyle(.plain)
-      .keyboardShortcut(.escape)
     }
     .padding(20)
   }
@@ -178,15 +177,23 @@ struct TaskComposerModal: View {
 
   private var footer: some View {
     HStack {
-      Spacer()
-
       Button("Cancel") {
         dismiss()
       }
       .keyboardShortcut(.escape)
 
-      Button("Add Task") {
-        submitTask()
+      Spacer()
+
+      Button("Add Pending Task") {
+        enqueueTask()
+        dismiss()
+      }
+      .disabled(!canSubmit)
+
+      Button("Start Immediately") {
+        enqueueTask()
+        appState.taskOrchestrator?.notifyQueueChanged()
+        dismiss()
       }
       .buttonStyle(.borderedProminent)
       .disabled(!canSubmit)
@@ -197,7 +204,7 @@ struct TaskComposerModal: View {
 
   // MARK: - Actions
 
-  private func submitTask() {
+  private func enqueueTask() {
     appState.taskQueueState.enqueueTask(
       title: title.trimmingCharacters(in: .whitespaces),
       prompt: prompt.trimmingCharacters(in: .whitespaces),
@@ -205,7 +212,6 @@ struct TaskComposerModal: View {
       agentType: agentType,
       priority: priority
     )
-    dismiss()
   }
 
   private func openFolderPicker() {

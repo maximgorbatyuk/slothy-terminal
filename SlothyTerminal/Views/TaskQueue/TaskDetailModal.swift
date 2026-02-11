@@ -357,15 +357,11 @@ struct TaskDetailModal: View {
       ScrollViewReader { proxy in
         ScrollView {
           LazyVStack(alignment: .leading, spacing: 1) {
-            ForEach(
-              Array(appState.taskQueueState.liveLogLines.enumerated()),
-              id: \.offset
-            ) { index, line in
-              Text(line)
+            ForEach(appState.taskQueueState.liveLogEntries) { entry in
+              Text(entry.text)
                 .font(.system(size: 10, design: .monospaced))
                 .textSelection(.enabled)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .id(index)
             }
           }
           .padding(6)
@@ -373,9 +369,9 @@ struct TaskDetailModal: View {
         .frame(maxHeight: 150)
         .background(appCardColor)
         .cornerRadius(8)
-        .onChange(of: appState.taskQueueState.liveLogLines.count) {
-          if let lastIndex = appState.taskQueueState.liveLogLines.indices.last {
-            proxy.scrollTo(lastIndex, anchor: .bottom)
+        .onChange(of: appState.taskQueueState.liveLogEntries.count) {
+          if let lastEntry = appState.taskQueueState.liveLogEntries.last {
+            proxy.scrollTo(lastEntry.id, anchor: .bottom)
           }
         }
       }

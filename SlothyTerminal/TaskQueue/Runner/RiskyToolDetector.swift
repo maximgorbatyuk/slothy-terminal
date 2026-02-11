@@ -15,9 +15,8 @@ enum RiskyToolDetector {
 
   /// Checks whether a tool invocation is risky.
   ///
-  /// Returns a `Detection` if the tool name + input match a risky pattern,
-  /// or `nil` if the operation is safe.
-  static func check(toolName: String, input: String) -> Detection? {
+  /// Returns all detected risky patterns, or an empty array if safe.
+  static func check(toolName: String, input: String) -> [Detection] {
     let lower = toolName.lowercased()
 
     if isBashTool(lower) {
@@ -28,7 +27,7 @@ enum RiskyToolDetector {
       return checkWrite(toolName: toolName, input: input)
     }
 
-    return nil
+    return []
   }
 
   // MARK: - Private
@@ -45,7 +44,7 @@ enum RiskyToolDetector {
     ("git push", "git push — pushes code to remote"),
     ("git commit", "git commit — creates a commit"),
     ("rm -rf", "rm -rf — recursive force delete"),
-    ("rm -r", "rm -r — recursive delete"),
+    ("rm -r ", "rm -r — recursive delete"),
     ("DROP ", "SQL DROP statement"),
     ("DELETE FROM", "SQL DELETE statement"),
     ("TRUNCATE", "SQL TRUNCATE statement"),
@@ -54,35 +53,41 @@ enum RiskyToolDetector {
     ("chown ", "chown — ownership change"),
   ]
 
-  private static let riskyWritePaths: [(pattern: String, reason: String)] = [
-    (".env", "writing to .env file"),
-    ("credentials", "writing to credentials file"),
-    (".ssh/", "writing to .ssh directory"),
-    (".gitconfig", "writing to .gitconfig"),
-    (".github/workflows", "writing to GitHub Actions workflow"),
+  /// Path patterns that indicate sensitive file writes.
+  ///
+  /// Uses path-boundary-aware matching: `/.env` requires a directory
+  /// separator before `.env` to avoid matching `.environment` etc.
+  private static let riskyWritePatterns: [(check: (String) -> Bool, reason: String)] = [
+    ({ $0.contains("/.env") && !$0.contains("/.envrc") }, "writing to .env file"),
+    ({ $0.hasSuffix("/credentials") || $0.contains("/credentials/") }, "writing to credentials file"),
+    ({ $0.contains("/.ssh/") }, "writing to .ssh directory"),
+    ({ $0.contains("/.gitconfig") }, "writing to .gitconfig"),
+    ({ $0.contains("/.github/workflows") }, "writing to GitHub Actions workflow"),
   ]
 
-  private static func checkBash(toolName: String, input: String) -> Detection? {
+  private static func checkBash(toolName: String, input: String) -> [Detection] {
     let inputLower = input.lowercased()
+    var detections: [Detection] = []
 
     for (pattern, reason) in riskyBashPatterns {
       if inputLower.contains(pattern.lowercased()) {
-        return Detection(toolName: toolName, reason: reason)
+        detections.append(Detection(toolName: toolName, reason: reason))
       }
     }
 
-    return nil
+    return detections
   }
 
-  private static func checkWrite(toolName: String, input: String) -> Detection? {
+  private static func checkWrite(toolName: String, input: String) -> [Detection] {
     let inputLower = input.lowercased()
+    var detections: [Detection] = []
 
-    for (pattern, reason) in riskyWritePaths {
-      if inputLower.contains(pattern.lowercased()) {
-        return Detection(toolName: toolName, reason: reason)
+    for (check, reason) in riskyWritePatterns {
+      if check(inputLower) {
+        detections.append(Detection(toolName: toolName, reason: reason))
       }
     }
 
-    return nil
+    return detections
   }
 }

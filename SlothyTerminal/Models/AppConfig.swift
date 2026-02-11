@@ -82,6 +82,10 @@ struct AppConfig: Codable, Equatable {
   /// Used to preselect Build/Plan in new OpenCode chat tabs.
   var lastUsedOpenCodeMode: ChatMode?
 
+  /// Whether OpenCode chat should prefer asking clarifying questions first.
+  /// Used to preselect Ask mode in new OpenCode chat tabs.
+  var lastUsedOpenCodeAskModeEnabled: Bool = false
+
   // MARK: - Keyboard Shortcuts
 
   /// Custom keyboard shortcuts.

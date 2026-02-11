@@ -6,67 +6,98 @@ final class RiskyToolDetectorTests: XCTestCase {
   // MARK: - Bash Risky
 
   func testBashGitPush() {
-    let result = RiskyToolDetector.check(
+    let results = RiskyToolDetector.check(
       toolName: "Bash",
       input: "{\"command\":\"git push origin main\"}"
     )
 
-    XCTAssertNotNil(result)
-    XCTAssertTrue(result?.reason.contains("git push") == true)
+    XCTAssertFalse(results.isEmpty)
+    XCTAssertTrue(results.contains { $0.reason.contains("git push") })
   }
 
   func testBashRmRf() {
-    let result = RiskyToolDetector.check(
+    let results = RiskyToolDetector.check(
       toolName: "bash",
       input: "{\"command\":\"rm -rf /tmp/build\"}"
     )
 
-    XCTAssertNotNil(result)
-    XCTAssertTrue(result?.reason.contains("rm -rf") == true)
+    XCTAssertFalse(results.isEmpty)
+    XCTAssertTrue(results.contains { $0.reason.contains("rm -rf") })
   }
 
   // MARK: - Bash Safe
 
   func testBashSafeCommand() {
-    let result = RiskyToolDetector.check(
+    let results = RiskyToolDetector.check(
       toolName: "Bash",
       input: "{\"command\":\"ls -la\"}"
     )
 
-    XCTAssertNil(result)
+    XCTAssertTrue(results.isEmpty)
+  }
+
+  // MARK: - Bash Multiple Detections
+
+  func testBashMultipleRiskyPatterns() {
+    let results = RiskyToolDetector.check(
+      toolName: "Bash",
+      input: "{\"command\":\"git commit -m 'msg' && git push origin main\"}"
+    )
+
+    XCTAssertEqual(results.count, 2)
+    XCTAssertTrue(results.contains { $0.reason.contains("git commit") })
+    XCTAssertTrue(results.contains { $0.reason.contains("git push") })
   }
 
   // MARK: - Write Risky
 
   func testWriteSensitivePath() {
-    let result = RiskyToolDetector.check(
+    let results = RiskyToolDetector.check(
       toolName: "Write",
       input: "{\"file_path\":\"/project/.env\",\"content\":\"SECRET=abc\"}"
     )
 
-    XCTAssertNotNil(result)
-    XCTAssertTrue(result?.reason.contains(".env") == true)
+    XCTAssertFalse(results.isEmpty)
+    XCTAssertTrue(results.contains { $0.reason.contains(".env") })
   }
 
-  // MARK: - Write Safe
+  // MARK: - Write Safe — no false positives
 
   func testWriteSafePath() {
-    let result = RiskyToolDetector.check(
+    let results = RiskyToolDetector.check(
       toolName: "Write",
       input: "{\"file_path\":\"/project/src/main.swift\",\"content\":\"print('hi')\"}"
     )
 
-    XCTAssertNil(result)
+    XCTAssertTrue(results.isEmpty)
+  }
+
+  func testWriteEnvironmentFileSafe() {
+    let results = RiskyToolDetector.check(
+      toolName: "Write",
+      input: "{\"file_path\":\"/project/src/setup.environment.swift\"}"
+    )
+
+    XCTAssertTrue(results.isEmpty)
+  }
+
+  func testWriteCredentialsHelperSafe() {
+    let results = RiskyToolDetector.check(
+      toolName: "Write",
+      input: "{\"file_path\":\"/project/tests/TestCredentialsFactory.swift\"}"
+    )
+
+    XCTAssertTrue(results.isEmpty)
   }
 
   // MARK: - Unknown Tool
 
-  func testUnknownToolReturnsNil() {
-    let result = RiskyToolDetector.check(
+  func testUnknownToolReturnsEmpty() {
+    let results = RiskyToolDetector.check(
       toolName: "Read",
       input: "{\"file_path\":\"/project/.env\"}"
     )
 
-    XCTAssertNil(result)
+    XCTAssertTrue(results.isEmpty)
   }
 }
