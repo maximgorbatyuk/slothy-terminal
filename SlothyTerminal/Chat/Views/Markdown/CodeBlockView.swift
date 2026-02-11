@@ -37,6 +37,7 @@ struct CodeBlockView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
+        .textSelection(.enabled)
     }
   }
 }
