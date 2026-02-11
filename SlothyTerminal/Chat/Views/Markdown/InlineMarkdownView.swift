@@ -13,9 +13,11 @@ struct InlineMarkdownView: View {
     ) {
       Text(attributed)
         .frame(maxWidth: .infinity, alignment: .leading)
+        .textSelection(.enabled)
     } else {
       Text(text)
         .frame(maxWidth: .infinity, alignment: .leading)
+        .textSelection(.enabled)
     }
   }
 }

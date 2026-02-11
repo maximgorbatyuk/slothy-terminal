@@ -204,6 +204,7 @@ enum SidebarPosition: String, Codable, CaseIterable {
 enum SidebarTab: String, Codable, CaseIterable, Identifiable {
   case explorer
   case gitChanges
+  case tasks
   case automation
 
   var id: String { rawValue }
@@ -215,6 +216,9 @@ enum SidebarTab: String, Codable, CaseIterable, Identifiable {
 
     case .gitChanges:
       return "arrow.triangle.branch"
+
+    case .tasks:
+      return "checklist"
 
     case .automation:
       return "gearshape.2"
@@ -228,6 +232,9 @@ enum SidebarTab: String, Codable, CaseIterable, Identifiable {
 
     case .gitChanges:
       return "Git Changes"
+
+    case .tasks:
+      return "Tasks"
 
     case .automation:
       return "Automation"

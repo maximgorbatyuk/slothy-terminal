@@ -100,6 +100,8 @@ Key rules:
 - Use `@Observable` (not ObservableObject) for shared state
 - Use `async/await` and `.task` modifier for async work; avoid Combine
 - Don't create ViewModels for every view or add unnecessary abstractions
+- Any potentially blocking operations (Process, network, file I/O) must be called within `Task { }` in views and marked `async` in services
+  - Example: `Task { files = await GitService.shared.getModifiedFiles(in: directory) }`
 
 ## Dependencies
 

@@ -81,7 +81,6 @@ struct MessageBubbleView: View {
           )
         }
       }
-      .textSelection(.enabled)
       .frame(maxWidth: .infinity, alignment: .leading)
     }
     .padding(.horizontal, 16)
@@ -208,6 +207,7 @@ struct ContentBlockView: View {
           Text(text)
             .font(.system(size: textSize.bodyFontSize))
             .frame(maxWidth: .infinity, alignment: .leading)
+            .textSelection(.enabled)
         }
       }
 

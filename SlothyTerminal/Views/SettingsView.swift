@@ -91,7 +91,7 @@ struct SettingsView: View {
         }
       }
     }
-    .frame(width: 650, height: 500)
+    .frame(minWidth: 600, idealWidth: 700, minHeight: 450)
     .background(appBackgroundColor)
   }
 }

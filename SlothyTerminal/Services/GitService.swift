@@ -10,7 +10,7 @@ final class GitService {
   /// Returns the current Git branch name for the given directory.
   /// - Parameter directory: The directory to check.
   /// - Returns: The branch name, or nil if not a Git repository.
-  func getCurrentBranch(in directory: URL) -> String? {
+  func getCurrentBranch(in directory: URL) async -> String? {
     let process = Process()
     process.executableURL = URL(fileURLWithPath: "/usr/bin/git")
     process.arguments = ["rev-parse", "--abbrev-ref", "HEAD"]
@@ -45,7 +45,7 @@ final class GitService {
   /// Returns the list of modified/untracked files in the given directory.
   /// - Parameter directory: The directory to check.
   /// - Returns: An array of modified files, or empty if not a git repo or on error.
-  func getModifiedFiles(in directory: URL) -> [GitModifiedFile] {
+  func getModifiedFiles(in directory: URL) async -> [GitModifiedFile] {
     let process = Process()
     process.executableURL = URL(fileURLWithPath: "/usr/bin/git")
     process.arguments = ["status", "--porcelain"]

@@ -27,6 +27,9 @@ struct SidebarContainerView: View {
       case .gitChanges:
         GitChangesView()
 
+      case .tasks:
+        TasksPlaceholderView()
+
       case .automation:
         AutomationPlaceholderView()
       }
@@ -69,7 +72,7 @@ struct SidebarTabStrip: View {
     }
     .padding(.vertical, 8)
     .padding(.horizontal, 4)
-    .frame(width: 36)
+    .frame(minWidth: 36, idealWidth: 36)
     .background(appBackgroundColor)
   }
 }

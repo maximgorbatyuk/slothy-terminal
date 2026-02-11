@@ -80,9 +80,11 @@ struct GitChangesView: View {
       return
     }
 
-    isLoading = true
-    files = GitService.shared.getModifiedFiles(in: directory)
-    isLoading = false
+    Task {
+      isLoading = true
+      files = await GitService.shared.getModifiedFiles(in: directory)
+      isLoading = false
+    }
   }
 }
 

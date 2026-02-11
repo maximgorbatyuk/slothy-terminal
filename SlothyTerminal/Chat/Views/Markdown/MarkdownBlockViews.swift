@@ -23,6 +23,7 @@ struct MarkdownHeadingView: View {
       .font(.system(size: fontSize, weight: .bold))
       .frame(maxWidth: .infinity, alignment: .leading)
       .padding(.bottom, level <= 2 ? 4 : 2)
+      .textSelection(.enabled)
   }
 }
 
@@ -135,6 +136,7 @@ struct MarkdownTableView: View {
               .frame(maxWidth: .infinity, alignment: .leading)
               .padding(.horizontal, 8)
               .padding(.vertical, 4)
+              .textSelection(.enabled)
           }
         }
 

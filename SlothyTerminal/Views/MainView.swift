@@ -147,18 +147,18 @@ struct StatusBarView: View {
     .padding(.vertical, 4)
     .background(appCardColor)
     .task(id: activeDirectory) {
-      updateGitBranch()
+      await updateGitBranch()
     }
   }
 
   /// Updates the git branch for the current directory.
-  private func updateGitBranch() {
+  private func updateGitBranch() async {
     guard let directory = activeDirectory else {
       gitBranch = nil
       return
     }
 
-    gitBranch = GitService.shared.getCurrentBranch(in: directory)
+    gitBranch = await GitService.shared.getCurrentBranch(in: directory)
   }
 }
 
