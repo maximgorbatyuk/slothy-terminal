@@ -26,7 +26,7 @@ All notable changes to SlothyTerminal will be documented in this file.
 ### Changed
 - Chat stack refactored from monolithic `ChatState` behavior to engine + transport + storage layering.
 - Tab labels now use mode-oriented naming:
-  - `Claude | chat`, `Opencode | chat`, `Claude | cli`, `Opencode | cli`.
+  - `Claude | chat`, `Claude | cli`, `Opencode | chat`, `Opencode | cli`, `Terminal | cli`.
 - Window title format updated to: `📁 <directory-name> | Slothy Terminal`.
 - Window chrome adjusted to a thinner, compact native title bar style (Ghostty-like direction) without custom rounded title blocks.
 - OpenCode chat remembers last used model and mode across new tabs and restarts.

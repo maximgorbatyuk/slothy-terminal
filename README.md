@@ -28,7 +28,7 @@ Use Claude CLI, OpenCode, or plain terminal sessions in a clean tabbed interface
 - Quick tab switching with `Cmd+1-9`
 - Visual agent indicators with accent colors
 - Close tabs with `Cmd+W`
-- Mode-aware tab names (`Claude | chat`, `Opencode | cli`, etc.)
+- Mode-aware tab names (`Claude | chat`, `Claude | cli`, `Opencode | chat`, `Opencode | cli`, `Terminal | cli`)
 
 ![](/docs/assets/open_new_tab.png)
 

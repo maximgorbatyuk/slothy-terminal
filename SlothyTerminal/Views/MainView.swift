@@ -64,8 +64,7 @@ struct MainView: View {
     }
   }
 
-  /// Window title pattern:
-  /// `<current directory last section> | <active tab name> - Slothy Terminal`.
+  /// Window title pattern: `📁 <directory> | Slothy Terminal`.
   private func updateWindowTitle() {
     let title = windowTitleText
 
@@ -401,6 +400,7 @@ struct TabTypeButton: View {
       .cornerRadius(8)
     }
     .buttonStyle(.plain)
+    .disabled(!isAvailable)
     .opacity(isAvailable ? 1.0 : 0.7)
     .onAppear {
       isAvailable = checkAvailability()
