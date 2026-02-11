@@ -13,6 +13,9 @@ struct AppConfig: Codable, Equatable {
   /// Position of the sidebar.
   var sidebarPosition: SidebarPosition = .right
 
+  /// The active sidebar panel tab.
+  var sidebarTab: SidebarTab = .explorer
+
   // MARK: - Startup Settings
 
   /// The default tab mode when creating a new tab via Cmd+T.
@@ -193,6 +196,41 @@ enum SidebarPosition: String, Codable, CaseIterable {
       return "Left"
     case .right:
       return "Right"
+    }
+  }
+}
+
+/// Sidebar panel tabs.
+enum SidebarTab: String, Codable, CaseIterable, Identifiable {
+  case explorer
+  case gitChanges
+  case automation
+
+  var id: String { rawValue }
+
+  var iconName: String {
+    switch self {
+    case .explorer:
+      return "folder"
+
+    case .gitChanges:
+      return "arrow.triangle.branch"
+
+    case .automation:
+      return "gearshape.2"
+    }
+  }
+
+  var tooltip: String {
+    switch self {
+    case .explorer:
+      return "Explorer"
+
+    case .gitChanges:
+      return "Git Changes"
+
+    case .automation:
+      return "Automation"
     }
   }
 }

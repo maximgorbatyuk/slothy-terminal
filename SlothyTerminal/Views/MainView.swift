@@ -21,7 +21,7 @@ struct MainView: View {
       HStack(spacing: 0) {
         /// Sidebar on the left.
         if appState.isSidebarVisible && sidebarPosition == .left {
-          SidebarView()
+          SidebarContainerView()
             .frame(width: appState.sidebarWidth)
             .padding(.vertical, 8)
             .padding(.leading, 8)
@@ -38,7 +38,7 @@ struct MainView: View {
         if appState.isSidebarVisible && sidebarPosition == .right {
           Divider()
 
-          SidebarView()
+          SidebarContainerView()
             .frame(width: appState.sidebarWidth)
             .padding(.vertical, 8)
             .padding(.trailing, 8)
