@@ -156,8 +156,10 @@ struct FolderSelectorModal: View {
       panel.directoryURL = FileManager.default.homeDirectoryForCurrentUser
     }
 
-    if panel.runModal() == .OK, let url = panel.url {
-      selectFolder(url)
+    panel.begin { response in
+      if response == .OK, let url = panel.url {
+        selectFolder(url)
+      }
     }
   }
 

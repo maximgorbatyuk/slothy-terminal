@@ -19,7 +19,7 @@ struct AssistantContentBlock {
 enum StreamEvent {
   /// Per-message streaming events (used in non-persistent mode).
   case messageStart(inputTokens: Int)
-  case contentBlockStart(index: Int, blockType: String, id: String?)
+  case contentBlockStart(index: Int, blockType: String, id: String?, name: String?)
   case contentBlockDelta(index: Int, deltaType: String, text: String)
   case contentBlockStop(index: Int)
   case messageDelta(stopReason: String?, outputTokens: Int)
@@ -27,6 +27,7 @@ enum StreamEvent {
 
   /// Persistent-mode events.
   case system(sessionId: String)
+  case userToolResult(toolUseId: String, content: String, isError: Bool)
   case assistant(content: [AssistantContentBlock], inputTokens: Int, outputTokens: Int)
   case result(text: String, inputTokens: Int, outputTokens: Int)
 

@@ -1,20 +1,14 @@
 import SwiftUI
 
-/// Renders text as markdown using AttributedString with text selection support.
-/// Falls back to plain text if markdown parsing fails.
+/// Renders text as markdown. Delegates to `MarkdownRendererView` which uses
+/// cheap inline-only rendering while streaming, and full block-level
+/// rendering once the message is complete.
 struct MarkdownTextView: View {
   let text: String
+  var isStreaming: Bool = false
 
   var body: some View {
-    if let attributed = try? AttributedString(
-      markdown: text,
-      options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace)
-    ) {
-      Text(attributed)
-        .textSelection(.enabled)
-    } else {
-      Text(text)
-        .textSelection(.enabled)
-    }
+    MarkdownRendererView(text: text, isStreaming: isStreaming)
+      .font(.system(size: 13))
   }
 }

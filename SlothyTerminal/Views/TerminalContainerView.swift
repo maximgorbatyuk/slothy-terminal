@@ -37,6 +37,7 @@ struct ActiveTerminalView: View {
         ChatView(chatState: chatState)
       } else if let error = agentUnavailableError {
         AgentUnavailableView(agentName: tab.agent.displayName, error: error)
+          .environment(\.colorScheme, .dark)
       } else if isReady {
         StandaloneTerminalView(
           workingDirectory: tab.workingDirectory,
@@ -57,8 +58,10 @@ struct ActiveTerminalView: View {
             tab.workingDirectory = newDirectory
           }
         )
+        .environment(\.colorScheme, .dark)
       } else {
         ProgressView("Starting \(tab.agent.displayName)...")
+          .environment(\.colorScheme, .dark)
       }
     }
     .task {
@@ -165,132 +168,26 @@ struct EmptyTerminalView: View {
       }
 
       VStack(spacing: 12) {
+        /// Chat mode buttons — primary entries.
+        ForEach(AgentType.allCases.filter(\.supportsChatMode)) { agentType in
+          TabTypeButton(chatAgent: agentType) {
+            appState.showChatFolderSelector(for: agentType)
+          }
+        }
+
+        Divider()
+          .padding(.horizontal, 16)
+
         ForEach(AgentType.allCases) { agentType in
           TabTypeButton(agentType: agentType) {
             appState.showFolderSelector(for: agentType)
           }
-        }
-
-        /// Chat mode button.
-        ChatTabTypeButton {
-          appState.showChatFolderSelector()
         }
       }
       .frame(maxWidth: 320)
     }
     .frame(maxWidth: .infinity, maxHeight: .infinity)
     .background(appBackgroundColor)
-  }
-}
-
-/// Button for creating a new tab with a specific type.
-struct TabTypeButton: View {
-  let agentType: AgentType
-  let action: () -> Void
-
-  private var agent: AIAgent {
-    AgentFactory.createAgent(for: agentType)
-  }
-
-  private var isAvailable: Bool {
-    agent.isAvailable()
-  }
-
-  var body: some View {
-    Button(action: action) {
-      HStack(spacing: 12) {
-        Image(systemName: agentType.iconName)
-          .font(.system(size: 20))
-          .foregroundColor(agentType.accentColor)
-          .frame(width: 32)
-
-        VStack(alignment: .leading, spacing: 2) {
-          Text("New \(agentType.rawValue) Tab")
-            .font(.system(size: 14, weight: .medium))
-
-          Text(agentType.description)
-            .font(.system(size: 11))
-            .foregroundColor(.secondary)
-        }
-
-        Spacer()
-
-        if !isAvailable && agentType != .terminal {
-          Text("Not installed")
-            .font(.system(size: 10))
-            .foregroundColor(.orange)
-            .padding(.horizontal, 6)
-            .padding(.vertical, 2)
-            .background(Color.orange.opacity(0.1))
-            .cornerRadius(4)
-        }
-      }
-      .padding(.horizontal, 16)
-      .padding(.vertical, 12)
-      .frame(maxWidth: .infinity, alignment: .leading)
-      .background(appCardColor)
-      .cornerRadius(8)
-    }
-    .buttonStyle(.plain)
-    .opacity(isAvailable ? 1.0 : 0.7)
-  }
-}
-
-/// Button for creating a new Claude Chat tab.
-struct ChatTabTypeButton: View {
-  let action: () -> Void
-
-  private var isAvailable: Bool {
-    ClaudeAgent().isAvailable()
-  }
-
-  var body: some View {
-    Button(action: action) {
-      HStack(spacing: 12) {
-        Image(systemName: "bubble.left.and.bubble.right")
-          .font(.system(size: 20))
-          .foregroundColor(AgentType.claude.accentColor)
-          .frame(width: 32)
-
-        VStack(alignment: .leading, spacing: 2) {
-          HStack(spacing: 6) {
-            Text("New Claude Chat")
-              .font(.system(size: 14, weight: .medium))
-
-            Text("Beta")
-              .font(.system(size: 9, weight: .semibold))
-              .foregroundColor(.orange)
-              .padding(.horizontal, 5)
-              .padding(.vertical, 1)
-              .background(Color.orange.opacity(0.15))
-              .cornerRadius(3)
-          }
-
-          Text("Chat interface for Claude")
-            .font(.system(size: 11))
-            .foregroundColor(.secondary)
-        }
-
-        Spacer()
-
-        if !isAvailable {
-          Text("Not installed")
-            .font(.system(size: 10))
-            .foregroundColor(.orange)
-            .padding(.horizontal, 6)
-            .padding(.vertical, 2)
-            .background(Color.orange.opacity(0.1))
-            .cornerRadius(4)
-        }
-      }
-      .padding(.horizontal, 16)
-      .padding(.vertical, 12)
-      .frame(maxWidth: .infinity, alignment: .leading)
-      .background(appCardColor)
-      .cornerRadius(8)
-    }
-    .buttonStyle(.plain)
-    .opacity(isAvailable ? 1.0 : 0.7)
   }
 }
 

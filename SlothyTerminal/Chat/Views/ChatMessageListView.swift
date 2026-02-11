@@ -4,15 +4,24 @@ import SwiftUI
 struct ChatMessageListView: View {
   let conversation: ChatConversation
   let isLoading: Bool
+  var assistantName: String = "Claude"
   var renderAsMarkdown: Bool = true
+  var currentToolName: String?
+  var retryAction: (() -> Void)?
 
   var body: some View {
     ScrollViewReader { proxy in
       ScrollView {
         LazyVStack(spacing: 0) {
           ForEach(conversation.messages) { message in
-            MessageBubbleView(message: message, renderAsMarkdown: renderAsMarkdown)
-              .id(message.id)
+            MessageBubbleView(
+              message: message,
+              assistantName: assistantName,
+              renderAsMarkdown: renderAsMarkdown,
+              currentToolName: message.isStreaming ? currentToolName : nil,
+              retryAction: isLastAssistantMessage(message) ? retryAction : nil
+            )
+            .id(message.id)
 
             if message.id != conversation.messages.last?.id {
               Divider()
@@ -42,5 +51,16 @@ struct ChatMessageListView: View {
   /// Track the last message's text content to trigger scroll on streaming updates.
   private var lastMessageText: String {
     conversation.messages.last?.textContent ?? ""
+  }
+
+  /// Whether this message is the last assistant message (retry target).
+  private func isLastAssistantMessage(_ message: ChatMessage) -> Bool {
+    guard message.role == .assistant,
+          !message.isStreaming
+    else {
+      return false
+    }
+
+    return conversation.messages.last(where: { $0.role == .assistant })?.id == message.id
   }
 }
