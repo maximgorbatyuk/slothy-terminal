@@ -31,12 +31,14 @@ class AppState {
   var isSidebarVisible: Bool
   var sidebarWidth: CGFloat
   var activeModal: ModalType?
+  var taskQueueState = TaskQueueState()
   private var configManager = ConfigManager.shared
 
   init() {
     let config = ConfigManager.shared.config
     self.isSidebarVisible = config.showSidebarByDefault
     self.sidebarWidth = config.sidebarWidth
+    taskQueueState.restoreFromDisk()
   }
 
   /// Returns the currently active tab, if any.
@@ -155,5 +157,6 @@ class AppState {
       /// terminateProcess() calls store.saveImmediately() internally.
       tab.chatState?.terminateProcess()
     }
+    taskQueueState.saveImmediately()
   }
 }

@@ -76,6 +76,12 @@ let package = Package(
         "Chat/OpenCode/OpenCodeEventMapper.swift",
         "Chat/OpenCode/OpenCodeCLITransport.swift",
         "Chat/State/ChatState.swift",
+
+        /// Task Queue — Models, Storage, State.
+        "TaskQueue/Models/QueuedTask.swift",
+        "TaskQueue/Storage/TaskQueueSnapshot.swift",
+        "TaskQueue/Storage/TaskQueueStore.swift",
+        "TaskQueue/State/TaskQueueState.swift",
       ]
     ),
     .testTarget(
