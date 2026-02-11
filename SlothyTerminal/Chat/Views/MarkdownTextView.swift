@@ -6,9 +6,10 @@ import SwiftUI
 struct MarkdownTextView: View {
   let text: String
   var isStreaming: Bool = false
+  var fontSize: CGFloat = 13
 
   var body: some View {
     MarkdownRendererView(text: text, isStreaming: isStreaming)
-      .font(.system(size: 13))
+      .font(.system(size: fontSize))
   }
 }

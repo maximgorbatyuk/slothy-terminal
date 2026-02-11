@@ -13,6 +13,9 @@ struct AppConfig: Codable, Equatable {
   /// Position of the sidebar.
   var sidebarPosition: SidebarPosition = .right
 
+  /// The active sidebar panel tab.
+  var sidebarTab: SidebarTab = .explorer
+
   // MARK: - Startup Settings
 
   /// The default tab mode when creating a new tab via Cmd+T.
@@ -58,6 +61,18 @@ struct AppConfig: Codable, Equatable {
 
   /// Which key sends a chat message (the other key inserts a newline).
   var chatSendKey: ChatSendKey = .enter
+
+  /// Default render mode for chat messages.
+  var chatRenderMode: ChatRenderMode = .markdown
+
+  /// Text size for chat messages.
+  var chatMessageTextSize: ChatMessageTextSize = .medium
+
+  /// Whether to show timestamps on completed assistant messages.
+  var chatShowTimestamps: Bool = true
+
+  /// Whether to show token counts on completed assistant messages.
+  var chatShowTokenMetadata: Bool = true
 
   /// Last explicitly selected model for OpenCode chat.
   /// Used to preselect model in new OpenCode chat tabs.
@@ -106,6 +121,70 @@ enum ChatSendKey: String, Codable, CaseIterable {
   }
 }
 
+/// Chat message render mode.
+enum ChatRenderMode: String, Codable, CaseIterable {
+  case markdown
+  case plainText
+
+  var displayName: String {
+    switch self {
+    case .markdown:
+      return "Markdown"
+
+    case .plainText:
+      return "Plain Text"
+    }
+  }
+}
+
+/// Chat message text size.
+enum ChatMessageTextSize: String, Codable, CaseIterable {
+  case small
+  case medium
+  case large
+
+  var displayName: String {
+    switch self {
+    case .small:
+      return "Small"
+
+    case .medium:
+      return "Medium"
+
+    case .large:
+      return "Large"
+    }
+  }
+
+  /// Font size in points for message body text.
+  var bodyFontSize: CGFloat {
+    switch self {
+    case .small:
+      return 12
+
+    case .medium:
+      return 13
+
+    case .large:
+      return 15
+    }
+  }
+
+  /// Font size in points for metadata and captions.
+  var metadataFontSize: CGFloat {
+    switch self {
+    case .small:
+      return 9
+
+    case .medium:
+      return 10
+
+    case .large:
+      return 11
+    }
+  }
+}
+
 /// Sidebar position options.
 enum SidebarPosition: String, Codable, CaseIterable {
   case left
@@ -117,6 +196,48 @@ enum SidebarPosition: String, Codable, CaseIterable {
       return "Left"
     case .right:
       return "Right"
+    }
+  }
+}
+
+/// Sidebar panel tabs.
+enum SidebarTab: String, Codable, CaseIterable, Identifiable {
+  case explorer
+  case gitChanges
+  case tasks
+  case automation
+
+  var id: String { rawValue }
+
+  var iconName: String {
+    switch self {
+    case .explorer:
+      return "folder"
+
+    case .gitChanges:
+      return "arrow.triangle.branch"
+
+    case .tasks:
+      return "checklist"
+
+    case .automation:
+      return "gearshape.2"
+    }
+  }
+
+  var tooltip: String {
+    switch self {
+    case .explorer:
+      return "Explorer"
+
+    case .gitChanges:
+      return "Git Changes"
+
+    case .tasks:
+      return "Tasks"
+
+    case .automation:
+      return "Automation"
     }
   }
 }

@@ -2,6 +2,8 @@
 
 A native macOS terminal application designed for AI coding assistants with a tabbed interface and session tracking.
 
+Privacy-first by design. See the [Privacy Policy](PRIVACY.md).
+
 ![macOS](https://img.shields.io/badge/macOS-13.0+-blue)
 ![Swift](https://img.shields.io/badge/Swift-5.9+-orange)
 ![License](https://img.shields.io/badge/License-MIT-green)

@@ -246,6 +246,7 @@ class ClaudeCLITransport: ChatTransport {
       "--output-format", "stream-json",
       "--verbose",
       "--include-partial-messages",
+      "--dangerously-skip-permissions",
     ]
 
     if let resumeSessionId {
