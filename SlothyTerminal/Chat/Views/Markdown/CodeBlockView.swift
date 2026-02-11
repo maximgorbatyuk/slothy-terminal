@@ -34,7 +34,6 @@ struct CodeBlockView: View {
     ScrollView(.horizontal, showsIndicators: false) {
       Text(code)
         .font(.system(size: 12, design: .monospaced))
-        .textSelection(.enabled)
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, 12)
         .padding(.vertical, 8)

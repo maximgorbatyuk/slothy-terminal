@@ -4,7 +4,7 @@ import SwiftUI
 struct MessageBubbleView: View {
   let message: ChatMessage
   var assistantName: String = "Claude"
-  var renderAsMarkdown: Bool = true
+  var appearance: ChatAppearance = ChatAppearance()
   var currentToolName: String?
   var retryAction: (() -> Void)?
 
@@ -59,7 +59,8 @@ struct MessageBubbleView: View {
           case .text, .thinking:
             ContentBlockView(
               block: block,
-              renderAsMarkdown: renderAsMarkdown,
+              renderAsMarkdown: appearance.renderAsMarkdown,
+              textSize: appearance.textSize,
               isStreaming: message.isStreaming
             )
           }
@@ -71,9 +72,16 @@ struct MessageBubbleView: View {
 
         /// Metadata row for completed assistant messages.
         if message.role == .assistant && !message.isStreaming {
-          MessageMetadataRow(message: message, retryAction: retryAction)
+          MessageMetadataRow(
+            message: message,
+            showTimestamps: appearance.showTimestamps,
+            showTokenMetadata: appearance.showTokenMetadata,
+            metadataFontSize: appearance.textSize.metadataFontSize,
+            retryAction: retryAction
+          )
         }
       }
+      .textSelection(.enabled)
       .frame(maxWidth: .infinity, alignment: .leading)
     }
     .padding(.horizontal, 16)
@@ -84,17 +92,24 @@ struct MessageBubbleView: View {
 /// Timestamp, token counts, copy button, and optional retry for completed assistant messages.
 struct MessageMetadataRow: View {
   let message: ChatMessage
+  var showTimestamps: Bool = true
+  var showTokenMetadata: Bool = true
+  var metadataFontSize: CGFloat = 10
   var retryAction: (() -> Void)?
 
   var body: some View {
     HStack(spacing: 8) {
-      Text(message.timestamp, style: .time)
-        .font(.system(size: 10))
-        .foregroundColor(.secondary.opacity(0.5))
+      if showTimestamps {
+        Text(message.timestamp, style: .time)
+          .font(.system(size: metadataFontSize))
+          .foregroundColor(.secondary.opacity(0.5))
+      }
 
-      if message.inputTokens > 0 || message.outputTokens > 0 {
+      if showTokenMetadata,
+         message.inputTokens > 0 || message.outputTokens > 0
+      {
         Text("\(message.inputTokens) in / \(message.outputTokens) out")
-          .font(.system(size: 10))
+          .font(.system(size: metadataFontSize))
           .foregroundColor(.secondary.opacity(0.5))
       }
 
@@ -106,10 +121,10 @@ struct MessageMetadataRow: View {
         } label: {
           HStack(spacing: 3) {
             Image(systemName: "arrow.clockwise")
-              .font(.system(size: 10))
+              .font(.system(size: metadataFontSize))
 
             Text("Retry")
-              .font(.system(size: 10))
+              .font(.system(size: metadataFontSize))
           }
           .foregroundColor(.secondary)
           .padding(.horizontal, 6)
@@ -149,7 +164,6 @@ struct UnmatchedToolResultView: View {
       Text(content)
         .font(.system(size: 11, design: .monospaced))
         .foregroundColor(.secondary)
-        .textSelection(.enabled)
         .frame(maxWidth: .infinity, alignment: .leading)
     }
     .padding(6)
@@ -181,6 +195,7 @@ struct RoleAvatarView: View {
 struct ContentBlockView: View {
   let block: ChatContentBlock
   var renderAsMarkdown: Bool = true
+  var textSize: ChatMessageTextSize = .medium
   var isStreaming: Bool = false
 
   var body: some View {
@@ -188,11 +203,10 @@ struct ContentBlockView: View {
     case .text(let text):
       if !text.isEmpty {
         if renderAsMarkdown {
-          MarkdownTextView(text: text, isStreaming: isStreaming)
+          MarkdownTextView(text: text, isStreaming: isStreaming, fontSize: textSize.bodyFontSize)
         } else {
           Text(text)
-            .font(.system(size: 13))
-            .textSelection(.enabled)
+            .font(.system(size: textSize.bodyFontSize))
             .frame(maxWidth: .infinity, alignment: .leading)
         }
       }

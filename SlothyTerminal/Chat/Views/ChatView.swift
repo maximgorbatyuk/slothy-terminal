@@ -3,7 +3,12 @@ import SwiftUI
 /// Main chat interface combining message list and input field.
 struct ChatView: View {
   let chatState: ChatState
+
+  /// Local override for render mode toggle in the status bar.
+  /// Initialized from persisted config, can be toggled per-session.
   @State private var renderAsMarkdown = true
+
+  private var configManager: ConfigManager { ConfigManager.shared }
 
   /// Whether the retry button should be shown on the last message.
   private var canRetry: Bool {
@@ -37,7 +42,7 @@ struct ChatView: View {
           conversation: chatState.conversation,
           isLoading: chatState.isLoading,
           assistantName: assistantDisplayName,
-          renderAsMarkdown: renderAsMarkdown,
+          appearance: chatAppearance,
           currentToolName: chatState.currentToolName,
           retryAction: canRetry ? { chatState.retryLastMessage() } : nil
         )
@@ -70,6 +75,18 @@ struct ChatView: View {
     }
     .frame(maxWidth: .infinity, maxHeight: .infinity)
     .background(appBackgroundColor)
+    .onAppear {
+      renderAsMarkdown = configManager.config.chatRenderMode == .markdown
+    }
+  }
+
+  private var chatAppearance: ChatAppearance {
+    ChatAppearance(
+      renderAsMarkdown: renderAsMarkdown,
+      textSize: configManager.config.chatMessageTextSize,
+      showTimestamps: configManager.config.chatShowTimestamps,
+      showTokenMetadata: configManager.config.chatShowTokenMetadata
+    )
   }
 
   private var assistantDisplayName: String {

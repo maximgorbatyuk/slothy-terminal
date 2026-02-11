@@ -294,7 +294,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 15.0;
-				MARKETING_VERSION = 2026.2.4;
+				MARKETING_VERSION = 2026.2.5;
 				PRODUCT_BUNDLE_IDENTIFIER = mgorbatyuk.dev.SlothyTerminal;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;
@@ -327,7 +327,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 15.0;
-				MARKETING_VERSION = 2026.2.4;
+				MARKETING_VERSION = 2026.2.5;
 				PRODUCT_BUNDLE_IDENTIFIER = mgorbatyuk.dev.SlothyTerminal;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;

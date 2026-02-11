@@ -21,7 +21,6 @@ struct MarkdownHeadingView: View {
   var body: some View {
     Text(text)
       .font(.system(size: fontSize, weight: .bold))
-      .textSelection(.enabled)
       .frame(maxWidth: .infinity, alignment: .leading)
       .padding(.bottom, level <= 2 ? 4 : 2)
   }
@@ -39,7 +38,6 @@ struct MarkdownUnorderedListView: View {
       ForEach(Array(items.enumerated()), id: \.offset) { _, item in
         HStack(alignment: .top, spacing: 6) {
           Text(bulletCharacter)
-            .font(.system(size: 13))
             .foregroundColor(.secondary)
 
           InlineMarkdownView(text: item.text)
@@ -74,7 +72,6 @@ struct MarkdownOrderedListView: View {
       ForEach(Array(items.enumerated()), id: \.offset) { index, item in
         HStack(alignment: .top, spacing: 6) {
           Text("\(index + 1).")
-            .font(.system(size: 13))
             .foregroundColor(.secondary)
             .frame(minWidth: 20, alignment: .trailing)
 
@@ -122,7 +119,7 @@ struct MarkdownTableView: View {
       HStack(spacing: 0) {
         ForEach(Array(headers.enumerated()), id: \.offset) { _, header in
           Text(header)
-            .font(.system(size: 12, weight: .semibold))
+            .fontWeight(.semibold)
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 8)
             .padding(.vertical, 6)
@@ -135,7 +132,6 @@ struct MarkdownTableView: View {
         HStack(spacing: 0) {
           ForEach(Array(row.enumerated()), id: \.offset) { _, cell in
             Text(cell)
-              .font(.system(size: 12))
               .frame(maxWidth: .infinity, alignment: .leading)
               .padding(.horizontal, 8)
               .padding(.vertical, 4)
@@ -149,6 +145,5 @@ struct MarkdownTableView: View {
     }
     .background(Color.white.opacity(0.04))
     .cornerRadius(6)
-    .textSelection(.enabled)
   }
 }

@@ -59,6 +59,18 @@ struct AppConfig: Codable, Equatable {
   /// Which key sends a chat message (the other key inserts a newline).
   var chatSendKey: ChatSendKey = .enter
 
+  /// Default render mode for chat messages.
+  var chatRenderMode: ChatRenderMode = .markdown
+
+  /// Text size for chat messages.
+  var chatMessageTextSize: ChatMessageTextSize = .medium
+
+  /// Whether to show timestamps on completed assistant messages.
+  var chatShowTimestamps: Bool = true
+
+  /// Whether to show token counts on completed assistant messages.
+  var chatShowTokenMetadata: Bool = true
+
   /// Last explicitly selected model for OpenCode chat.
   /// Used to preselect model in new OpenCode chat tabs.
   var lastUsedOpenCodeModel: ChatModelSelection?
@@ -102,6 +114,70 @@ enum ChatSendKey: String, Codable, CaseIterable {
 
     case .shiftEnter:
       return "Return for new line"
+    }
+  }
+}
+
+/// Chat message render mode.
+enum ChatRenderMode: String, Codable, CaseIterable {
+  case markdown
+  case plainText
+
+  var displayName: String {
+    switch self {
+    case .markdown:
+      return "Markdown"
+
+    case .plainText:
+      return "Plain Text"
+    }
+  }
+}
+
+/// Chat message text size.
+enum ChatMessageTextSize: String, Codable, CaseIterable {
+  case small
+  case medium
+  case large
+
+  var displayName: String {
+    switch self {
+    case .small:
+      return "Small"
+
+    case .medium:
+      return "Medium"
+
+    case .large:
+      return "Large"
+    }
+  }
+
+  /// Font size in points for message body text.
+  var bodyFontSize: CGFloat {
+    switch self {
+    case .small:
+      return 12
+
+    case .medium:
+      return 13
+
+    case .large:
+      return 15
+    }
+  }
+
+  /// Font size in points for metadata and captions.
+  var metadataFontSize: CGFloat {
+    switch self {
+    case .small:
+      return 9
+
+    case .medium:
+      return 10
+
+    case .large:
+      return 11
     }
   }
 }

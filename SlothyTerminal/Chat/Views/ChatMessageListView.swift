@@ -1,11 +1,19 @@
 import SwiftUI
 
+/// Bundles chat appearance preferences for threading through views.
+struct ChatAppearance {
+  var renderAsMarkdown: Bool = true
+  var textSize: ChatMessageTextSize = .medium
+  var showTimestamps: Bool = true
+  var showTokenMetadata: Bool = true
+}
+
 /// Scrollable list of chat messages with auto-scroll to bottom on new content.
 struct ChatMessageListView: View {
   let conversation: ChatConversation
   let isLoading: Bool
   var assistantName: String = "Claude"
-  var renderAsMarkdown: Bool = true
+  var appearance: ChatAppearance = ChatAppearance()
   var currentToolName: String?
   var retryAction: (() -> Void)?
 
@@ -17,7 +25,7 @@ struct ChatMessageListView: View {
             MessageBubbleView(
               message: message,
               assistantName: assistantName,
-              renderAsMarkdown: renderAsMarkdown,
+              appearance: appearance,
               currentToolName: message.isStreaming ? currentToolName : nil,
               retryAction: isLastAssistantMessage(message) ? retryAction : nil
             )

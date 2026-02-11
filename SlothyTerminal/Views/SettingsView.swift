@@ -1,38 +1,97 @@
 import SwiftUI
 
-/// Main settings view with tabbed interface.
+/// Settings navigation sections.
+enum SettingsSection: String, CaseIterable, Identifiable {
+  case general
+  case chat
+  case agents
+  case appearance
+  case shortcuts
+  case prompts
+
+  var id: String { rawValue }
+
+  var displayName: String {
+    switch self {
+    case .general:
+      return "General"
+
+    case .chat:
+      return "Chat"
+
+    case .agents:
+      return "Agents"
+
+    case .appearance:
+      return "Appearance"
+
+    case .shortcuts:
+      return "Shortcuts"
+
+    case .prompts:
+      return "Prompts"
+    }
+  }
+
+  var icon: String {
+    switch self {
+    case .general:
+      return "gear"
+
+    case .chat:
+      return "bubble.left.and.bubble.right"
+
+    case .agents:
+      return "cpu"
+
+    case .appearance:
+      return "paintbrush"
+
+    case .shortcuts:
+      return "keyboard"
+
+    case .prompts:
+      return "text.bubble"
+    }
+  }
+}
+
+/// Main settings view with sidebar navigation.
 struct SettingsView: View {
-  private var configManager = ConfigManager.shared
-  private var recentFoldersManager = RecentFoldersManager.shared
+  @State private var selectedSection: SettingsSection = .general
 
   var body: some View {
-    TabView {
-      GeneralSettingsTab()
-        .tabItem {
-          Label("General", systemImage: "gear")
-        }
+    NavigationSplitView {
+      List(SettingsSection.allCases, selection: $selectedSection) { section in
+        Label(section.displayName, systemImage: section.icon)
+          .tag(section)
+      }
+      .navigationSplitViewColumnWidth(min: 160, ideal: 180, max: 220)
+      .listStyle(.sidebar)
+    } detail: {
+      Group {
+        switch selectedSection {
+        case .general:
+          GeneralSettingsTab()
 
-      AgentsSettingsTab()
-        .tabItem {
-          Label("Agents", systemImage: "cpu")
-        }
+        case .chat:
+          ChatSettingsTab()
 
-      AppearanceSettingsTab()
-        .tabItem {
-          Label("Appearance", systemImage: "paintbrush")
-        }
+        case .agents:
+          AgentsSettingsTab()
 
-      ShortcutsSettingsTab()
-        .tabItem {
-          Label("Shortcuts", systemImage: "keyboard")
-        }
+        case .appearance:
+          AppearanceSettingsTab()
 
-      PromptsSettingsTab()
-        .tabItem {
-          Label("Prompts", systemImage: "text.bubble")
+        case .shortcuts:
+          ShortcutsSettingsTab()
+
+        case .prompts:
+          PromptsSettingsTab()
         }
+      }
     }
-    .frame(width: 550, height: 450)
+    .frame(width: 650, height: 500)
     .background(appBackgroundColor)
   }
 }
@@ -89,19 +148,6 @@ struct GeneralSettingsTab: View {
             .monospacedDigit()
             .frame(width: 50, alignment: .trailing)
         }
-      }
-
-      Section("Chat") {
-        Picker("Send message with", selection: Bindable(configManager).config.chatSendKey) {
-          ForEach(ChatSendKey.allCases, id: \.self) { key in
-            Text(key.displayName).tag(key)
-          }
-        }
-        .pickerStyle(.segmented)
-
-        Text(configManager.config.chatSendKey.newlineHint)
-          .font(.caption)
-          .foregroundColor(.secondary)
       }
 
       Section("Updates") {
@@ -229,6 +275,73 @@ struct GeneralSettingsTab: View {
       return "~" + path.dropFirst(homeDir.count)
     }
     return path
+  }
+}
+
+// MARK: - Chat Settings Tab
+
+struct ChatSettingsTab: View {
+  private var configManager = ConfigManager.shared
+
+  var body: some View {
+    Form {
+      Section("Input") {
+        Picker("Send message with", selection: Bindable(configManager).config.chatSendKey) {
+          ForEach(ChatSendKey.allCases, id: \.self) { key in
+            Text(key.displayName).tag(key)
+          }
+        }
+        .pickerStyle(.segmented)
+
+        Text(configManager.config.chatSendKey.newlineHint)
+          .font(.caption)
+          .foregroundColor(.secondary)
+      }
+
+      Section("Display") {
+        Picker("Render mode", selection: Bindable(configManager).config.chatRenderMode) {
+          ForEach(ChatRenderMode.allCases, id: \.self) { mode in
+            Text(mode.displayName).tag(mode)
+          }
+        }
+        .pickerStyle(.segmented)
+
+        Text("Controls how assistant messages are displayed by default.")
+          .font(.caption)
+          .foregroundColor(.secondary)
+      }
+
+      Section("Text Size") {
+        Picker("Message text size", selection: Bindable(configManager).config.chatMessageTextSize) {
+          ForEach(ChatMessageTextSize.allCases, id: \.self) { size in
+            Text(size.displayName).tag(size)
+          }
+        }
+        .pickerStyle(.segmented)
+
+        /// Preview text at the selected size.
+        Text("The quick brown fox jumps over the lazy dog.")
+          .font(.system(size: configManager.config.chatMessageTextSize.bodyFontSize))
+          .foregroundColor(.secondary)
+          .padding(.vertical, 4)
+      }
+
+      Section("Metadata") {
+        Toggle(
+          "Show message timestamps",
+          isOn: Bindable(configManager).config.chatShowTimestamps
+        )
+
+        Toggle(
+          "Show token counts",
+          isOn: Bindable(configManager).config.chatShowTokenMetadata
+        )
+      }
+    }
+    .formStyle(.grouped)
+    .scrollContentBackground(.hidden)
+    .padding()
+    .background(appBackgroundColor)
   }
 }
 
