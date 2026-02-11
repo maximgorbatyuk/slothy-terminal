@@ -11,6 +11,13 @@ class TaskOrchestrator {
   /// 30-minute execution timeout.
   static let executionTimeoutNanos: UInt64 = 30 * 60 * 1_000_000_000
 
+  /// Exponential backoff: 2s → 4s → 8s (capped).
+  static func backoffDelay(retryCount: Int) -> UInt64 {
+    let baseNanos: UInt64 = 2_000_000_000
+    let maxNanos: UInt64 = 8_000_000_000
+    return min(baseNanos * (1 << min(retryCount, 2)), maxNanos)
+  }
+
   private let queueState: TaskQueueState
   private let runnerFactory: (QueuedTask) -> TaskRunner
 
@@ -19,7 +26,6 @@ class TaskOrchestrator {
   private var currentTaskId: UUID?
   private var executionTask: Task<Void, Never>?
   private var timeoutTask: Task<Void, Never>?
-  private var pendingWakeUp = false
 
   init(
     queueState: TaskQueueState,
@@ -102,6 +108,7 @@ class TaskOrchestrator {
     currentTaskId = nil
     executionTask?.cancel()
     executionTask = nil
+    queueState.clearLiveLog()
     scheduleNext()
   }
 
@@ -111,9 +118,8 @@ class TaskOrchestrator {
       return
     }
 
-    /// If already executing, just note that we need to check again.
+    /// If already executing, skip — finishExecution will call scheduleNext.
     if currentTaskId != nil {
-      pendingWakeUp = true
       return
     }
 
@@ -138,8 +144,17 @@ class TaskOrchestrator {
   }
 
   /// Selects the next pending task: highest priority first, then FIFO by createdAt.
+  ///
+  /// Returns `nil` if any task is awaiting approval — pauses the queue.
   private func selectNextTask() -> QueuedTask? {
-    queueState.tasks
+    let hasApprovalPending = queueState.tasks.contains { $0.approvalState == .waiting }
+
+    if hasApprovalPending {
+      Logger.taskQueue.debug("Queue paused: task awaiting approval")
+      return nil
+    }
+
+    return queueState.tasks
       .filter { $0.status == .pending }
       .sorted { lhs, rhs in
         if lhs.priority != rhs.priority {
@@ -184,6 +199,11 @@ class TaskOrchestrator {
     currentRunner = runner
 
     let logCollector = TaskLogCollector(taskId: task.id, attemptId: attemptId)
+    logCollector.onLogLine = { [weak self] line in
+      Task { @MainActor [weak self] in
+        self?.queueState.appendLiveLog(line)
+      }
+    }
 
     /// Start timeout timer.
     timeoutTask = Task { [weak self] in
@@ -223,12 +243,22 @@ class TaskOrchestrator {
         self.timeoutTask?.cancel()
         self.timeoutTask = nil
 
-        self.queueState.markCompleted(
-          id: task.id,
-          resultSummary: result.resultSummary,
-          logArtifactPath: result.logArtifactPath,
-          sessionId: result.sessionId
-        )
+        if !result.detectedRiskyOperations.isEmpty {
+          self.queueState.markCompletedAwaitingApproval(
+            id: task.id,
+            resultSummary: result.resultSummary,
+            logArtifactPath: result.logArtifactPath,
+            sessionId: result.sessionId,
+            riskyOperations: result.detectedRiskyOperations
+          )
+        } else {
+          self.queueState.markCompleted(
+            id: task.id,
+            resultSummary: result.resultSummary,
+            logArtifactPath: result.logArtifactPath,
+            sessionId: result.sessionId
+          )
+        }
 
         self.finishExecution()
       } catch {
@@ -294,6 +324,27 @@ class TaskOrchestrator {
         logArtifactPath: logArtifactPath,
         failureKind: failureKind
       )
+
+      /// Clear execution state before sleeping for backoff.
+      currentRunner = nil
+      currentTaskId = nil
+      executionTask = nil
+      queueState.clearLiveLog()
+
+      let delay = Self.backoffDelay(retryCount: task.retryCount)
+      executionTask = Task { [weak self] in
+        try? await Task.sleep(nanoseconds: delay)
+
+        guard !Task.isCancelled,
+              let self,
+              self.isRunning
+        else {
+          return
+        }
+
+        self.scheduleNext()
+      }
+      return
     } else {
       queueState.markFailed(
         id: taskId,
@@ -311,7 +362,7 @@ class TaskOrchestrator {
     currentRunner = nil
     currentTaskId = nil
     executionTask = nil
-    pendingWakeUp = false
+    queueState.clearLiveLog()
     scheduleNext()
   }
 }

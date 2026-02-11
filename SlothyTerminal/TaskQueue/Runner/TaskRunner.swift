@@ -20,6 +20,7 @@ struct TaskRunResult {
   let sessionId: String?
   let failureKind: FailureKind?
   let errorMessage: String?
+  let detectedRiskyOperations: [String]
 }
 
 /// Errors that can occur during task runner execution.

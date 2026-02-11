@@ -7,6 +7,8 @@ enum ModalType: Identifiable {
   case folderSelector(AgentType)
   case chatFolderSelector(AgentType)
   case settings
+  case addTask
+  case taskDetail(UUID)
 
   var id: String {
     switch self {
@@ -18,6 +20,10 @@ enum ModalType: Identifiable {
       return "chatFolderSelector-\(agent.rawValue)"
     case .settings:
       return "settings"
+    case .addTask:
+      return "addTask"
+    case .taskDetail(let id):
+      return "taskDetail-\(id.uuidString)"
     }
   }
 }
@@ -145,6 +151,16 @@ class AppState {
   /// Shows the settings modal.
   func showSettings() {
     activeModal = .settings
+  }
+
+  /// Shows the add task modal.
+  func showAddTaskModal() {
+    activeModal = .addTask
+  }
+
+  /// Shows the task detail modal.
+  func showTaskDetail(id: UUID) {
+    activeModal = .taskDetail(id)
   }
 
   /// Dismisses the current modal.

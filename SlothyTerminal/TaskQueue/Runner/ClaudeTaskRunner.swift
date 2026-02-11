@@ -39,6 +39,9 @@ class ClaudeTaskRunner: TaskRunner {
     return try await withCheckedThrowingContinuation { continuation in
       var resumed = false
       var capturedSessionId: String?
+      var riskyDetections: [String] = []
+      var currentToolName: String?
+      var currentToolInput = ""
 
       transport.start(
         onEvent: { [weak self] event in
@@ -49,6 +52,33 @@ class ClaudeTaskRunner: TaskRunner {
           }
 
           self.logEvent(event, collector: logCollector)
+
+          /// Track tool use for risky operation detection.
+          switch event {
+          case .contentBlockStart(_, let blockType, _, let name):
+            if blockType == "tool_use" {
+              currentToolName = name
+              currentToolInput = ""
+            }
+
+          case .contentBlockDelta(_, let deltaType, let text):
+            if deltaType == "input_json_delta" {
+              currentToolInput += text
+            }
+
+          case .contentBlockStop:
+            if let toolName = currentToolName,
+               let detection = RiskyToolDetector.check(toolName: toolName, input: currentToolInput)
+            {
+              riskyDetections.append(detection.reason)
+              logCollector.append("RISKY: \(detection.reason)")
+            }
+            currentToolName = nil
+            currentToolInput = ""
+
+          default:
+            break
+          }
 
           if case .result(let text, _, _) = event {
             guard !resumed else {
@@ -64,7 +94,8 @@ class ClaudeTaskRunner: TaskRunner {
               logArtifactPath: logPath,
               sessionId: capturedSessionId,
               failureKind: nil,
-              errorMessage: nil
+              errorMessage: nil,
+              detectedRiskyOperations: riskyDetections
             ))
           }
         },

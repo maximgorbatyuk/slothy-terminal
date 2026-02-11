@@ -16,6 +16,9 @@ class TaskLogCollector {
   private var currentSize = 0
   private var truncated = false
 
+  /// Callback fired on each appended line (for live log streaming).
+  var onLogLine: ((String) -> Void)?
+
   private static let timestampFormatter: DateFormatter = {
     let fmt = DateFormatter()
     fmt.dateFormat = "HH:mm:ss.SSS"
@@ -45,6 +48,7 @@ class TaskLogCollector {
 
     lines.append(line)
     currentSize += lineSize
+    onLogLine?(line)
   }
 
   /// Writes accumulated log lines to disk and returns the file path.
@@ -87,10 +91,16 @@ class TaskLogCollector {
   // MARK: - Private
 
   private static var logsDirectory: URL {
-    let appSupport = FileManager.default.urls(
+    guard let appSupport = FileManager.default.urls(
       for: .applicationSupportDirectory,
       in: .userDomainMask
-    ).first!
+    ).first
+    else {
+      return FileManager.default.temporaryDirectory
+        .appendingPathComponent("SlothyTerminal", isDirectory: true)
+        .appendingPathComponent("tasks", isDirectory: true)
+        .appendingPathComponent("logs", isDirectory: true)
+    }
 
     return appSupport
       .appendingPathComponent("SlothyTerminal")

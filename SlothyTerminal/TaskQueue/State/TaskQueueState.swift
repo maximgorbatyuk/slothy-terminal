@@ -11,6 +11,12 @@ import OSLog
 class TaskQueueState {
   var tasks: [QueuedTask] = []
 
+  /// Live log lines from the currently executing task.
+  var liveLogLines: [String] = []
+
+  /// Last live log line for compact display.
+  var lastLiveLogLine: String? { liveLogLines.last }
+
   /// Called after every mutation so the orchestrator can wake up.
   var onQueueChanged: (() -> Void)?
 
@@ -260,6 +266,79 @@ class TaskQueueState {
     tasks[index].finishedAt = Date()
     Logger.taskQueue.info("Task \(id) → cancelled (was running)")
     persistAndNotify()
+  }
+
+  // MARK: - Approval Gates
+
+  /// Transitions a running task to completed, pending user approval.
+  func markCompletedAwaitingApproval(
+    id: UUID,
+    resultSummary: String?,
+    logArtifactPath: String?,
+    sessionId: String?,
+    riskyOperations: [String]
+  ) {
+    guard let index = tasks.firstIndex(where: { $0.id == id }),
+          tasks[index].status == .running
+    else {
+      Logger.taskQueue.warning("markCompletedAwaitingApproval: task \(id) not found or not running")
+      return
+    }
+
+    tasks[index].status = .completed
+    tasks[index].exitReason = .completed
+    tasks[index].finishedAt = Date()
+    tasks[index].resultSummary = resultSummary
+    tasks[index].logArtifactPath = logArtifactPath
+    tasks[index].sessionId = sessionId
+    tasks[index].approvalState = .waiting
+    tasks[index].detectedRiskyOperations = riskyOperations
+    Logger.taskQueue.info("Task \(id) → completed (awaiting approval)")
+    persistAndNotify()
+  }
+
+  /// Approves a task that was awaiting approval.
+  func approveTask(id: UUID) {
+    guard let index = tasks.firstIndex(where: { $0.id == id }),
+          tasks[index].approvalState == .waiting
+    else {
+      return
+    }
+
+    tasks[index].approvalState = .approved
+    Logger.taskQueue.info("Task \(id) → approved")
+    persistAndNotify()
+  }
+
+  /// Rejects a task that was awaiting approval.
+  func rejectTask(id: UUID) {
+    guard let index = tasks.firstIndex(where: { $0.id == id }),
+          tasks[index].approvalState == .waiting
+    else {
+      return
+    }
+
+    tasks[index].approvalState = .rejected
+    tasks[index].status = .failed
+    tasks[index].exitReason = .approvalRejected
+    Logger.taskQueue.info("Task \(id) → rejected")
+    persistAndNotify()
+  }
+
+  // MARK: - Live Log
+
+  /// Appends a line to the live log buffer (capped at 500 lines).
+  func appendLiveLog(_ line: String) {
+    liveLogLines.append(line)
+
+    if liveLogLines.count > 500 {
+      liveLogLines.removeFirst(liveLogLines.count - 500)
+    }
+  }
+
+  /// Clears the live log buffer.
+  func clearLiveLog() {
+    liveLogLines.removeAll()
   }
 
   /// Flushes any pending snapshot to disk immediately.

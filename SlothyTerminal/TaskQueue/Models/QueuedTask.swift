@@ -81,6 +81,9 @@ struct QueuedTask: Codable, Identifiable, Equatable {
   var logArtifactPath: String?
   var failureKind: FailureKind?
 
+  /// Risky tool operations detected during execution.
+  var detectedRiskyOperations: [String]?
+
   /// Set on crash recovery when a running task is found during restore.
   var interruptedNote: String?
 

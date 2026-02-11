@@ -87,6 +87,7 @@ let package = Package(
         "TaskQueue/Runner/OpenCodeTaskRunner.swift",
         "TaskQueue/Runner/TaskLogCollector.swift",
         "TaskQueue/Orchestrator/TaskOrchestrator.swift",
+        "TaskQueue/Runner/RiskyToolDetector.swift",
         "TaskQueue/Orchestrator/TaskPreflight.swift",
       ]
     ),
