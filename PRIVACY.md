@@ -1,6 +1,6 @@
 # Privacy Policy
 
-**Last updated: February 2, 2026**
+**Last updated: February 11, 2026**
 
 ## Overview
 
@@ -8,14 +8,14 @@ SlothyTerminal is a native macOS terminal application that runs entirely on your
 
 ## Data Collection
 
-**SlothyTerminal does not collect, store, or transmit any personal data.**
+**SlothyTerminal does not collect or transmit personal data to us.**
 
 ### What We Don't Collect
 
 - No personal information
 - No usage analytics or telemetry
-- No terminal commands or output
-- No file contents or directory information
+- No telemetry copy of terminal commands or output
+- No telemetry copy of file contents or directory information
 - No IP addresses or location data
 - No cookies or tracking identifiers
 
@@ -29,6 +29,8 @@ SlothyTerminal stores the following data **locally on your device only**:
 - Terminal font preferences
 - Custom agent paths
 - Window state
+- Chat preferences (for example send key behavior, markdown rendering)
+- Last used OpenCode chat model and mode
 
 **Location:** `~/Library/Application Support/SlothyTerminal/config.json`
 
@@ -36,6 +38,19 @@ SlothyTerminal stores the following data **locally on your device only**:
 - A list of recently accessed directories for quick access
 
 **Location:** Stored within the application settings file
+
+### Chat Session Snapshots
+- Chat conversation history for native chat tabs
+- Tool call/result blocks shown in chat
+- Session usage counters and timestamps
+- Selected and resolved model/mode metadata
+
+**Location:** `~/Library/Application Support/SlothyTerminal/` (chat session snapshot files)
+
+### Saved Prompts
+- Reusable prompts you create in Settings
+
+**Location:** Stored within the application settings and local app support data
 
 This data never leaves your device and can be deleted at any time by removing the application support folder.
 
@@ -45,8 +60,8 @@ This data never leaves your device and can be deleted at any time by removing th
 SlothyTerminal provides an interface to run third-party AI coding assistants (Claude CLI, OpenCode). When you use these agents:
 
 - **Your interactions are governed by their respective privacy policies**
-- SlothyTerminal acts only as a terminal interface
-- We do not intercept, store, or modify communications with these services
+- SlothyTerminal can display and locally persist native chat history for session restore
+- We do not run telemetry or send your chat/terminal data to our own servers
 
 Please refer to:
 - [Anthropic Privacy Policy](https://www.anthropic.com/privacy) for Claude CLI
@@ -62,7 +77,8 @@ SlothyTerminal uses the [Sparkle](https://sparkle-project.org/) framework to che
 ## Data Security
 
 - All data remains on your local machine
-- No network connections are made by SlothyTerminal itself (except for update checks)
+- SlothyTerminal itself does not include analytics/telemetry endpoints
+- Network traffic may occur when you use third-party agent CLIs (for example Claude/OpenCode) and during update checks
 - Terminal sessions run in isolated PTY processes
 
 ## Children's Privacy
