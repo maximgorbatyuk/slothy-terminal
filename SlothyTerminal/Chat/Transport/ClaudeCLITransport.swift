@@ -15,6 +15,11 @@ class ClaudeCLITransport: ChatTransport {
   private var readingTask: Task<Void, Never>?
   private(set) var isRunning: Bool = false
 
+  /// Set `true` in `terminate()` before sending SIGTERM so the
+  /// termination handler can distinguish manual shutdown from a crash
+  /// and invoke `onTerminated` exactly once with the correct reason.
+  private var didRequestTerminate: Bool = false
+
   /// Accumulated stderr output, drained asynchronously to prevent
   /// pipe buffer deadlock when the CLI writes verbose output.
   private var stderrBuffer = Data()
@@ -128,20 +133,29 @@ class ClaudeCLITransport: ChatTransport {
 
     /// Process termination handler.
     proc.terminationHandler = { [weak self] process in
-      self?.isRunning = false
+      guard let self else {
+        return
+      }
+
+      self.isRunning = false
 
       /// Stop draining stderr.
       stderr.fileHandleForReading.readabilityHandler = nil
 
-      let stderrText: String
-      if let self {
-        self.stderrLock.lock()
-        stderrText = String(data: self.stderrBuffer, encoding: .utf8)?
-          .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        self.stderrLock.unlock()
-      } else {
-        stderrText = ""
+      let manualTerminate = self.didRequestTerminate
+      self.didRequestTerminate = false
+
+      if manualTerminate {
+        Logger.chat.info("Claude CLI terminated by user request")
+        onTerminated(.normal)
+        return
       }
+
+      let stderrText: String
+      self.stderrLock.lock()
+      stderrText = String(data: self.stderrBuffer, encoding: .utf8)?
+        .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+      self.stderrLock.unlock()
 
       if process.terminationStatus == 0 {
         Logger.chat.info("Claude CLI exited normally")
@@ -156,8 +170,11 @@ class ClaudeCLITransport: ChatTransport {
   }
 
   func send(message: String) {
-    guard let stdinPipe else {
-      Logger.chat.warning("send() called but stdinPipe is nil")
+    guard let stdinPipe,
+          let process,
+          process.isRunning
+    else {
+      Logger.chat.warning("send() called but process is not running")
       return
     }
 
@@ -180,9 +197,16 @@ class ClaudeCLITransport: ChatTransport {
 
     jsonString += "\n"
 
-    if let writeData = jsonString.data(using: .utf8) {
-      Logger.chat.debug("→ send (\(writeData.count) bytes): \(jsonString.prefix(500))")
-      stdinPipe.fileHandleForWriting.write(writeData)
+    guard let writeData = jsonString.data(using: .utf8) else {
+      return
+    }
+
+    Logger.chat.debug("→ send (\(writeData.count) bytes): \(jsonString.prefix(500))")
+
+    do {
+      try stdinPipe.fileHandleForWriting.write(contentsOf: writeData)
+    } catch {
+      Logger.chat.error("stdin write failed (broken pipe?): \(error.localizedDescription)")
     }
   }
 
@@ -201,12 +225,16 @@ class ClaudeCLITransport: ChatTransport {
     if let process,
        process.isRunning
     {
+      didRequestTerminate = true
+      stdinPipe = nil
       process.terminate()
+    } else {
+      /// No running process — terminationHandler won't fire,
+      /// so clean up directly.
+      process = nil
+      stdinPipe = nil
+      isRunning = false
     }
-
-    process = nil
-    stdinPipe = nil
-    isRunning = false
   }
 
   // MARK: - Private helpers

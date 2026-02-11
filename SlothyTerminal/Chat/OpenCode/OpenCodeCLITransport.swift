@@ -22,6 +22,11 @@ class OpenCodeCLITransport: ChatTransport {
   private var readingTask: Task<Void, Never>?
   private(set) var isRunning: Bool = false
 
+  /// Set `true` in `terminate()` before sending SIGTERM so the
+  /// termination handler can distinguish manual shutdown from a crash
+  /// and invoke `onTerminated` exactly once with the correct reason.
+  private var didRequestTerminate: Bool = false
+
   /// Mapper context tracking block indices and text block state within a turn.
   private var mapperContext = OpenCodeMapperContext()
 
@@ -193,6 +198,16 @@ class OpenCodeCLITransport: ChatTransport {
       stderr.fileHandleForReading.readabilityHandler = nil
       self.process = nil
 
+      let manualTerminate = self.didRequestTerminate
+      self.didRequestTerminate = false
+
+      if manualTerminate {
+        Logger.chat.info("OpenCode process terminated by user request")
+        self.isRunning = false
+        self.onTerminated?(.normal)
+        return
+      }
+
       let stderrText: String
       self.stderrLock.lock()
       stderrText = String(data: self.stderrBuffer, encoding: .utf8)?
@@ -231,12 +246,14 @@ class OpenCodeCLITransport: ChatTransport {
     if let process,
        process.isRunning
     {
+      didRequestTerminate = true
       process.terminate()
+    } else {
+      /// No running process — terminationHandler won't fire,
+      /// so invoke the callback directly.
+      isRunning = false
+      onTerminated?(.normal)
     }
-
-    process = nil
-    isRunning = false
-    onTerminated?(.normal)
   }
 
   // MARK: - Private helpers
