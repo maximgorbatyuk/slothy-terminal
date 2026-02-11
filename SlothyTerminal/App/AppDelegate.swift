@@ -8,6 +8,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
   private var windowObserver: NSObjectProtocol?
 
   func applicationDidFinishLaunching(_ notification: Notification) {
+    /// Ignore SIGPIPE so a broken-pipe write returns an error instead
+    /// of terminating the process. This protects all FileHandle.write
+    /// calls (e.g., stdin pipes to CLI subprocesses).
+    signal(SIGPIPE, SIG_IGN)
+
     /// Restore window state after a short delay to allow window to be created.
     DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
       self?.restoreWindowState()
@@ -29,6 +34,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     else {
       return
     }
+
+    configureWindowAppearance(window)
 
     /// Validate the frame is on screen.
     let frame = windowState.frame
@@ -62,22 +69,39 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     ) { [weak self] _ in
       self?.saveWindowState()
     }
+
+    NotificationCenter.default.addObserver(
+      forName: NSWindow.didBecomeMainNotification,
+      object: nil,
+      queue: .main
+    ) { [weak self] notification in
+      guard let window = notification.object as? NSWindow else {
+        return
+      }
+
+      self?.configureWindowAppearance(window)
+    }
+  }
+
+  private func configureWindowAppearance(_ window: NSWindow) {
+    window.toolbarStyle = .unifiedCompact
+    window.titlebarAppearsTransparent = true
   }
 
   func applicationDockMenu(_ sender: NSApplication) -> NSMenu? {
     let menu = NSMenu()
 
-    /// New tab items.
-    let terminalItem = NSMenuItem(
-      title: "New Terminal Tab",
-      action: #selector(newTerminalTab),
+    /// New tab items — chat first as primary experience.
+    let chatItem = NSMenuItem(
+      title: "New Chat Tab",
+      action: #selector(newChatTab),
       keyEquivalent: ""
     )
-    terminalItem.target = self
-    menu.addItem(terminalItem)
+    chatItem.target = self
+    menu.addItem(chatItem)
 
     let claudeItem = NSMenuItem(
-      title: "New Claude Tab",
+      title: "New Claude TUI Tab",
       action: #selector(newClaudeTab),
       keyEquivalent: ""
     )
@@ -91,6 +115,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     )
     opencodeItem.target = self
     menu.addItem(opencodeItem)
+
+    let terminalItem = NSMenuItem(
+      title: "New Terminal Tab",
+      action: #selector(newTerminalTab),
+      keyEquivalent: ""
+    )
+    terminalItem.target = self
+    menu.addItem(terminalItem)
 
     /// Recent folders submenu.
     let recentFolders = recentFoldersManager.recentFolders
@@ -119,6 +151,13 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     return menu
+  }
+
+  @objc private func newChatTab() {
+    NotificationCenter.default.post(
+      name: .newChatTabRequested,
+      object: nil
+    )
   }
 
   @objc private func newTerminalTab() {
@@ -171,5 +210,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
 extension Notification.Name {
   static let newTabRequested = Notification.Name("newTabRequested")
+  static let newChatTabRequested = Notification.Name("newChatTabRequested")
   static let openFolderRequested = Notification.Name("openFolderRequested")
 }

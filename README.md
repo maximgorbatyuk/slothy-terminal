@@ -8,14 +8,18 @@ A native macOS terminal application designed for AI coding assistants with a tab
 
 ## Overview
 
-SlothyTerminal provides a unified terminal environment for working with AI coding agents. Run Claude CLI, OpenCode, or plain terminal sessions in a clean tabbed interface with real-time session statistics.
+SlothyTerminal provides a unified macOS workspace for AI coding agents with both:
+- native chat tabs (Claude and OpenCode)
+- classic CLI/TUI terminal tabs
+
+Use Claude CLI, OpenCode, or plain terminal sessions in a clean tabbed interface with real-time session statistics.
 
 ## Features
 
 ### Multi-Agent Support
 - **Terminal** - Plain shell sessions
-- **Claude** - Claude CLI integration for AI-assisted coding
-- **OpenCode** - OpenCode CLI integration
+- **Claude** - Native chat + Claude CLI/TUI tab support
+- **OpenCode** - Native chat + OpenCode CLI/TUI tab support
 
 ![](/docs/assets/main_window.png)
 
@@ -24,6 +28,7 @@ SlothyTerminal provides a unified terminal environment for working with AI codin
 - Quick tab switching with `Cmd+1-9`
 - Visual agent indicators with accent colors
 - Close tabs with `Cmd+W`
+- Mode-aware tab names (`Claude | chat`, `Claude | cli`, `Opencode | chat`, `Opencode | cli`, `Terminal | cli`)
 
 ![](/docs/assets/open_new_tab.png)
 
@@ -32,6 +37,22 @@ SlothyTerminal provides a unified terminal environment for working with AI codin
 - Session duration timer
 - Command counter
 - Configurable sidebar position (left/right)
+
+### Native Chat Experience
+- Production chat engine architecture (state machine + transport + persistent store)
+- Streaming markdown responses with tool-aware rendering
+- Reliable multi-step tool flow handling for Claude stream-json
+- Session recovery and restore across app restarts
+- Composer status bar with:
+  - mode selection (`Build` / `Plan`)
+  - model selection
+  - selected vs resolved metadata
+
+### OpenCode Chat Enhancements
+- Native OpenCode JSON event transport (`opencode run --format json`)
+- Searchable model picker loaded dynamically from `opencode models`
+- Model groups by provider prefix (for example `anthropic`, `openai`, `github-copilot`, `zai`)
+- Last used OpenCode model/mode remembered for new chats
 
 ### Directory Tree Browser
 - Collapsible file tree showing project structure
@@ -65,7 +86,7 @@ SlothyTerminal provides a unified terminal environment for working with AI codin
 ### Additional Features
 - Recent folders quick access
 - Automatic updates via Sparkle framework
-- Dark mode optimized
+- Compact native title bar with contextual window title (`📁 <folder> | Slothy Terminal`)
 - Native macOS integration
 
 ![](/docs/assets/select_working_folder.png)
@@ -97,9 +118,10 @@ Download the latest DMG from [GitHub Releases](https://github.com/maximgorbatyuk
 ### Tabs
 | Action | Shortcut |
 |--------|----------|
-| New Terminal Tab | `Cmd+T` |
-| New Claude Tab | `Cmd+Shift+T` |
-| New OpenCode Tab | `Cmd+Option+T` |
+| New Chat Tab (Claude) | `Cmd+T` |
+| New Claude TUI Tab | `Cmd+Shift+T` |
+| New OpenCode Chat Tab | `Cmd+Option+T` |
+| New Terminal Tab | `Cmd+Shift+Option+T` |
 | Close Tab | `Cmd+W` |
 | Next Tab | `Cmd+Shift+]` |
 | Previous Tab | `Cmd+Shift+[` |
@@ -125,6 +147,10 @@ Access settings via `Cmd+,` or **SlothyTerminal → Settings**.
 ### Agent Settings
 - Custom executable paths for Claude CLI and OpenCode
 - Installation verification
+
+### Chat Settings
+- Markdown rendering mode (Markdown / Plain)
+- Chat send key behavior (Enter vs Shift+Enter)
 
 ### Appearance Settings
 - Terminal font family (monospaced fonts)
@@ -172,10 +198,18 @@ SlothyTerminal/
 │   ├── AboutView.swift            # About window
 │   └── FolderSelectorModal.swift  # Folder browser modal
 ├── Models/
-│   ├── Tab.swift                  # Tab model with PTY controller
+│   ├── Tab.swift                  # Tab model for chat/cli modes
 │   ├── AgentType.swift            # Agent type enum (Terminal/Claude/OpenCode)
 │   ├── UsageStats.swift           # Session statistics tracking
 │   └── AppConfig.swift            # Configuration model
+├── Chat/
+│   ├── Engine/                    # Chat state machine and commands
+│   ├── Transport/                 # Provider transports (Claude/OpenCode)
+│   ├── OpenCode/                  # OpenCode parser/mapper/transport
+│   ├── Storage/                   # Session snapshot persistence
+│   ├── Parser/                    # Stream event parser types
+│   ├── Models/                    # Chat/domain models
+│   └── Views/                     # Chat UI, markdown, tool rendering
 ├── Agents/
 │   ├── AIAgent.swift              # Agent protocol and factory
 │   ├── ClaudeAgent.swift          # Claude CLI integration

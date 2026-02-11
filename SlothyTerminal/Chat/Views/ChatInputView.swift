@@ -3,12 +3,15 @@ import SwiftUI
 /// Text input field with send/stop button for the chat interface.
 /// Respects the `chatSendKey` setting: Enter or Shift+Enter to send,
 /// with the opposite key inserting a newline.
+/// Supports up/down arrow navigation through previously sent messages.
 struct ChatInputView: View {
   let isLoading: Bool
   let onSend: (String) -> Void
   let onStop: () -> Void
 
   @State private var inputText: String = ""
+  @State private var messageHistory: [String] = []
+  @State private var historyIndex: Int = -1
   @FocusState private var isFocused: Bool
 
   private var sendKey: ChatSendKey {
@@ -21,7 +24,7 @@ struct ChatInputView: View {
         .font(.system(size: 13))
         .scrollContentBackground(.hidden)
         .focused($isFocused)
-        .frame(minHeight: 36, maxHeight: 120)
+        .frame(minHeight: 44, maxHeight: 120)
         .fixedSize(horizontal: false, vertical: true)
         .padding(8)
         .background(appCardColor)
@@ -49,6 +52,39 @@ struct ChatInputView: View {
 
             /// Plain Return → newline (let TextEditor handle it).
             return .ignored
+          }
+        }
+        .onKeyPress(.upArrow, phases: .down) { _ in
+          guard !messageHistory.isEmpty else {
+            return .ignored
+          }
+
+          /// Only intercept when input is empty or already browsing history.
+          guard inputText.isEmpty || historyIndex >= 0 else {
+            return .ignored
+          }
+
+          if historyIndex < messageHistory.count - 1 {
+            historyIndex += 1
+            inputText = messageHistory[messageHistory.count - 1 - historyIndex]
+            return .handled
+          }
+
+          return .ignored
+        }
+        .onKeyPress(.downArrow, phases: .down) { _ in
+          guard historyIndex >= 0 else {
+            return .ignored
+          }
+
+          if historyIndex > 0 {
+            historyIndex -= 1
+            inputText = messageHistory[messageHistory.count - 1 - historyIndex]
+            return .handled
+          } else {
+            historyIndex = -1
+            inputText = ""
+            return .handled
           }
         }
 
@@ -93,6 +129,8 @@ struct ChatInputView: View {
     }
 
     let text = inputText
+    messageHistory.append(text)
+    historyIndex = -1
     inputText = ""
     onSend(text)
   }

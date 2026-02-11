@@ -20,6 +20,9 @@ extension Logger {
   /// Logger for agent operations.
   static let agent = Logger(subsystem: subsystem, category: "Agent")
 
+  /// Logger for chat engine, transport, and storage operations.
+  static let chat = Logger(subsystem: subsystem, category: "Chat")
+
   /// Logger for general app operations.
   static let app = Logger(subsystem: subsystem, category: "App")
 }

@@ -33,4 +33,31 @@ class ChatConversation {
     totalInputTokens = 0
     totalOutputTokens = 0
   }
+
+  // MARK: - Snapshot serialization
+
+  /// Creates a persistable snapshot of this conversation.
+  func toSnapshot(
+    sessionId: String,
+    selectedMode: ChatMode? = nil,
+    selectedModel: ChatModelSelection? = nil
+  ) -> ChatSessionSnapshot {
+    ChatSessionSnapshot(
+      sessionId: sessionId,
+      workingDirectory: workingDirectory.path,
+      messages: messages.map { SerializedMessage.from($0) },
+      totalInputTokens: totalInputTokens,
+      totalOutputTokens: totalOutputTokens,
+      savedAt: Date(),
+      selectedMode: selectedMode,
+      selectedModel: selectedModel
+    )
+  }
+
+  /// Restores conversation state from a persisted snapshot.
+  func restore(from snapshot: ChatSessionSnapshot) {
+    messages = snapshot.messages.map { $0.toMessage() }
+    totalInputTokens = snapshot.totalInputTokens
+    totalOutputTokens = snapshot.totalOutputTokens
+  }
 }

@@ -5,7 +5,7 @@ import SwiftUI
 enum ModalType: Identifiable {
   case newTab(AgentType?)
   case folderSelector(AgentType)
-  case chatFolderSelector
+  case chatFolderSelector(AgentType)
   case settings
 
   var id: String {
@@ -14,8 +14,8 @@ enum ModalType: Identifiable {
       return "newTab-\(agent?.rawValue ?? "none")"
     case .folderSelector(let agent):
       return "folderSelector-\(agent.rawValue)"
-    case .chatFolderSelector:
-      return "chatFolderSelector"
+    case .chatFolderSelector(let agent):
+      return "chatFolderSelector-\(agent.rawValue)"
     case .settings:
       return "settings"
     }
@@ -55,12 +55,18 @@ class AppState {
     switchToTab(id: tab.id)
   }
 
-  /// Creates a new chat tab with the specified working directory.
-  func createChatTab(directory: URL, initialPrompt: String? = nil) {
+  /// Creates a new chat tab with the specified working directory and agent.
+  func createChatTab(
+    agent: AgentType = .claude,
+    directory: URL,
+    initialPrompt: String? = nil,
+    resumeSessionId: String? = nil
+  ) {
     let tab = Tab(
-      agentType: .claude,
+      agentType: agent,
       workingDirectory: directory,
-      mode: .chat
+      mode: .chat,
+      resumeSessionId: resumeSessionId
     )
     tabs.append(tab)
     switchToTab(id: tab.id)
@@ -73,9 +79,9 @@ class AppState {
     }
   }
 
-  /// Shows the chat folder selector modal.
-  func showChatFolderSelector() {
-    activeModal = .chatFolderSelector
+  /// Shows the chat folder selector modal for the specified agent.
+  func showChatFolderSelector(for agent: AgentType = .claude) {
+    activeModal = .chatFolderSelector(agent)
   }
 
   /// Closes the tab with the specified ID.
@@ -146,6 +152,7 @@ class AppState {
   func terminateAllSessions() {
     for tab in tabs {
       tab.ptyController?.terminate()
+      /// terminateProcess() calls store.saveImmediately() internally.
       tab.chatState?.terminateProcess()
     }
   }

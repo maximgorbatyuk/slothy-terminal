@@ -49,6 +49,9 @@ enum StreamEventParser {
     case "assistant":
       return parseAssistant(json)
 
+    case "user":
+      return parseUserToolResult(json)
+
     case "message_start":
       return parseMessageStart(json)
 
@@ -165,13 +168,15 @@ enum StreamEventParser {
     let index = json["index"] as? Int ?? 0
     var blockType = "text"
     var id: String?
+    var name: String?
 
     if let contentBlock = json["content_block"] as? [String: Any] {
       blockType = contentBlock["type"] as? String ?? "text"
       id = contentBlock["id"] as? String
+      name = contentBlock["name"] as? String
     }
 
-    return .contentBlockStart(index: index, blockType: blockType, id: id)
+    return .contentBlockStart(index: index, blockType: blockType, id: id, name: name)
   }
 
   private static func parseContentBlockDelta(_ json: [String: Any]) -> StreamEvent {
@@ -181,7 +186,7 @@ enum StreamEventParser {
 
     if let delta = json["delta"] as? [String: Any] {
       deltaType = delta["type"] as? String ?? "text_delta"
-      text = delta["text"] as? String ?? ""
+      text = delta["text"] as? String ?? delta["partial_json"] as? String ?? ""
     }
 
     return .contentBlockDelta(index: index, deltaType: deltaType, text: text)
@@ -225,5 +230,39 @@ enum StreamEventParser {
     }
 
     return .result(text: text, inputTokens: inputTokens, outputTokens: outputTokens)
+  }
+
+  private static func parseUserToolResult(_ json: [String: Any]) -> StreamEvent? {
+    guard let message = json["message"] as? [String: Any],
+          let content = message["content"] as? [[String: Any]]
+    else {
+      return .unknown
+    }
+
+    for item in content {
+      guard (item["type"] as? String) == "tool_result" else {
+        continue
+      }
+
+      let toolUseId = item["tool_use_id"] as? String ?? ""
+      let isError = item["is_error"] as? Bool ?? false
+
+      if let resultText = item["content"] as? String {
+        return .userToolResult(toolUseId: toolUseId, content: resultText, isError: isError)
+      }
+
+      if let contentArray = item["content"] as? [[String: Any]] {
+        let texts = contentArray.compactMap { $0["text"] as? String }
+        return .userToolResult(
+          toolUseId: toolUseId,
+          content: texts.joined(separator: "\n"),
+          isError: isError
+        )
+      }
+
+      return .userToolResult(toolUseId: toolUseId, content: "", isError: isError)
+    }
+
+    return .unknown
   }
 }

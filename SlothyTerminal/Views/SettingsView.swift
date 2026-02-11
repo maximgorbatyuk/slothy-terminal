@@ -47,7 +47,14 @@ struct GeneralSettingsTab: View {
   var body: some View {
     Form {
       Section("Startup") {
-        Picker("Default Agent", selection: Bindable(configManager).config.defaultAgent) {
+        Picker("Default tab mode", selection: Bindable(configManager).config.defaultTabMode) {
+          ForEach(TabMode.allCases, id: \.self) { mode in
+            Text(mode.displayName).tag(mode)
+          }
+        }
+        .pickerStyle(.segmented)
+
+        Picker("Default agent (TUI)", selection: Bindable(configManager).config.defaultAgent) {
           ForEach(AgentType.allCases) { agent in
             Text(agent.rawValue).tag(agent)
           }
@@ -402,10 +409,12 @@ struct AgentSettingsSection: View {
     panel.allowsMultipleSelection = false
     panel.message = "Select the \(agent.displayName) CLI executable"
 
-    if panel.runModal() == .OK, let url = panel.url {
-      pathText = url.path
-      customPath = url.path
-      verifyInstallation()
+    panel.begin { response in
+      if response == .OK, let url = panel.url {
+        pathText = url.path
+        customPath = url.path
+        verifyInstallation()
+      }
     }
   }
 
@@ -432,6 +441,15 @@ struct AppearanceSettingsTab: View {
 
   var body: some View {
     Form {
+      Section("Color Scheme") {
+        Picker("Appearance", selection: Bindable(configManager).config.colorScheme) {
+          ForEach(AppColorScheme.allCases, id: \.self) { scheme in
+            Text(scheme.displayName).tag(scheme)
+          }
+        }
+        .pickerStyle(.segmented)
+      }
+
       Section("Terminal Font") {
         Picker("Font family", selection: Bindable(configManager).config.terminalFontName) {
           ForEach(ConfigManager.availableMonospacedFonts, id: \.self) { font in
@@ -792,7 +810,7 @@ struct PromptEditorSheet: View {
 
           TextEditor(text: $promptText)
             .font(.system(size: 12, design: .monospaced))
-            .frame(minHeight: 120)
+            .frame(maxHeight: .infinity)
             .scrollContentBackground(.hidden)
             .padding(8)
             .background(appCardColor)
@@ -829,8 +847,7 @@ struct PromptEditorSheet: View {
       }
       .padding(16)
     }
-    .frame(width: 450)
-    .fixedSize(horizontal: false, vertical: true)
+    .frame(width: 450, height: 450)
     .background(appBackgroundColor)
     .onAppear {
       if let prompt {
