@@ -46,6 +46,9 @@ struct AppConfig: Codable, Equatable {
   /// Terminal font size in points.
   var terminalFontSize: CGFloat = 13
 
+  /// How terminal mouse input is handled for TUI tabs.
+  var terminalInteractionMode: TerminalInteractionMode = .hostSelection
+
   /// Custom accent color for Claude (nil uses default).
   var claudeAccentColor: CodableColor?
 
@@ -121,6 +124,44 @@ enum ChatSendKey: String, Codable, CaseIterable {
 
     case .shiftEnter:
       return "Return for new line"
+    }
+  }
+}
+
+/// Controls how mouse input is routed in terminal tabs.
+enum TerminalInteractionMode: String, Codable, CaseIterable {
+  case hostSelection
+  case appMouse
+
+  var displayName: String {
+    switch self {
+    case .hostSelection:
+      return "Host Selection"
+
+    case .appMouse:
+      return "App Mouse"
+    }
+  }
+
+  /// Whether mouse events should be forwarded to the process.
+  var allowsMouseReporting: Bool {
+    switch self {
+    case .hostSelection:
+      return false
+
+    case .appMouse:
+      return true
+    }
+  }
+
+  /// Short explanation shown in settings.
+  var description: String {
+    switch self {
+    case .hostSelection:
+      return "Use mouse for terminal text selection and copy."
+
+    case .appMouse:
+      return "Send mouse events to the running TUI for in-app interactions."
     }
   }
 }

@@ -63,9 +63,10 @@ struct TerminalViewRepresentable: NSViewRepresentable {
     terminalView.configureNativeColors()
     terminalView.font = ConfigManager.shared.terminalFont
 
-    /// Disable mouse reporting so text selection works instead of
-    /// forwarding mouse events to the child process (e.g. Claude CLI).
-    terminalView.allowMouseReporting = false
+    /// Configure mouse routing mode.
+    /// Host Selection: keep mouse for local text selection.
+    /// App Mouse: forward mouse events to the running TUI.
+    terminalView.allowMouseReporting = ConfigManager.shared.config.terminalInteractionMode.allowsMouseReporting
 
     /// Set up output callback.
     terminalView.onDataReceived = { [onOutput] data in
@@ -104,6 +105,12 @@ struct TerminalViewRepresentable: NSViewRepresentable {
     let configuredFont = ConfigManager.shared.terminalFont
     if nsView.font != configuredFont {
       nsView.font = configuredFont
+    }
+
+    /// Update mouse routing mode if changed in settings.
+    let allowsMouseReporting = ConfigManager.shared.config.terminalInteractionMode.allowsMouseReporting
+    if nsView.allowMouseReporting != allowsMouseReporting {
+      nsView.allowMouseReporting = allowsMouseReporting
     }
 
     /// Update active state - this manages event monitors and focus.
@@ -253,14 +260,31 @@ class OutputCapturingTerminalView: LocalProcessTerminalView {
   /// Tracks whether this terminal view is currently active (visible tab).
   private(set) var isActive: Bool = false
 
-  /// Handle Cmd+V for paste - only when this view is active.
+  /// Handle Cmd+C/Cmd+V terminal copy/paste when active.
   override func performKeyEquivalent(with event: NSEvent) -> Bool {
     guard isActive else {
       return super.performKeyEquivalent(with: event)
     }
 
-    if event.modifierFlags.contains(.command) && event.charactersIgnoringModifiers == "v" {
+    let flags = event.modifierFlags.intersection([.command, .shift, .option, .control])
+    guard flags.contains(.command),
+          !flags.contains(.option),
+          !flags.contains(.control)
+    else {
+      return super.performKeyEquivalent(with: event)
+    }
+
+    guard let key = event.charactersIgnoringModifiers?.lowercased() else {
+      return super.performKeyEquivalent(with: event)
+    }
+
+    if key == "v" {
       paste(self)
+      return true
+    }
+
+    if key == "c", selectionActive {
+      copy(self)
       return true
     }
 

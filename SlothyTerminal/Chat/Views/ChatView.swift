@@ -67,6 +67,7 @@ struct ChatView: View {
 
       ChatInputView(
         isLoading: chatState.isLoading,
+        askModeBadgeText: askModeBadgeText,
         onSend: { text in
           chatState.sendMessage(text)
         },
@@ -106,6 +107,16 @@ struct ChatView: View {
       ?? "default"
 
     return "Opencode / \(modelName)"
+  }
+
+  private var askModeBadgeText: String? {
+    guard chatState.agentType == .opencode,
+          chatState.isOpenCodeAskModeEnabled
+    else {
+      return nil
+    }
+
+    return "Ask mode active: agent asks clarifying questions first"
   }
 }
 

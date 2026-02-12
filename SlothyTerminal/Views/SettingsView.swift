@@ -600,6 +600,19 @@ struct AppearanceSettingsTab: View {
         }
       }
 
+      Section("Terminal Interaction") {
+        Picker("Mouse mode", selection: Bindable(configManager).config.terminalInteractionMode) {
+          ForEach(TerminalInteractionMode.allCases, id: \.self) { mode in
+            Text(mode.displayName).tag(mode)
+          }
+        }
+        .pickerStyle(.segmented)
+
+        Text(configManager.config.terminalInteractionMode.description)
+          .font(.caption)
+          .foregroundColor(.secondary)
+      }
+
       Section("Agent Colors") {
         AgentColorPicker(
           agentType: .claude,
