@@ -17,6 +17,9 @@ struct GhosttyTerminalViewRepresentable: NSViewRepresentable {
   /// Callback when the current directory changes.
   var onDirectoryChanged: ((URL) -> Void)?
 
+  /// Callback when user presses Enter in terminal input.
+  var onCommandEntered: (() -> Void)?
+
   /// Callback when the surface is closed (process exits).
   var onClosed: (() -> Void)?
 
@@ -26,24 +29,32 @@ struct GhosttyTerminalViewRepresentable: NSViewRepresentable {
 
     /// Wire callbacks.
     surfaceView.onDirectoryChanged = onDirectoryChanged
+    surfaceView.onCommandEntered = onCommandEntered
     surfaceView.onClosed = onClosed
 
-    /// Determine the command to run.
-    /// For AI agents (shouldAutoRunCommand=true), we pass the command directly
-    /// to libghostty as the surface command so it runs immediately.
-    /// For plain terminal, we let libghostty use the default shell.
-    if shouldAutoRunCommand {
+    let launchEnvironment = makeLaunchEnvironment(
+      workingDirectory: workingDirectory,
+      additionalEnvironment: environment
+    )
+
+    /// Run the resolved command explicitly for both AI and plain terminal tabs.
+    /// This guarantees shell startup even when Ghostty config has no default command.
+    var resolvedCommand = command.trimmingCharacters(in: .whitespacesAndNewlines)
+    if resolvedCommand.isEmpty, !shouldAutoRunCommand {
+      resolvedCommand = launchEnvironment["SHELL"] ?? "/bin/zsh"
+    }
+
+    if !resolvedCommand.isEmpty {
       surfaceView.createSurface(
-        command: command,
+        command: resolvedCommand,
         args: arguments,
         workingDirectory: workingDirectory,
-        environment: environment
+        environment: launchEnvironment
       )
     } else {
-      /// Plain terminal — launch default shell, let ghostty config control it.
       surfaceView.createSurface(
         workingDirectory: workingDirectory,
-        environment: environment
+        environment: launchEnvironment
       )
     }
 
@@ -68,6 +79,50 @@ struct GhosttyTerminalViewRepresentable: NSViewRepresentable {
     weak var surfaceView: GhosttySurfaceView?
   }
 
+  private func makeLaunchEnvironment(
+    workingDirectory: URL,
+    additionalEnvironment: [String: String]
+  ) -> [String: String] {
+    var env = ProcessInfo.processInfo.environment
+
+    for (key, value) in additionalEnvironment {
+      env[key] = value
+    }
+
+    let defaultPaths = [
+      "/opt/homebrew/bin",
+      "/usr/local/bin",
+      "/usr/bin",
+      "/bin",
+      "/usr/sbin",
+      "/sbin",
+      "/opt/homebrew/sbin"
+    ]
+
+    var pathEntries = env["PATH"]?
+      .split(separator: ":")
+      .map(String.init) ?? []
+
+    for path in defaultPaths where !pathEntries.contains(path) {
+      pathEntries.append(path)
+    }
+
+    env["PATH"] = pathEntries.joined(separator: ":")
+    env["PWD"] = workingDirectory.path
+    env["TERM"] = env["TERM"] ?? "xterm-256color"
+    env["COLORTERM"] = env["COLORTERM"] ?? "truecolor"
+    env["LANG"] = env["LANG"] ?? "en_US.UTF-8"
+    env["LC_ALL"] = env["LC_ALL"] ?? "en_US.UTF-8"
+    env["HOME"] = env["HOME"] ?? NSHomeDirectory()
+    env["USER"] = env["USER"] ?? NSUserName()
+    env["SHELL"] = env["SHELL"] ?? "/bin/zsh"
+    env["TERM_PROGRAM"] = "SlothyTerminal"
+    env["FORCE_COLOR"] = "1"
+    env.removeValue(forKey: "CI")
+
+    return env
+  }
+
   static func dismantleNSView(_ nsView: GhosttySurfaceView, coordinator: Coordinator) {
     nsView.destroySurface()
   }
@@ -89,6 +144,9 @@ struct StandaloneTerminalView: View {
   /// Callback when the current directory changes.
   var onDirectoryChanged: ((URL) -> Void)? = nil
 
+  /// Callback when user presses Enter in terminal input.
+  var onCommandEntered: (() -> Void)? = nil
+
   /// Callback when the surface is closed.
   var onClosed: (() -> Void)? = nil
 
@@ -101,6 +159,7 @@ struct StandaloneTerminalView: View {
       shouldAutoRunCommand: shouldAutoRunCommand,
       isActive: isActive,
       onDirectoryChanged: onDirectoryChanged,
+      onCommandEntered: onCommandEntered,
       onClosed: onClosed
     )
   }

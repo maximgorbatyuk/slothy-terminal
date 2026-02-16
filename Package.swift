@@ -33,10 +33,13 @@ let package = Package(
         "Chat/Views",
         "Assets.xcassets",
         "Info.plist",
+        "Models/GitModifiedFile.swift",
         "Services/UpdateManager.swift",
         "Services/ExternalAppManager.swift",
         "Services/DirectoryTreeManager.swift",
-        "Services/GitService.swift"
+        "Services/GitService.swift",
+        "Terminal/GhosttyApp.swift",
+        "Terminal/GhosttySurfaceView.swift"
       ],
       sources: [
         "Services/StatsParser.swift",

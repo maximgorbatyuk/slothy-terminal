@@ -282,7 +282,7 @@ Ensure `GhosttyKit.xcframework` is present in the project root, then:
 ./scripts/build-release.sh 2026.2.6
 ```
 
-This archives, notarizes, creates a DMG, and signs for Sparkle updates. See [RELEASE.md](RELEASE.md) for full step-by-step instructions.
+This archives, notarizes, creates a DMG, and signs for Sparkle updates. See [RELEASE.md](docs/RELEASE.md) for full step-by-step instructions.
 
 ## Changelog
 

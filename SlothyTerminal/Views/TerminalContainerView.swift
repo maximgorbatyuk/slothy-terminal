@@ -48,6 +48,9 @@ struct ActiveTerminalView: View {
           isActive: isActive,
           onDirectoryChanged: { newDirectory in
             tab.workingDirectory = newDirectory
+          },
+          onCommandEntered: {
+            tab.usageStats.incrementCommandCount()
           }
         )
         .environment(\.colorScheme, .dark)

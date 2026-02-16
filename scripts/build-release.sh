@@ -24,6 +24,15 @@ echo "  Version: $VERSION"
 echo "  Team ID: $TEAM_ID"
 echo "==========================================="
 
+# Ensure GhosttyKit binary dependency is present.
+if [ ! -d "GhosttyKit.xcframework" ]; then
+  echo ""
+  echo "ERROR: GhosttyKit.xcframework not found in project root."
+  echo "This release requires libghostty binaries to be available before archiving."
+  echo ""
+  exit 1
+fi
+
 # Check if credentials are stored
 if ! xcrun notarytool history --keychain-profile "$KEYCHAIN_PROFILE" &>/dev/null; then
   echo ""

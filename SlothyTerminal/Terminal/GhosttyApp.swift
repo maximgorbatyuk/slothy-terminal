@@ -2,6 +2,11 @@ import AppKit
 import GhosttyKit
 import os
 
+private let ghosttyCallbackLogger = Logger(
+  subsystem: Bundle.main.bundleIdentifier ?? "SlothyTerminal",
+  category: "GhosttyApp"
+)
+
 /// Process-wide singleton managing the libghostty app instance.
 /// Creates the ghostty config and app, implements the required runtime callbacks,
 /// and dispatches actions (title changes, PWD updates, close requests, etc.)
@@ -11,13 +16,7 @@ class GhosttyApp {
   static let shared = GhosttyApp()
 
   private(set) var app: ghostty_app_t?
-  private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "SlothyTerminal", category: "GhosttyApp")
-
-  /// Callbacks that surface views register to receive actions.
-  var onTitleChanged: ((_ surface: ghostty_surface_t, _ title: String) -> Void)?
-  var onPwdChanged: ((_ surface: ghostty_surface_t, _ pwd: String) -> Void)?
-  var onSurfaceClosed: ((_ surface: ghostty_surface_t) -> Void)?
-  var onBell: ((_ surface: ghostty_surface_t) -> Void)?
+  fileprivate let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "SlothyTerminal", category: "GhosttyApp")
 
   private init() {
     initializeGhostty()
@@ -111,8 +110,8 @@ class GhosttyApp {
       return
     }
 
-    let isDark = NSApp.effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
-    ghostty_app_set_color_scheme(app, isDark ? GHOSTTY_COLOR_SCHEME_DARK : GHOSTTY_COLOR_SCHEME_LIGHT)
+    /// Slothy terminal UI is currently dark-themed.
+    ghostty_app_set_color_scheme(app, GHOSTTY_COLOR_SCHEME_DARK)
   }
 
   // MARK: - Notification Handlers
@@ -190,8 +189,13 @@ private func ghosttyAction(
 
     let title = String(cString: cTitle)
     DispatchQueue.main.async {
-      GhosttyApp.shared.onTitleChanged?(surface, title)
+      guard let view = GhosttyApp.surfaceView(from: surface) else {
+        return
+      }
+
+      view.onTitleChanged?(title)
     }
+
     return true
 
   case GHOSTTY_ACTION_PWD:
@@ -203,16 +207,28 @@ private func ghosttyAction(
 
     let pwd = String(cString: cPwd)
     DispatchQueue.main.async {
-      GhosttyApp.shared.onPwdChanged?(surface, pwd)
+      guard let view = GhosttyApp.surfaceView(from: surface) else {
+        return
+      }
+
+      let url: URL
+      if pwd.hasPrefix("file://"), let parsed = URL(string: pwd)
+      {
+        url = parsed
+      } else {
+        url = URL(fileURLWithPath: pwd)
+      }
+
+      view.onDirectoryChanged?(url)
     }
+
     return true
 
   case GHOSTTY_ACTION_RING_BELL:
-    if let surface {
-      DispatchQueue.main.async {
-        GhosttyApp.shared.onBell?(surface)
-      }
+    DispatchQueue.main.async {
+      NSSound.beep()
     }
+
     return true
 
   case GHOSTTY_ACTION_MOUSE_SHAPE:
@@ -247,6 +263,36 @@ private func ghosttyAction(
     }
     return true
 
+  case GHOSTTY_ACTION_RENDERER_HEALTH:
+    let health = action.action.renderer_health
+    if health == GHOSTTY_RENDERER_HEALTH_UNHEALTHY {
+      ghosttyCallbackLogger.error("Ghostty renderer health is UNHEALTHY")
+    } else {
+      ghosttyCallbackLogger.info("Ghostty renderer health is OK")
+    }
+
+    return true
+
+  case GHOSTTY_ACTION_INITIAL_SIZE:
+    let initialSize = action.action.initial_size
+    ghosttyCallbackLogger.info("Ghostty initial size hint: \(initialSize.width)x\(initialSize.height)")
+    return true
+
+  case GHOSTTY_ACTION_CELL_SIZE:
+    let cellSize = action.action.cell_size
+    ghosttyCallbackLogger.info("Ghostty cell size: \(cellSize.width)x\(cellSize.height)")
+    return true
+
+  case GHOSTTY_ACTION_COMMAND_FINISHED:
+    let finished = action.action.command_finished
+    ghosttyCallbackLogger.info("Ghostty command finished: exit=\(finished.exit_code), durationNs=\(finished.duration)")
+    return true
+
+  case GHOSTTY_ACTION_SHOW_CHILD_EXITED:
+    let child = action.action.child_exited
+    ghosttyCallbackLogger.info("Ghostty child exited: exit=\(child.exit_code), elapsedMs=\(child.timetime_ms)")
+    return true
+
   case GHOSTTY_ACTION_OPEN_CONFIG:
     DispatchQueue.main.async {
       let configPath = ghostty_config_open_path()
@@ -260,25 +306,22 @@ private func ghosttyAction(
     return true
 
   case GHOSTTY_ACTION_RENDER:
-    /// Trigger a redraw of the surface's view.
-    if let surface {
-      DispatchQueue.main.async {
-        guard let view = GhosttyApp.surfaceView(from: surface) else {
-          return
-        }
-
-        view.needsDisplay = true
-      }
-    }
+    /// Metal-backed surfaces present automatically in the normal render path.
+    /// Treat this as a signal only; avoid forcing extra refresh/draw calls.
     return true
 
   case GHOSTTY_ACTION_CLOSE_WINDOW:
     /// In our app, closing the "window" for a surface means closing that surface's tab.
     if let surface {
       DispatchQueue.main.async {
-        GhosttyApp.shared.onSurfaceClosed?(surface)
+        guard let view = GhosttyApp.surfaceView(from: surface) else {
+          return
+        }
+
+        view.onClosed?()
       }
     }
+
     return true
 
   default:
@@ -292,9 +335,13 @@ private func ghosttyReadClipboard(
   location: ghostty_clipboard_e,
   state: UnsafeMutableRawPointer?
 ) {
+  guard let userdata else {
+    return
+  }
+
   /// Read from the standard pasteboard.
   let str = NSPasteboard.general.string(forType: .string) ?? ""
-  let surfaceView = Unmanaged<GhosttySurfaceView>.fromOpaque(userdata!).takeUnretainedValue()
+  let surfaceView = Unmanaged<GhosttySurfaceView>.fromOpaque(userdata).takeUnretainedValue()
 
   guard let surface = surfaceView.surface else {
     return
@@ -311,8 +358,12 @@ private func ghosttyConfirmReadClipboard(
   state: UnsafeMutableRawPointer?,
   request: ghostty_clipboard_request_e
 ) {
+  guard let userdata else {
+    return
+  }
+
   /// Auto-approve clipboard reads for simplicity.
-  let surfaceView = Unmanaged<GhosttySurfaceView>.fromOpaque(userdata!).takeUnretainedValue()
+  let surfaceView = Unmanaged<GhosttySurfaceView>.fromOpaque(userdata).takeUnretainedValue()
 
   guard let surface = surfaceView.surface else {
     return
@@ -358,13 +409,14 @@ private func ghosttyWriteClipboard(
 }
 
 private func ghosttyCloseSurface(_ userdata: UnsafeMutableRawPointer?, processAlive: Bool) {
-  let surfaceView = Unmanaged<GhosttySurfaceView>.fromOpaque(userdata!).takeUnretainedValue()
-
-  guard let surface = surfaceView.surface else {
+  guard let userdata else {
     return
   }
 
+  let surfaceView = Unmanaged<GhosttySurfaceView>.fromOpaque(userdata).takeUnretainedValue()
+  ghosttyCallbackLogger.info("Ghostty close surface requested (processAlive=\(processAlive))")
+
   DispatchQueue.main.async {
-    GhosttyApp.shared.onSurfaceClosed?(surface)
+    surfaceView.onClosed?()
   }
 }

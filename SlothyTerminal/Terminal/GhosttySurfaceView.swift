@@ -7,8 +7,16 @@ import os
 /// Handles keyboard/mouse input, sizing, focus, and lifecycle.
 /// One instance per terminal tab.
 class GhosttySurfaceView: NSView, NSTextInputClient {
+  private struct SurfaceLaunchRequest {
+    let command: String?
+    let args: [String]
+    let workingDirectory: URL?
+    let environment: [String: String]
+  }
+
   private(set) var surface: ghostty_surface_t?
   private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "SlothyTerminal", category: "GhosttySurface")
+  private var pendingLaunchRequest: SurfaceLaunchRequest?
 
   /// Accumulated text from `insertText` during key interpretation.
   private var keyTextAccumulator: [String]?
@@ -21,16 +29,13 @@ class GhosttySurfaceView: NSView, NSTextInputClient {
   /// Callbacks for integration with Tab.
   var onTitleChanged: ((String) -> Void)?
   var onDirectoryChanged: ((URL) -> Void)?
+  var onCommandEntered: (() -> Void)?
   var onClosed: (() -> Void)?
 
   // MARK: - Initialization
 
   init() {
     super.init(frame: NSMakeRect(0, 0, 800, 600))
-
-    /// Metal rendering requires a layer-backed view.
-    wantsLayer = true
-    layer?.isOpaque = true
   }
 
   @available(*, unavailable)
@@ -61,21 +66,30 @@ class GhosttySurfaceView: NSView, NSTextInputClient {
       return
     }
 
-    /// Build the full command string (command + args).
+    guard window != nil else {
+      pendingLaunchRequest = SurfaceLaunchRequest(
+        command: command,
+        args: args,
+        workingDirectory: workingDirectory,
+        environment: environment
+      )
+      logger.debug("Deferring Ghostty surface creation until view is in a window")
+      return
+    }
+
+    pendingLaunchRequest = nil
+
+    /// Build a shell-safe command string (command + args).
     let fullCommand: String?
     if let command {
-      if args.isEmpty {
-        fullCommand = command
-      } else {
-        fullCommand = ([command] + args).joined(separator: " ")
-      }
+      let allParts = [command] + args
+      fullCommand = allParts.map(Self.shellEscape).joined(separator: " ")
     } else {
       fullCommand = nil
     }
 
-    /// Build environment array.
-    let envKeys = Array(environment.keys)
-    let envValues = Array(environment.values)
+    /// Build environment array with stable key/value pairing.
+    let envPairs = Array(environment)
 
     /// Create the surface config.
     var config = ghostty_surface_config_new()
@@ -86,7 +100,7 @@ class GhosttySurfaceView: NSView, NSTextInputClient {
     )
     config.scale_factor = Double(window?.backingScaleFactor ?? NSScreen.main?.backingScaleFactor ?? 2.0)
     config.font_size = 0
-    config.context = GHOSTTY_SURFACE_CONTEXT_TAB
+    config.context = GHOSTTY_SURFACE_CONTEXT_WINDOW
 
     /// Use nested withCString calls to keep C string pointers alive.
     let wd = workingDirectory?.path ?? ""
@@ -100,12 +114,12 @@ class GhosttySurfaceView: NSView, NSTextInputClient {
 
         /// Build env vars array.
         var envVars: [ghostty_env_var_s] = []
-        envVars.reserveCapacity(envKeys.count)
+        envVars.reserveCapacity(envPairs.count)
 
         /// We need to keep C strings alive, so we use a helper.
-        withExtendedLifetime(envKeys.map { $0.utf8CString }) { keyCStrings in
-          withExtendedLifetime(envValues.map { $0.utf8CString }) { valueCStrings in
-            for i in 0..<envKeys.count {
+        withExtendedLifetime(envPairs.map { $0.key.utf8CString }) { keyCStrings in
+          withExtendedLifetime(envPairs.map { $0.value.utf8CString }) { valueCStrings in
+            for i in 0..<envPairs.count {
               keyCStrings[i].withUnsafeBufferPointer { keyBuf in
                 valueCStrings[i].withUnsafeBufferPointer { valBuf in
                   envVars.append(ghostty_env_var_s(
@@ -118,7 +132,7 @@ class GhosttySurfaceView: NSView, NSTextInputClient {
 
             envVars.withUnsafeMutableBufferPointer { buffer in
               config.env_vars = buffer.baseAddress
-              config.env_var_count = envKeys.count
+              config.env_var_count = envPairs.count
 
               self.surface = ghostty_surface_new(app, &config)
             }
@@ -129,103 +143,89 @@ class GhosttySurfaceView: NSView, NSTextInputClient {
 
     if surface == nil {
       logger.error("ghostty_surface_new failed")
+      return
     }
 
-    /// Register for action callbacks.
-    registerActionCallbacks()
+    applyCurrentSizeAndScale()
+
+    if let surface {
+      ghostty_surface_set_occlusion(surface, false)
+      ghostty_surface_set_focus(surface, window?.firstResponder == self)
+      ghostty_surface_set_color_scheme(surface, GHOSTTY_COLOR_SCHEME_DARK)
+
+      let size = ghostty_surface_size(surface)
+      logger.info(
+        "Ghostty surface ready: px=\(size.width_px)x\(size.height_px), cells=\(size.columns)x\(size.rows), command=\(fullCommand ?? "<default>", privacy: .public)"
+      )
+      logger.info("Ghostty process exited at startup: \(ghostty_surface_process_exited(surface))")
+    }
+
+    GhosttyApp.shared.tick()
+
   }
 
   /// Destroys the surface and cleans up resources.
   func destroySurface() {
-    unregisterActionCallbacks()
-
     if let surface {
       ghostty_surface_free(surface)
       self.surface = nil
     }
   }
 
-  // MARK: - Action Callback Registration
-
-  private func registerActionCallbacks() {
-    GhosttyApp.shared.onTitleChanged = { [weak self] surface, title in
-      guard let self,
-            self.surface == surface
-      else {
-        return
-      }
-
-      self.onTitleChanged?(title)
-    }
-
-    GhosttyApp.shared.onPwdChanged = { [weak self] surface, pwd in
-      guard let self,
-            self.surface == surface
-      else {
-        return
-      }
-
-      let url: URL
-      if pwd.hasPrefix("file://") {
-        guard let parsed = URL(string: pwd) else {
-          return
-        }
-        url = parsed
-      } else {
-        url = URL(fileURLWithPath: pwd)
-      }
-      self.onDirectoryChanged?(url)
-    }
-
-    GhosttyApp.shared.onSurfaceClosed = { [weak self] surface in
-      guard let self,
-            self.surface == surface
-      else {
-        return
-      }
-
-      self.onClosed?()
-    }
-  }
-
-  private func unregisterActionCallbacks() {
-    /// Only clear if we are the one who registered.
-    GhosttyApp.shared.onTitleChanged = nil
-    GhosttyApp.shared.onPwdChanged = nil
-    GhosttyApp.shared.onSurfaceClosed = nil
-  }
-
   // MARK: - View Lifecycle
 
   override var acceptsFirstResponder: Bool { true }
   override var canBecomeKeyView: Bool { true }
-  override var isFlipped: Bool { true }
 
   override func viewDidMoveToWindow() {
     super.viewDidMoveToWindow()
+
+    if window != nil,
+       surface == nil,
+       let request = pendingLaunchRequest
+    {
+      createSurface(
+        command: request.command,
+        args: request.args,
+        workingDirectory: request.workingDirectory,
+        environment: request.environment
+      )
+    }
+
     updateTrackingAreas()
+    applyCurrentSizeAndScale()
+    GhosttyApp.shared.tick()
+  }
+
+  override func layout() {
+    super.layout()
+    applyCurrentSizeAndScale()
+    GhosttyApp.shared.tick()
   }
 
   override func setFrameSize(_ newSize: NSSize) {
     super.setFrameSize(newSize)
-
-    guard let surface else {
-      return
-    }
-
-    let backing = convertToBacking(newSize)
-    ghostty_surface_set_size(surface, UInt32(backing.width), UInt32(backing.height))
+    applyCurrentSizeAndScale()
   }
 
   override func viewDidChangeBackingProperties() {
     super.viewDidChangeBackingProperties()
 
+    applyCurrentSizeAndScale()
+  }
+
+  private func applyCurrentSizeAndScale() {
     guard let surface else {
       return
     }
 
     let scale = window?.backingScaleFactor ?? NSScreen.main?.backingScaleFactor ?? 2.0
+    let backing = convertToBacking(bounds.size)
+    let widthPx = max(Int(backing.width.rounded()), 1)
+    let heightPx = max(Int(backing.height.rounded()), 1)
+    ghostty_surface_set_size(surface, UInt32(widthPx), UInt32(heightPx))
     ghostty_surface_set_content_scale(surface, scale, scale)
+    ghostty_surface_refresh(surface)
   }
 
   override func updateTrackingAreas() {
@@ -251,10 +251,7 @@ class GhosttySurfaceView: NSView, NSTextInputClient {
     }
 
     ghostty_surface_set_focus(surface, focused)
-
-    if focused {
-      ghostty_surface_set_occlusion(surface, false)
-    }
+    ghostty_surface_set_occlusion(surface, !focused)
   }
 
   override func becomeFirstResponder() -> Bool {
@@ -333,6 +330,10 @@ class GhosttySurfaceView: NSView, NSTextInputClient {
     }
 
     keyTextAccumulator = nil
+
+    if shouldCountCommandEntry(for: event) {
+      onCommandEntered?()
+    }
   }
 
   override func keyUp(with event: NSEvent) {
@@ -449,6 +450,35 @@ class GhosttySurfaceView: NSView, NSTextInputClient {
     } else {
       return ghostty_surface_key(surface, keyEvent)
     }
+  }
+
+  private func shouldCountCommandEntry(for event: NSEvent) -> Bool {
+    guard !hasMarkedText(),
+          !event.isARepeat
+    else {
+      return false
+    }
+
+    guard event.keyCode == 36 || event.keyCode == 76 else {
+      return false
+    }
+
+    let disallowed: NSEvent.ModifierFlags = [.command, .control, .option]
+    return event.modifierFlags.intersection(disallowed).isEmpty
+  }
+
+  static func shellEscape(_ argument: String) -> String {
+    guard !argument.isEmpty else {
+      return "''"
+    }
+
+    let specialCharacters = CharacterSet(charactersIn: " \t\n\"'`$\\!#&|;<>(){}[]?*~")
+
+    if argument.unicodeScalars.allSatisfy({ !specialCharacters.contains($0) }) {
+      return argument
+    }
+
+    return "'" + argument.replacingOccurrences(of: "'", with: "'\\''") + "'"
   }
 
   static func makeKeyEvent(
