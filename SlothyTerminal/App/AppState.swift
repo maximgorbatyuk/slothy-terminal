@@ -106,9 +106,6 @@ class AppState {
       return
     }
 
-    /// Terminate the PTY session if active.
-    tabs[index].ptyController?.terminate()
-
     /// Terminate chat process if active.
     tabs[index].chatState?.terminateProcess()
 
@@ -177,7 +174,6 @@ class AppState {
   /// Called during app quit to ensure child processes are cleaned up.
   func terminateAllSessions() {
     for tab in tabs {
-      tab.ptyController?.terminate()
       /// terminateProcess() calls store.saveImmediately() internally.
       tab.chatState?.terminateProcess()
     }

@@ -5,7 +5,7 @@ import PackageDescription
 /// The main app is still built via the Xcode project.
 /// Run tests with: swift test
 ///
-/// Note: External dependencies (SwiftTerm, Sparkle) are excluded here
+/// Note: External dependencies (Sparkle) are excluded here
 /// since the tested code doesn't require them. Views and UpdateManager
 /// are excluded from the test target.
 
@@ -52,7 +52,6 @@ let package = Package(
         "Agents/ClaudeAgent.swift",
         "Agents/OpenCodeAgent.swift",
         "Agents/TerminalAgent.swift",
-        "Terminal/PTYController.swift",
         "Models/SavedPrompt.swift",
 
         /// Chat core (non-UI) — Engine, Models, Parser, Transport, State adapter.

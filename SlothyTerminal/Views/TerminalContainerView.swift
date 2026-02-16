@@ -43,17 +43,9 @@ struct ActiveTerminalView: View {
           workingDirectory: tab.workingDirectory,
           command: tab.command,
           arguments: tab.arguments,
-          onOutput: { output in
-            tab.processOutput(output)
-          },
+          environment: tab.environment,
           shouldAutoRunCommand: tab.agentType.showsUsageStats,
           isActive: isActive,
-          onTerminalReady: { sendFunc in
-            tab.sendToTerminal = sendFunc
-          },
-          onCommandEntered: {
-            tab.usageStats.incrementCommandCount()
-          },
           onDirectoryChanged: { newDirectory in
             tab.workingDirectory = newDirectory
           }

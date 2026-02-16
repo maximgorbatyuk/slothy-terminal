@@ -8,6 +8,14 @@
 - [x] STF-4. Show current Git branch in left corner of the bottom line. If there is no git branch, show nothing.
 - [ ] STF-5. Fetch claude usage stats on the background and show it on the sidebar.
 - [ ] STF-6. Add Custom UI for Claude as tab option (claude-custom-ui.md)
+- [ ] STF-7. Open OpenCode chat with predefined model, mode (build/plan), and reasoning level.
+  - Model + mode are partially supported today via last-used persistence, but not explicit per-tab launch params.
+  - Reasoning level is not implemented in the app yet; OpenCode CLI supports it via `--variant` (for example: `minimal`, `high`, `max`).
+  - Transport already passes `--model` and `--agent`; adding `--variant` is straightforward.
+  - Plan: add optional launch params to `createChatTab(...)` and wire them through `Tab` -> `ChatState` -> `OpenCodeCLITransport`.
+- [ ] STF-8. Auto-scroll chat to bottom while the agent is writing messages.
+  - Current issue: chat does not auto-scroll during streaming responses.
+  - Expected behavior: keep latest assistant output visible unless user intentionally scrolls up.
 
 ## Findings
 

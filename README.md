@@ -164,23 +164,64 @@ Access settings via `Cmd+,` or **SlothyTerminal → Settings**.
 ### Prerequisites
 
 - Xcode 15.0+
-- macOS 13.0+
+- macOS 15.0+
+- [Zig](https://ziglang.org/) 0.14+ (`brew install zig`)
+- [Ghostty](https://github.com/ghostty-org/ghostty) source code cloned locally
 
 ### Dependencies
 
-Add via Swift Package Manager:
-- [SwiftTerm](https://github.com/migueldeicaza/SwiftTerm) - Terminal emulation
-- [Sparkle](https://github.com/sparkle-project/Sparkle) - Auto-updates
+- [libghostty](https://github.com/ghostty-org/ghostty) - GPU-accelerated terminal rendering (Metal) and PTY management via `GhosttyKit.xcframework`
+- [Sparkle](https://github.com/sparkle-project/Sparkle) - Auto-updates (via Swift Package Manager)
 
 ### Build
 
 ```bash
 git clone https://github.com/maximgorbatyuk/slothy-terminal.git
 cd slothy-terminal
+```
+
+#### 1. Build GhosttyKit.xcframework
+
+The terminal rendering backend is powered by libghostty, which must be built from the Ghostty source repo. This produces a `GhosttyKit.xcframework` containing the static library and Metal shaders.
+
+```bash
+# Clone ghostty if you haven't already
+git clone https://github.com/ghostty-org/ghostty.git ~/projects/ghostty
+
+# Build the xcframework (takes ~2-3 minutes)
+cd ~/projects/ghostty
+zig build -Dapp-runtime=none -Demit-xcframework -Dxcframework-target=native
+
+# Copy into the SlothyTerminal project root
+cp -R macos/GhosttyKit.xcframework /path/to/slothy-terminal/
+```
+
+> **Note:** If the build fails with a Metal Toolchain error, install it first:
+> ```bash
+> xcodebuild -downloadComponent MetalToolchain
+> ```
+
+You only need to rebuild the xcframework when:
+- You update the Ghostty source (`git pull` in the ghostty repo)
+- You do a fresh clone of SlothyTerminal
+
+#### 2. Open and run
+
+```bash
 open SlothyTerminal.xcodeproj
 ```
 
 Press `Cmd+R` in Xcode to build and run.
+
+#### CLI build and test
+
+```bash
+# Xcode build
+xcodebuild -project SlothyTerminal.xcodeproj -scheme SlothyTerminal -configuration Debug build
+
+# SwiftPM tests (does not require the xcframework)
+swift test
+```
 
 ## Project Structure
 
@@ -193,7 +234,7 @@ SlothyTerminal/
 ├── Views/
 │   ├── MainView.swift             # Main window layout
 │   ├── TabBarView.swift           # Tab bar with agent indicators
-│   ├── TerminalView.swift         # SwiftTerm wrapper
+│   ├── TerminalView.swift         # Libghostty SwiftUI bridge
 │   ├── TerminalContainerView.swift# Terminal display container
 │   ├── SidebarView.swift          # Session statistics sidebar
 │   ├── SettingsView.swift         # Settings window (4 tabs)
@@ -226,7 +267,8 @@ SlothyTerminal/
 │   ├── ExternalAppManager.swift   # External app integration
 │   └── BuildConfig.swift          # Build environment config
 ├── Terminal/
-│   └── PTYController.swift        # PTY/process management
+│   ├── GhosttyApp.swift           # Libghostty app singleton and callbacks
+│   └── GhosttySurfaceView.swift   # NSView subclass for terminal surfaces
 └── Resources/
     ├── Config.debug.json          # Debug build configuration
     └── Config.release.json        # Release build configuration
@@ -234,7 +276,13 @@ SlothyTerminal/
 
 ## Release Process
 
-See [RELEASE.md](RELEASE.md) for step-by-step release instructions.
+Ensure `GhosttyKit.xcframework` is present in the project root, then:
+
+```bash
+./scripts/build-release.sh 2026.2.6
+```
+
+This archives, notarizes, creates a DMG, and signs for Sparkle updates. See [RELEASE.md](RELEASE.md) for full step-by-step instructions.
 
 ## Changelog
 
@@ -259,5 +307,5 @@ MIT License - see [LICENSE](LICENSE) for details.
 
 ## Acknowledgments
 
-- [SwiftTerm](https://github.com/migueldeicaza/SwiftTerm) by Miguel de Icaza
+- [Ghostty](https://github.com/ghostty-org/ghostty) by Mitchell Hashimoto - GPU-accelerated terminal rendering via libghostty
 - [Sparkle](https://github.com/sparkle-project/Sparkle) for the update framework
