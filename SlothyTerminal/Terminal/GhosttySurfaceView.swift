@@ -17,6 +17,7 @@ class GhosttySurfaceView: NSView, NSTextInputClient {
   private(set) var surface: ghostty_surface_t?
   private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "SlothyTerminal", category: "GhosttySurface")
   private var pendingLaunchRequest: SurfaceLaunchRequest?
+  private var occlusionObserver: NSObjectProtocol?
 
   /// Accumulated text from `insertText` during key interpretation.
   private var keyTextAccumulator: [String]?
@@ -44,6 +45,10 @@ class GhosttySurfaceView: NSView, NSTextInputClient {
   }
 
   deinit {
+    if let occlusionObserver {
+      NotificationCenter.default.removeObserver(occlusionObserver)
+    }
+
     destroySurface()
   }
 
@@ -149,8 +154,8 @@ class GhosttySurfaceView: NSView, NSTextInputClient {
     applyCurrentSizeAndScale()
 
     if let surface {
-      ghostty_surface_set_occlusion(surface, false)
       ghostty_surface_set_focus(surface, window?.firstResponder == self)
+      updateWindowOcclusion()
       ghostty_surface_set_color_scheme(surface, GHOSTTY_COLOR_SCHEME_DARK)
 
       let size = ghostty_surface_size(surface)
@@ -180,6 +185,21 @@ class GhosttySurfaceView: NSView, NSTextInputClient {
   override func viewDidMoveToWindow() {
     super.viewDidMoveToWindow()
 
+    if let occlusionObserver {
+      NotificationCenter.default.removeObserver(occlusionObserver)
+      self.occlusionObserver = nil
+    }
+
+    if let window {
+      occlusionObserver = NotificationCenter.default.addObserver(
+        forName: NSWindow.didChangeOcclusionStateNotification,
+        object: window,
+        queue: .main
+      ) { [weak self] _ in
+        self?.updateWindowOcclusion()
+      }
+    }
+
     if window != nil,
        surface == nil,
        let request = pendingLaunchRequest
@@ -194,6 +214,7 @@ class GhosttySurfaceView: NSView, NSTextInputClient {
 
     updateTrackingAreas()
     applyCurrentSizeAndScale()
+    updateWindowOcclusion()
     GhosttyApp.shared.tick()
   }
 
@@ -228,6 +249,15 @@ class GhosttySurfaceView: NSView, NSTextInputClient {
     ghostty_surface_refresh(surface)
   }
 
+  private func updateWindowOcclusion() {
+    guard let surface else {
+      return
+    }
+
+    let visible = window?.occlusionState.contains(.visible) ?? true
+    ghostty_surface_set_occlusion(surface, visible)
+  }
+
   override func updateTrackingAreas() {
     /// Remove existing tracking areas.
     trackingAreas.forEach { removeTrackingArea($0) }
@@ -251,7 +281,6 @@ class GhosttySurfaceView: NSView, NSTextInputClient {
     }
 
     ghostty_surface_set_focus(surface, focused)
-    ghostty_surface_set_occlusion(surface, !focused)
   }
 
   override func becomeFirstResponder() -> Bool {
