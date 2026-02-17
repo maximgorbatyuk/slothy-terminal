@@ -2,6 +2,80 @@
 
 All notable changes to SlothyTerminal will be documented in this file.
 
+## [2026.2.5] - 2026-02-17
+
+### Added
+- **Task Queue** - Background AI task execution engine for running prompts headlessly without occupying a chat tab.
+  - Compose tasks with title, prompt, agent type (Claude or OpenCode), working directory, and priority (High/Normal/Low).
+  - Priority-then-FIFO scheduling with sequential execution.
+  - Live log streaming with timestamped entries (capped at 500 lines in UI, 5MB per log artifact).
+  - Per-task log artifacts persisted to `~/Library/Application Support/SlothyTerminal/tasks/logs/`.
+  - Auto-retry with exponential backoff (2s/4s/8s) for transient failures; permanent failures (CLI not found, empty prompt) fail immediately.
+  - 30-minute execution timeout per task.
+  - Preflight validation: checks prompt non-empty, repo path exists, agent supports chat mode, CLI is installed.
+  - Crash recovery: tasks stuck in `.running` state at app restart are reset to `.pending` with an interrupted note.
+  - Persistent queue stored at `~/Library/Application Support/SlothyTerminal/tasks/queue.json` with schema versioning.
+- **Risky Tool Detection** - Post-execution approval gate for dangerous operations detected during headless task runs.
+  - Bash tool checks: `git push`, `git commit`, `rm -rf`, `rm -r`, SQL `DROP`/`DELETE FROM`/`TRUNCATE`, `sudo`, `chmod`, `chown`.
+  - Write tool checks: `.env` files, `credentials` paths, `.ssh/` directory, `.gitconfig`, GitHub Actions workflows.
+  - Tasks with detected risky operations pause the queue and show an approval banner (Approve / Reject / Review).
+- **Task Queue UI** - Full panel and modal views for managing the queue.
+  - Sidebar panel with running, pending, and collapsible history sections.
+  - Real-time status summary (idle/running indicator + pending count).
+  - Orange approval banner when a task awaits human review.
+  - Task composer modal with agent picker, working directory selector, and priority.
+  - Task detail modal with full metadata, prompt, result summary, risky operations, error info, live log, and persisted log artifact.
+  - Task row with animated status pulse, live log line preview, and context-menu actions (Copy Title/Prompt, Retry, Cancel, Remove).
+- **Libghostty Terminal Backend** - Replaced SwiftTerm + PTYController with libghostty for GPU-accelerated terminal rendering.
+  - `GhosttyApp` singleton manages the process-wide libghostty app instance, config loading (uses Ghostty's standard config files), and C callback routing.
+  - `GhosttySurfaceView` is a full `NSView` + `NSTextInputClient` implementation per terminal tab: IME support with preedit/composition, keyboard/mouse/scroll/pressure forwarding, cursor shape updates, clipboard integration, and renderer health monitoring.
+  - Metal-accelerated rendering via `GhosttyKit.xcframework`.
+  - Deferred surface creation pattern (`pendingLaunchRequest`) for SwiftUI lifecycle compatibility.
+  - Single-source size updates from `layout()` only, preventing duplicate SIGWINCH during startup.
+  - Window occlusion tracking for renderer throttling.
+  - PUA range filtering (0xF700-0xF8FF) for macOS function key codes.
+  - Right-side modifier key detection via raw `NX_DEVICE*` flags.
+- **OpenCode Ask Mode** - Instructs the agent to ask clarifying questions before implementing.
+  - Toggle persisted across sessions via `lastUsedOpenCodeAskModeEnabled` config field.
+  - Blue badge in chat input when active: "Ask mode active: agent asks clarifying questions first".
+  - Directive prepended to every user message when enabled.
+- **Claude CLI Mach-O Path Resolution** - `ClaudeAgent.command` now resolves the full executable path, preferring native Mach-O binaries over Node.js script wrappers.
+  - Two-pass search: first for Mach-O binaries (checks magic bytes after resolving symlinks), then any executable.
+  - Search order prioritizes `~/.local/bin/claude` over `/opt/homebrew/bin/claude`.
+  - `~/.local/bin` added to terminal PATH defaults.
+- **AppConfig Enhancements**
+  - `terminalInteractionMode` (Host Selection / App Mouse) for controlling mouse input routing in TUI tabs.
+  - `chatShowTimestamps` and `chatShowTokenMetadata` toggles for per-message metadata visibility.
+  - `chatMessageTextSize` (Small / Medium / Large) controlling body and metadata font sizes.
+  - `claudeAccentColor` and `opencodeAccentColor` for per-agent custom colors via `CodableColor` wrapper.
+  - `claudePath` and `opencodePath` for custom CLI path overrides.
+- **Chat Input History Navigation** - Up/down arrow keys navigate previously sent messages.
+- **Chat Suggestion Chips** - Empty state shows quick-start prompts (Review codebase, Fix tests, Explain architecture, Help refactor).
+- **Chat Activity Bar** - Context-aware streaming indicator: "Running `<toolName>`..." when a tool is active.
+- **New tests** - `RiskyToolDetectorTests`, `TaskLogCollectorTests`, `TaskOrchestratorTests`, `TaskQueueStateTests`, `TaskQueueStoreTests`, `MockTaskRunner`.
+
+### Changed
+- Terminal rendering backend switched from SwiftTerm to libghostty (Metal-accelerated).
+- `PTYController` deleted; PTY management now handled by libghostty's embedded runtime.
+- SwiftTerm SPM dependency removed.
+- macOS minimum raised to 15.0; Zig 0.14+ and Ghostty source required for building.
+- `GhosttyKit.xcframework` must be present in the project root for Xcode builds.
+- `Tab` model simplified: removed `ptyController`, `localTerminalView`, `terminalViewID`, `statsParserTask` properties.
+- Sidebar gains a Tasks tab for the task queue panel.
+- `isAvailable()` in `ClaudeAgent` now checks `~/.local/bin/claude` before `/opt/homebrew/bin/claude`.
+
+### Fixed
+- **IME candidate window positioning** - `characterIndex(for:)` now returns `NSNotFound` instead of `0`.
+- **Ghostty callback nil safety** - `ghosttyWakeup` guards against nil `userdata` instead of force-unwrapping.
+- **Task queue crash recovery** - Tasks with `.running` status at app restart are reset to `.pending`.
+- **Risky tool pattern matching** - SQL patterns (`DROP`, `DELETE FROM`, `TRUNCATE`) are now consistently lowercase to match the lowercased input; removed redundant `.lowercased()` call.
+- **Terminal prompt duplication** - Fixed multiple `sizeDidChange` calls during startup by making `layout()` the single source of truth for size updates, matching Ghostty's architecture.
+
+### Docs
+- Added `Terminal Environment Variables` section to `CLAUDE.md`.
+- Added `messageForCLI` doc comment documenting directive injection consideration in OpenCode transport.
+- Expanded PUA range comment with `NSEvent.h` reference.
+
 ## [2026.2.4] - 2026-02-10
 
 ### Added

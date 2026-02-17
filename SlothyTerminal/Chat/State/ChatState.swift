@@ -43,6 +43,17 @@ class ChatState {
     }
   }
 
+  /// Whether OpenCode should ask clarifying questions before implementation.
+  var isOpenCodeAskModeEnabled: Bool = false {
+    didSet {
+      if let ocTransport = transport as? OpenCodeCLITransport {
+        ocTransport.askModeEnabled = isOpenCodeAskModeEnabled
+      }
+
+      persistLastOpenCodeSelectionIfNeeded()
+    }
+  }
+
   /// Metadata resolved from the transport after a turn.
   var resolvedMetadata: ChatResolvedMetadata?
 
@@ -116,6 +127,10 @@ class ChatState {
         resolvedModelID: self.selectedModel?.modelID,
         resolvedMode: self.selectedMode
       )
+
+      if agentType == .opencode {
+        self.isOpenCodeAskModeEnabled = configManager.config.lastUsedOpenCodeAskModeEnabled
+      }
     } else {
       applyLastOpenCodeSelectionIfNeeded()
       self.resolvedMetadata = ChatResolvedMetadata(
@@ -154,6 +169,7 @@ class ChatState {
       if let ocTransport = transport as? OpenCodeCLITransport {
         ocTransport.currentModel = selectedModel
         ocTransport.currentMode = selectedMode
+        ocTransport.askModeEnabled = isOpenCodeAskModeEnabled
       }
 
     default:
@@ -273,11 +289,14 @@ class ChatState {
     let newTransport: ChatTransport
     switch agentType {
     case .opencode:
+      let customExecutablePath = configManager.customPath(for: .opencode)
       newTransport = OpenCodeCLITransport(
         workingDirectory: workingDirectory,
         resumeSessionId: resumeSessionId,
         currentModel: selectedModel,
-        currentMode: selectedMode
+        currentMode: selectedMode,
+        askModeEnabled: isOpenCodeAskModeEnabled,
+        executablePathOverride: customExecutablePath
       )
 
     default:
@@ -556,6 +575,8 @@ class ChatState {
     if let lastMode = configManager.config.lastUsedOpenCodeMode {
       selectedMode = lastMode
     }
+
+    isOpenCodeAskModeEnabled = configManager.config.lastUsedOpenCodeAskModeEnabled
   }
 
   /// Persists the latest OpenCode model/mode selection to app config.
@@ -570,6 +591,10 @@ class ChatState {
 
     if configManager.config.lastUsedOpenCodeMode != selectedMode {
       configManager.config.lastUsedOpenCodeMode = selectedMode
+    }
+
+    if configManager.config.lastUsedOpenCodeAskModeEnabled != isOpenCodeAskModeEnabled {
+      configManager.config.lastUsedOpenCodeAskModeEnabled = isOpenCodeAskModeEnabled
     }
   }
 }

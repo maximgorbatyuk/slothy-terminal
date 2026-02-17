@@ -13,7 +13,7 @@
       <pubDate>DATE_HERE</pubDate>
       <sparkle:version>BUILD_NUMBER</sparkle:version>
       <sparkle:shortVersionString>X.X.X</sparkle:shortVersionString>
-      <sparkle:minimumSystemVersion>13.0</sparkle:minimumSystemVersion>
+      <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
       <description><![CDATA[
         <h2>What's New</h2>
         <ul>
@@ -28,6 +28,55 @@
       />
     </item>
     -->
+
+    <item>
+      <title>Version 2026.2.5</title>
+      <pubDate>Mon, 17 Feb 2026 12:00:00 +0000</pubDate>
+      <sparkle:version>7</sparkle:version>
+      <sparkle:shortVersionString>2026.2.5</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
+      <description><![CDATA[
+        <h2>What's New</h2>
+        <h3>Task Queue</h3>
+        <ul>
+          <li>Background AI task execution — queue prompts for headless runs without occupying a chat tab</li>
+          <li>Priority scheduling (High/Normal/Low), auto-retry with exponential backoff, 30-minute timeout</li>
+          <li>Risky tool detection (git push, rm -rf, .env writes, etc.) with post-completion approval gate</li>
+          <li>Live log streaming, per-task log artifacts, crash recovery for interrupted tasks</li>
+          <li>Task queue panel in sidebar with composer, detail modal, and approval banner</li>
+        </ul>
+        <h3>GPU-Accelerated Terminal (libghostty)</h3>
+        <ul>
+          <li>Terminal rendering now powered by libghostty with Metal acceleration</li>
+          <li>Full IME support for CJK and complex input methods</li>
+          <li>Reads Ghostty config files for terminal customization</li>
+        </ul>
+        <h3>OpenCode Ask Mode</h3>
+        <ul>
+          <li>New toggle instructs the agent to ask clarifying questions before implementing</li>
+        </ul>
+        <h3>Improvements</h3>
+        <ul>
+          <li>Smart Claude CLI path resolution — prefers native binary over Node.js wrapper</li>
+          <li>Chat input history navigation with up/down arrow keys</li>
+          <li>Context-aware streaming indicator showing active tool name</li>
+          <li>Suggestion chips on empty chat state for quick-start prompts</li>
+          <li>Configurable chat message text size, per-agent accent colors, terminal interaction mode</li>
+        </ul>
+        <h3>Bug Fixes</h3>
+        <ul>
+          <li>Fixed terminal prompt duplication on startup</li>
+          <li>Fixed IME candidate window positioning</li>
+          <li>Fixed crash recovery for interrupted task queue items</li>
+        </ul>
+      ]]></description>
+      <enclosure
+        url="https://github.com/maximgorbatyuk/slothy-terminal/releases/download/v2026.2.5/SlothyTerminal-2026.2.5.dmg"
+        type="application/octet-stream"
+        sparkle:edSignature="TA/kpcUBBuCZ9W40QFqVgz5kygc8HRO/CvFzqa/gB1phQbjapuhOHsNgzuG0VClU0EMMQuNmakIPucOqfX+mCQ=="
+        length="19734421"
+      />
+    </item>
 
     <item>
       <title>Version 2026.2.4</title>

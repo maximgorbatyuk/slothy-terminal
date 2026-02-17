@@ -5,7 +5,7 @@ import PackageDescription
 /// The main app is still built via the Xcode project.
 /// Run tests with: swift test
 ///
-/// Note: External dependencies (SwiftTerm, Sparkle) are excluded here
+/// Note: External dependencies (Sparkle) are excluded here
 /// since the tested code doesn't require them. Views and UpdateManager
 /// are excluded from the test target.
 
@@ -33,10 +33,13 @@ let package = Package(
         "Chat/Views",
         "Assets.xcassets",
         "Info.plist",
+        "Models/GitModifiedFile.swift",
         "Services/UpdateManager.swift",
         "Services/ExternalAppManager.swift",
         "Services/DirectoryTreeManager.swift",
-        "Services/GitService.swift"
+        "Services/GitService.swift",
+        "Terminal/GhosttyApp.swift",
+        "Terminal/GhosttySurfaceView.swift"
       ],
       sources: [
         "Services/StatsParser.swift",
@@ -52,7 +55,6 @@ let package = Package(
         "Agents/ClaudeAgent.swift",
         "Agents/OpenCodeAgent.swift",
         "Agents/TerminalAgent.swift",
-        "Terminal/PTYController.swift",
         "Models/SavedPrompt.swift",
 
         /// Chat core (non-UI) — Engine, Models, Parser, Transport, State adapter.
@@ -76,6 +78,19 @@ let package = Package(
         "Chat/OpenCode/OpenCodeEventMapper.swift",
         "Chat/OpenCode/OpenCodeCLITransport.swift",
         "Chat/State/ChatState.swift",
+
+        /// Task Queue — Models, Storage, State, Runner, Orchestrator.
+        "TaskQueue/Models/QueuedTask.swift",
+        "TaskQueue/Storage/TaskQueueSnapshot.swift",
+        "TaskQueue/Storage/TaskQueueStore.swift",
+        "TaskQueue/State/TaskQueueState.swift",
+        "TaskQueue/Runner/TaskRunner.swift",
+        "TaskQueue/Runner/ClaudeTaskRunner.swift",
+        "TaskQueue/Runner/OpenCodeTaskRunner.swift",
+        "TaskQueue/Runner/TaskLogCollector.swift",
+        "TaskQueue/Orchestrator/TaskOrchestrator.swift",
+        "TaskQueue/Runner/RiskyToolDetector.swift",
+        "TaskQueue/Orchestrator/TaskPreflight.swift",
       ]
     ),
     .testTarget(

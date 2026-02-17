@@ -9,8 +9,8 @@ struct ClaudeAgent: AIAgent {
   let displayName = "Claude"
   let contextWindowLimit = 200_000
 
-  /// Command to run Claude CLI.
-  /// Uses just "claude" to let the shell's PATH find the correct version.
+  /// Resolves the Claude CLI executable path, preferring native Mach-O
+  /// binaries over Node.js script wrappers.
   var command: String {
     if let envPath = ProcessInfo.processInfo.environment["CLAUDE_PATH"],
        FileManager.default.isExecutableFile(atPath: envPath)
@@ -18,7 +18,10 @@ struct ClaudeAgent: AIAgent {
       return envPath
     }
 
-    /// Use just "claude" - the shell will find it via PATH.
+    if let resolved = resolveClaudePath() {
+      return resolved
+    }
+
     return "claude"
   }
 
@@ -50,13 +53,13 @@ struct ClaudeAgent: AIAgent {
       return FileManager.default.isExecutableFile(atPath: envPath)
     }
 
-    /// Check common installation paths.
+    /// Check common installation paths, preferring native installs.
     let commonPaths = [
-      "/usr/local/bin/claude",
-      "/opt/homebrew/bin/claude",
       "\(NSHomeDirectory())/.local/bin/claude",
       "\(NSHomeDirectory())/.claude/local/claude",
-      "\(NSHomeDirectory())/bin/claude"
+      "\(NSHomeDirectory())/bin/claude",
+      "/usr/local/bin/claude",
+      "/opt/homebrew/bin/claude",
     ]
 
     for path in commonPaths {
@@ -66,5 +69,68 @@ struct ClaudeAgent: AIAgent {
     }
 
     return false
+  }
+
+  // MARK: - Private
+
+  /// Common search paths ordered to prefer native installations.
+  private static let searchPaths = [
+    "\(NSHomeDirectory())/.local/bin/claude",
+    "\(NSHomeDirectory())/.claude/local/claude",
+    "\(NSHomeDirectory())/bin/claude",
+    "/usr/local/bin/claude",
+    "/opt/homebrew/bin/claude",
+  ]
+
+  /// Resolves the best Claude CLI path, preferring Mach-O binaries.
+  private func resolveClaudePath() -> String? {
+    /// First pass: prefer native Mach-O executables.
+    for path in Self.searchPaths {
+      if FileManager.default.isExecutableFile(atPath: path),
+         isBinaryExecutable(atPath: path)
+      {
+        return path
+      }
+    }
+
+    /// Second pass: any executable.
+    for path in Self.searchPaths {
+      if FileManager.default.isExecutableFile(atPath: path) {
+        return path
+      }
+    }
+
+    return nil
+  }
+
+  /// Checks whether a file is a Mach-O binary (not a script).
+  private func isBinaryExecutable(atPath path: String) -> Bool {
+    let resolvedPath: String
+    do {
+      resolvedPath = try FileManager.default.destinationOfSymbolicLink(atPath: path)
+    } catch {
+      resolvedPath = path
+    }
+
+    guard let fileHandle = FileHandle(forReadingAtPath: resolvedPath) else {
+      return false
+    }
+
+    defer { fileHandle.closeFile() }
+
+    let magic = fileHandle.readData(ofLength: 4)
+
+    guard magic.count >= 4 else {
+      return false
+    }
+
+    let magicBytes = [UInt8](magic)
+    let machO64: [UInt8] = [0xCF, 0xFA, 0xED, 0xFE]
+    let machO64Reversed: [UInt8] = [0xFE, 0xED, 0xFA, 0xCF]
+    let fatBinary: [UInt8] = [0xCA, 0xFE, 0xBA, 0xBE]
+
+    return magicBytes == machO64
+      || magicBytes == machO64Reversed
+      || magicBytes == fatBinary
   }
 }

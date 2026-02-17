@@ -5,7 +5,7 @@ import Foundation
 /// Replaces `ChatError` for engine-level concerns with more specific
 /// error cases covering transport failures and recovery.
 enum ChatSessionError: LocalizedError, Equatable {
-  /// Claude CLI was not found at any expected path.
+  /// Chat CLI was not found at any expected path.
   case transportNotAvailable(String)
 
   /// Process failed to launch.
@@ -23,16 +23,16 @@ enum ChatSessionError: LocalizedError, Equatable {
   var errorDescription: String? {
     switch self {
     case .transportNotAvailable(let detail):
-      return "Claude CLI not found: \(detail)"
+      return "Chat CLI not found: \(detail)"
 
     case .transportStartFailed(let detail):
-      return "Failed to start Claude: \(detail)"
+      return "Failed to start chat transport: \(detail)"
 
     case .transportCrashed(let exitCode, let stderr):
       if stderr.isEmpty {
-        return "Claude process crashed (exit code \(exitCode))"
+        return "Chat process crashed (exit code \(exitCode))"
       }
-      return "Claude process crashed: \(stderr)"
+      return "Chat process crashed: \(stderr)"
 
     case .maxRetriesExceeded(let attempts):
       return "Recovery failed after \(attempts) attempts"

@@ -185,6 +185,12 @@ struct ModalRouter: View {
     case .settings:
       Text("Settings")
         .frame(width: 500, height: 400)
+
+    case .addTask:
+      TaskComposerModal()
+
+    case .taskDetail(let taskId):
+      TaskDetailModal(taskId: taskId)
     }
   }
 }

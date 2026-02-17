@@ -6,6 +6,7 @@ import SwiftUI
 /// Supports up/down arrow navigation through previously sent messages.
 struct ChatInputView: View {
   let isLoading: Bool
+  let askModeBadgeText: String?
   let onSend: (String) -> Void
   let onStop: () -> Void
 
@@ -19,97 +20,116 @@ struct ChatInputView: View {
   }
 
   var body: some View {
-    HStack(alignment: .bottom, spacing: 8) {
-      TextEditor(text: $inputText)
-        .font(.system(size: 13))
-        .scrollContentBackground(.hidden)
-        .focused($isFocused)
-        .frame(minHeight: 44, maxHeight: 120)
-        .fixedSize(horizontal: false, vertical: true)
-        .padding(8)
-        .background(appCardColor)
-        .cornerRadius(8)
-        .onKeyPress(.return, phases: .down) { press in
-          let hasShift = press.modifiers.contains(.shift)
+    VStack(alignment: .leading, spacing: 6) {
+      if let askModeBadgeText {
+        HStack(spacing: 6) {
+          Image(systemName: "bubble.left.and.bubble.right.fill")
+            .font(.system(size: 10, weight: .semibold))
 
-          switch sendKey {
-          case .enter:
-            if hasShift {
-              /// Shift+Return → newline (let TextEditor handle it).
+          Text(askModeBadgeText)
+            .font(.system(size: 10, weight: .medium))
+
+          Spacer()
+        }
+        .foregroundColor(.blue)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 4)
+        .background(Color.blue.opacity(0.12))
+        .cornerRadius(6)
+      }
+
+      HStack(alignment: .bottom, spacing: 8) {
+        TextEditor(text: $inputText)
+          .font(.system(size: 13))
+          .scrollContentBackground(.hidden)
+          .focused($isFocused)
+          .frame(minHeight: 44, maxHeight: 120)
+          .fixedSize(horizontal: false, vertical: true)
+          .padding(8)
+          .background(appCardColor)
+          .cornerRadius(8)
+          .onKeyPress(.return, phases: .down) { press in
+            let hasShift = press.modifiers.contains(.shift)
+
+            switch sendKey {
+            case .enter:
+              if hasShift {
+                /// Shift+Return → newline (let TextEditor handle it).
+                return .ignored
+              }
+
+              /// Plain Return → send.
+              send()
+              return .handled
+
+            case .shiftEnter:
+              if hasShift {
+                /// Shift+Return → send.
+                send()
+                return .handled
+              }
+
+              /// Plain Return → newline (let TextEditor handle it).
+              return .ignored
+            }
+          }
+          .onKeyPress(.upArrow, phases: .down) { _ in
+            guard !messageHistory.isEmpty else {
               return .ignored
             }
 
-            /// Plain Return → send.
-            send()
-            return .handled
+            /// Only intercept when input is empty or already browsing history.
+            guard inputText.isEmpty || historyIndex >= 0 else {
+              return .ignored
+            }
 
-          case .shiftEnter:
-            if hasShift {
-              /// Shift+Return → send.
-              send()
+            if historyIndex < messageHistory.count - 1 {
+              historyIndex += 1
+              inputText = messageHistory[messageHistory.count - 1 - historyIndex]
               return .handled
             }
 
-            /// Plain Return → newline (let TextEditor handle it).
             return .ignored
           }
-        }
-        .onKeyPress(.upArrow, phases: .down) { _ in
-          guard !messageHistory.isEmpty else {
-            return .ignored
+          .onKeyPress(.downArrow, phases: .down) { _ in
+            guard historyIndex >= 0 else {
+              return .ignored
+            }
+
+            if historyIndex > 0 {
+              historyIndex -= 1
+              inputText = messageHistory[messageHistory.count - 1 - historyIndex]
+              return .handled
+            } else {
+              historyIndex = -1
+              inputText = ""
+              return .handled
+            }
           }
 
-          /// Only intercept when input is empty or already browsing history.
-          guard inputText.isEmpty || historyIndex >= 0 else {
-            return .ignored
+        if isLoading {
+          Button {
+            onStop()
+          } label: {
+            Image(systemName: "stop.circle.fill")
+              .font(.system(size: 24))
+              .foregroundColor(.red)
           }
-
-          if historyIndex < messageHistory.count - 1 {
-            historyIndex += 1
-            inputText = messageHistory[messageHistory.count - 1 - historyIndex]
-            return .handled
+          .buttonStyle(.plain)
+          .help("Stop response (Esc)")
+          .keyboardShortcut(.escape, modifiers: [])
+        } else {
+          Button {
+            send()
+          } label: {
+            Image(systemName: "arrow.up.circle.fill")
+              .font(.system(size: 24))
+              .foregroundColor(canSend ? .blue : .secondary)
           }
-
-          return .ignored
+          .buttonStyle(.plain)
+          .disabled(!canSend)
+          .help("Send message (\(sendKey.displayName))")
         }
-        .onKeyPress(.downArrow, phases: .down) { _ in
-          guard historyIndex >= 0 else {
-            return .ignored
-          }
-
-          if historyIndex > 0 {
-            historyIndex -= 1
-            inputText = messageHistory[messageHistory.count - 1 - historyIndex]
-            return .handled
-          } else {
-            historyIndex = -1
-            inputText = ""
-            return .handled
-          }
-        }
-
-      if isLoading {
-        Button {
-          onStop()
-        } label: {
-          Image(systemName: "stop.circle.fill")
-            .font(.system(size: 24))
-            .foregroundColor(.red)
-        }
-        .buttonStyle(.plain)
-        .help("Stop response (Esc)")
-        .keyboardShortcut(.escape, modifiers: [])
-      } else {
-        Button {
-          send()
-        } label: {
-          Image(systemName: "arrow.up.circle.fill")
-            .font(.system(size: 24))
-            .foregroundColor(canSend ? .blue : .secondary)
-        }
-        .buttonStyle(.plain)
-        .disabled(!canSend)
-        .help("Send message (\(sendKey.displayName))")
       }
     }
     .padding(.horizontal, 16)

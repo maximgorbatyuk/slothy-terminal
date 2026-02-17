@@ -19,6 +19,13 @@ struct TerminalAgent: AIAgent {
     []
   }
 
+  var environmentVariables: [String: String] {
+    [
+      "TERM": "xterm-256color",
+      "COLORTERM": "truecolor"
+    ]
+  }
+
   /// Terminal doesn't parse stats.
   func parseStats(from output: String) -> UsageUpdate? {
     nil

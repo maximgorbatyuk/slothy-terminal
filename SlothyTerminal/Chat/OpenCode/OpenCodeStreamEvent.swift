@@ -9,6 +9,7 @@ enum OpenCodeStreamEvent {
   case text(OpenCodeTextPart)
   case toolUse(OpenCodeToolUsePart)
   case stepFinish(OpenCodeStepFinishPart)
+  case error(OpenCodeErrorPart)
   case unknown
 }
 
@@ -52,6 +53,12 @@ struct OpenCodeStepFinishPart {
   let reason: String
   let cost: Double?
   let tokens: OpenCodeTokens?
+}
+
+/// Payload for top-level `error` events.
+struct OpenCodeErrorPart {
+  let name: String
+  let message: String
 }
 
 /// Token usage counters from a `step_finish` event.
