@@ -158,8 +158,12 @@ class GhosttyApp {
 /// passed as C function pointers in `ghostty_runtime_config_s`.
 
 private func ghosttyWakeup(_ userdata: UnsafeMutableRawPointer?) {
+  guard let userdata else {
+    return
+  }
+
   DispatchQueue.main.async {
-    let app = Unmanaged<GhosttyApp>.fromOpaque(userdata!).takeUnretainedValue()
+    let app = Unmanaged<GhosttyApp>.fromOpaque(userdata).takeUnretainedValue()
     app.tick()
   }
 }

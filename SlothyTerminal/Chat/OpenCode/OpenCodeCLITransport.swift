@@ -329,6 +329,10 @@ class OpenCodeCLITransport: ChatTransport {
     return args
   }
 
+  /// Wraps the user message with ask-mode directive when enabled.
+  /// Note: The directive is prepended before the user message. While a crafted
+  /// user message could theoretically confuse interpretation, this is acceptable
+  /// since the user controls their own input and the directive is internal.
   private func messageForCLI(_ userMessage: String) -> String {
     guard askModeEnabled else {
       return userMessage

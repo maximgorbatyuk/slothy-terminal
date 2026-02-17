@@ -40,14 +40,15 @@ enum RiskyToolDetector {
     lower == "write" || lower == "create" || lower == "edit"
   }
 
+  /// Patterns are lowercase — input is lowercased before comparison.
   private static let riskyBashPatterns: [(pattern: String, reason: String)] = [
     ("git push", "git push — pushes code to remote"),
     ("git commit", "git commit — creates a commit"),
     ("rm -rf", "rm -rf — recursive force delete"),
     ("rm -r ", "rm -r — recursive delete"),
-    ("DROP ", "SQL DROP statement"),
-    ("DELETE FROM", "SQL DELETE statement"),
-    ("TRUNCATE", "SQL TRUNCATE statement"),
+    ("drop ", "SQL DROP statement"),
+    ("delete from", "SQL DELETE statement"),
+    ("truncate", "SQL TRUNCATE statement"),
     ("sudo ", "sudo — elevated privileges"),
     ("chmod ", "chmod — permission change"),
     ("chown ", "chown — ownership change"),
@@ -65,12 +66,14 @@ enum RiskyToolDetector {
     ({ $0.contains("/.github/workflows") }, "writing to GitHub Actions workflow"),
   ]
 
+  /// Checks bash input for risky command patterns.
+  /// Input is lowercased; patterns are already lowercase.
   private static func checkBash(toolName: String, input: String) -> [Detection] {
     let inputLower = input.lowercased()
     var detections: [Detection] = []
 
     for (pattern, reason) in riskyBashPatterns {
-      if inputLower.contains(pattern.lowercased()) {
+      if inputLower.contains(pattern) {
         detections.append(Detection(toolName: toolName, reason: reason))
       }
     }

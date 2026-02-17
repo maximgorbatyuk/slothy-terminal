@@ -45,6 +45,17 @@ class TaskQueueState {
     }
 
     tasks = snapshot.tasks
+
+    /// Crash recovery: tasks that were running at quit time are reset
+    /// to pending so they can be retried.
+    for i in tasks.indices where tasks[i].status == .running {
+      tasks[i].status = .pending
+      tasks[i].interruptedNote = "Task was interrupted by app restart"
+      tasks[i].startedAt = nil
+      tasks[i].runAttemptId = nil
+      Logger.taskQueue.info("Recovered interrupted task: \(self.tasks[i].id)")
+    }
+
     Logger.taskQueue.info("Restored \(snapshot.tasks.count) tasks from disk.")
   }
 

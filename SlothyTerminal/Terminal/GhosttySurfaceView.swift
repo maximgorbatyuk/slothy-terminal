@@ -862,7 +862,7 @@ class GhosttySurfaceView: NSView, NSTextInputClient {
   }
 
   func characterIndex(for point: NSPoint) -> Int {
-    0
+    NSNotFound
   }
 }
 
@@ -884,7 +884,8 @@ extension NSEvent {
         return self.characters(byApplyingModifiers: modifierFlags.subtracting(.control))
       }
 
-      /// Skip PUA range (macOS function key codes).
+      /// Skip PUA range (macOS reserves 0xF700-0xF8FF for function key codes
+      /// like arrow keys, F1-F24, etc. — see NSEvent.h special characters).
       if scalar.value >= 0xF700 && scalar.value <= 0xF8FF {
         return nil
       }
