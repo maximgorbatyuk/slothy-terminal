@@ -36,17 +36,6 @@ class Tab: Identifiable {
   /// The chat state for chat-mode tabs.
   var chatState: ChatState?
 
-  /// The PTY controller managing this tab's terminal session.
-  /// Set after the tab is created and the terminal is initialized.
-  var ptyController: PTYController?
-
-  /// Callback to send text to the terminal.
-  var sendToTerminal: ((String) -> Void)?
-
-  /// Buffer for accumulating terminal output for stats parsing.
-  private var outputBuffer: String = ""
-  private let maxBufferSize = 10_000
-
   init(
     id: UUID = UUID(),
     agentType: AgentType,
@@ -140,46 +129,8 @@ class Tab: Identifiable {
     agent.environmentVariables
   }
 
-  /// Processes terminal output and updates usage statistics.
-  /// - Parameter output: New terminal output to process.
-  func processOutput(_ output: String) {
-    /// Add to buffer.
-    outputBuffer += output
-
-    /// Trim buffer if too large.
-    if outputBuffer.count > maxBufferSize {
-      let startIndex = outputBuffer.index(
-        outputBuffer.endIndex,
-        offsetBy: -maxBufferSize,
-        limitedBy: outputBuffer.startIndex
-      ) ?? outputBuffer.startIndex
-      outputBuffer = String(outputBuffer[startIndex...])
-    }
-
-    /// Try to parse stats from the new output.
-    if let update = agent.parseStats(from: output) {
-      usageStats.applyUpdate(update, incrementMessages: update.incrementMessageCount)
-    }
-  }
-
-  /// Clears the output buffer.
-  func clearOutputBuffer() {
-    outputBuffer = ""
-  }
-
   /// Checks if the agent is available (installed).
   var isAgentAvailable: Bool {
     agent.isAvailable()
-  }
-
-  /// Sends a command to request usage stats from the agent.
-  func requestUsageStats() {
-    /// Only send for AI agents (not plain terminal).
-    guard agentType.showsUsageStats else {
-      return
-    }
-
-    /// Send /usage command to Claude CLI.
-    sendToTerminal?("/usage\n")
   }
 }

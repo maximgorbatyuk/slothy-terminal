@@ -7,6 +7,8 @@ enum ModalType: Identifiable {
   case folderSelector(AgentType)
   case chatFolderSelector(AgentType)
   case settings
+  case addTask
+  case taskDetail(UUID)
 
   var id: String {
     switch self {
@@ -18,6 +20,10 @@ enum ModalType: Identifiable {
       return "chatFolderSelector-\(agent.rawValue)"
     case .settings:
       return "settings"
+    case .addTask:
+      return "addTask"
+    case .taskDetail(let id):
+      return "taskDetail-\(id.uuidString)"
     }
   }
 }
@@ -31,12 +37,22 @@ class AppState {
   var isSidebarVisible: Bool
   var sidebarWidth: CGFloat
   var activeModal: ModalType?
+  var taskQueueState = TaskQueueState()
+  var taskOrchestrator: TaskOrchestrator?
   private var configManager = ConfigManager.shared
 
   init() {
     let config = ConfigManager.shared.config
     self.isSidebarVisible = config.showSidebarByDefault
     self.sidebarWidth = config.sidebarWidth
+    taskQueueState.restoreFromDisk()
+
+    let orchestrator = TaskOrchestrator(queueState: taskQueueState)
+    self.taskOrchestrator = orchestrator
+    taskQueueState.onQueueChanged = { [weak orchestrator] in
+      orchestrator?.notifyQueueChanged()
+    }
+    orchestrator.start()
   }
 
   /// Returns the currently active tab, if any.
@@ -90,9 +106,6 @@ class AppState {
       return
     }
 
-    /// Terminate the PTY session if active.
-    tabs[index].ptyController?.terminate()
-
     /// Terminate chat process if active.
     tabs[index].chatState?.terminateProcess()
 
@@ -137,6 +150,16 @@ class AppState {
     activeModal = .settings
   }
 
+  /// Shows the add task modal.
+  func showAddTaskModal() {
+    activeModal = .addTask
+  }
+
+  /// Shows the task detail modal.
+  func showTaskDetail(id: UUID) {
+    activeModal = .taskDetail(id)
+  }
+
   /// Dismisses the current modal.
   func dismissModal() {
     activeModal = nil
@@ -151,9 +174,10 @@ class AppState {
   /// Called during app quit to ensure child processes are cleaned up.
   func terminateAllSessions() {
     for tab in tabs {
-      tab.ptyController?.terminate()
       /// terminateProcess() calls store.saveImmediately() internally.
       tab.chatState?.terminateProcess()
     }
+    taskOrchestrator?.stop()
+    taskQueueState.saveImmediately()
   }
 }

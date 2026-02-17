@@ -6,13 +6,13 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Slothy Terminal — Take it slow, ship it fast</title>
   <meta name="description"
-    content="A native macOS terminal for AI coding assistants. Tabbed interface for Claude CLI, OpenCode, and plain terminal sessions.">
+    content="A native macOS terminal for AI coding assistants. GPU-accelerated terminal via libghostty, background task queue, and tabbed sessions for Claude CLI and OpenCode.">
   <meta name="theme-color" content="#0F172A">
 
   <!-- Open Graph -->
   <meta property="og:title" content="Slothy Terminal">
   <meta property="og:description"
-    content="Take it slow, ship it fast. A native macOS terminal for AI coding assistants.">
+    content="Take it slow, ship it fast. GPU-accelerated macOS terminal for AI coding assistants with background task queue.">
   <meta property="og:image" content="assets/SlothyTerminalIcon.jpg">
   <meta property="og:type" content="website">
 
@@ -82,8 +82,10 @@
       <h1 class="hero-title">Slothy Terminal</h1>
       <p class="hero-tagline">Take it slow, ship it fast.</p>
       <p class="hero-description">
-        A native macOS terminal for AI coding assistants.<br>
-        Tabbed sessions for Claude CLI, OpenCode, and more.
+        A GPU-accelerated macOS terminal for AI coding assistants.<br>
+        Powered by <a href="https://github.com/ghostty-org/ghostty" target="_blank" rel="noopener"
+          style="color: var(--accent-primary); text-decoration: none;">libghostty</a> with Metal rendering,
+        background task queue, and tabbed sessions.
       </p>
       <div class="hero-actions">
         <a href="#install" class="btn btn-primary">
@@ -105,7 +107,7 @@
             <path
               d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.81-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z" />
           </svg>
-          macOS 13.0+
+          macOS 15.0+ &middot; Apple Silicon
         </span>
       </p>
     </div>
@@ -126,6 +128,50 @@
       <div class="features-grid">
         <div class="feature-card">
           <div class="feature-icon">
+            <!-- GPU/Metal chip icon -->
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+              <rect x="4" y="4" width="16" height="16" rx="2"></rect>
+              <rect x="9" y="9" width="6" height="6"></rect>
+              <line x1="9" y1="1" x2="9" y2="4"></line>
+              <line x1="15" y1="1" x2="15" y2="4"></line>
+              <line x1="9" y1="20" x2="9" y2="23"></line>
+              <line x1="15" y1="20" x2="15" y2="23"></line>
+              <line x1="20" y1="9" x2="23" y2="9"></line>
+              <line x1="20" y1="15" x2="23" y2="15"></line>
+              <line x1="1" y1="9" x2="4" y2="9"></line>
+              <line x1="1" y1="15" x2="4" y2="15"></line>
+            </svg>
+          </div>
+          <h3 class="feature-title">GPU-Accelerated Terminal</h3>
+          <p class="feature-description">
+            Powered by <a href="https://github.com/ghostty-org/ghostty" target="_blank" rel="noopener"
+              style="color: var(--accent-primary); text-decoration: none;">libghostty</a> with Metal rendering.
+            The same terminal engine behind the Ghostty terminal app, with full IME support
+            and native Ghostty config file compatibility.
+          </p>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon">
+            <!-- Queue/list icon -->
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+              <line x1="8" y1="6" x2="21" y2="6"></line>
+              <line x1="8" y1="12" x2="21" y2="12"></line>
+              <line x1="8" y1="18" x2="21" y2="18"></line>
+              <line x1="3" y1="6" x2="3.01" y2="6"></line>
+              <line x1="3" y1="12" x2="3.01" y2="12"></line>
+              <line x1="3" y1="18" x2="3.01" y2="18"></line>
+            </svg>
+          </div>
+          <h3 class="feature-title">Background Task Queue</h3>
+          <p class="feature-description">
+            Queue AI prompts for headless execution without occupying a chat tab. Priority scheduling,
+            auto-retry with exponential backoff, live log streaming, and crash recovery built in.
+          </p>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon">
             <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
               <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
               <line x1="3" y1="9" x2="21" y2="9"></line>
@@ -141,6 +187,22 @@
 
         <div class="feature-card">
           <div class="feature-icon">
+            <!-- Shield icon -->
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+            </svg>
+          </div>
+          <h3 class="feature-title">Risky Tool Detection</h3>
+          <p class="feature-description">
+            Background tasks are scanned for dangerous operations like <code style="font-family: var(--font-mono); font-size: 0.85em;">git push</code>,
+            <code style="font-family: var(--font-mono); font-size: 0.85em;">rm -rf</code>, or writing to
+            <code style="font-family: var(--font-mono); font-size: 0.85em;">.env</code> files. Risky tasks
+            pause the queue for your approval.
+          </p>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon">
             <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
               <path d="M12 2L2 7l10 5 10-5-10-5z"></path>
               <path d="M2 17l10 5 10-5"></path>
@@ -149,68 +211,24 @@
           </div>
           <h3 class="feature-title">Production Chat Engine</h3>
           <p class="feature-description">
-            State-machine chat architecture with transport and storage layers keeps long sessions
-            stable, predictable, and recoverable.
+            State-machine architecture with transport and storage layers. Session snapshots persist
+            conversations, usage data, and model selection for instant recovery across restarts.
           </p>
         </div>
 
         <div class="feature-card">
           <div class="feature-icon">
+            <!-- Message question icon -->
             <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-              <line x1="18" y1="20" x2="18" y2="10"></line>
-              <line x1="12" y1="20" x2="12" y2="4"></line>
-              <line x1="6" y1="20" x2="6" y2="14"></line>
+              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+              <line x1="12" y1="8" x2="12" y2="12"></line>
+              <line x1="12" y1="16" x2="12.01" y2="16"></line>
             </svg>
           </div>
-          <h3 class="feature-title">Reliable Tool Workflows</h3>
+          <h3 class="feature-title">Ask Mode &amp; Smart Routing</h3>
           <p class="feature-description">
-            Correct multi-step Claude tool turns and structured OpenCode events mean complex tool
-            runs render cleanly from start to finish.
-          </p>
-        </div>
-
-        <div class="feature-card">
-          <div class="feature-icon">
-            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-              <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
-              <line x1="8" y1="21" x2="16" y2="21"></line>
-              <line x1="12" y1="17" x2="12" y2="21"></line>
-            </svg>
-          </div>
-          <h3 class="feature-title">Session Restore</h3>
-          <p class="feature-description">
-            Chat snapshots persist conversation history, usage data, selected model and mode, so you
-            can relaunch and keep going instantly.
-          </p>
-        </div>
-
-        <div class="feature-card">
-          <div class="feature-icon">
-            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-              <polyline points="4 17 10 11 4 5"></polyline>
-              <line x1="12" y1="19" x2="20" y2="19"></line>
-            </svg>
-          </div>
-          <h3 class="feature-title">OpenCode Model Picker</h3>
-          <p class="feature-description">
-            Search and choose OpenCode models dynamically from the opencode models command, grouped by provider
-            for fast, accurate switching.
-          </p>
-        </div>
-
-        <div class="feature-card">
-          <div class="feature-icon">
-            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-              <circle cx="12" cy="12" r="3"></circle>
-              <path
-                d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z">
-              </path>
-            </svg>
-          </div>
-          <h3 class="feature-title">Composer Control Bar</h3>
-          <p class="feature-description">
-            Set Build or Plan mode, pick models, and see selected vs resolved metadata directly under
-            the composer while you type.
+            OpenCode Ask Mode instructs the agent to clarify requirements before coding.
+            Smart Claude CLI path resolution prefers native Mach-O binaries over Node.js wrappers.
           </p>
         </div>
       </div>
@@ -309,12 +327,15 @@
             Build from Source
           </h3>
           <p class="install-card-description">
-            Clone the repo and build with Xcode for the latest development version.
+            Requires Zig 0.14+ and Ghostty source to build
+            <code style="font-family: var(--font-mono); font-size: 0.85em;">GhosttyKit.xcframework</code>.
+            See the <a href="https://github.com/maximgorbatyuk/slothy-terminal#building-from-source" target="_blank"
+              rel="noopener" style="color: var(--accent-primary);">README</a> for full instructions.
           </p>
           <div class="code-block">
             <code>
               <span class="prompt">❯</span> git clone https://github.com/maximgorbatyuk/slothy-terminal.git<br>
-              <span class="prompt">❯</span> cd SlothyTerminal<br>
+              <span class="prompt">❯</span> cd slothy-terminal<br>
               <span class="prompt">❯</span> open SlothyTerminal.xcodeproj
             </code>
           </div>
@@ -324,7 +345,8 @@
       <div class="requirements">
         <h4 class="requirements-title">Requirements</h4>
         <ul class="requirements-list">
-          <li>macOS 13.0 (Ventura) or later</li>
+          <li>macOS 15.0 (Sequoia) or later</li>
+          <li>Apple Silicon Mac (M1 or later)</li>
           <li>Claude CLI or OpenCode installed for AI features</li>
         </ul>
       </div>

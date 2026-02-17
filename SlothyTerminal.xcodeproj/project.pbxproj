@@ -7,12 +7,13 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		873AF9FE2F30C5F90054BEC8 /* SwiftTerm in Frameworks */ = {isa = PBXBuildFile; productRef = 873AF9EF2F30C2000054BEC8 /* SwiftTerm */; };
 		873AFBE02F310CB60054BEC8 /* Sparkle in Frameworks */ = {isa = PBXBuildFile; productRef = 873AFBDF2F310CB60054BEC8 /* Sparkle */; };
+		87A00001DEAD0000BEEF0001 /* GhosttyKit.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = 87A00002DEAD0000BEEF0002 /* GhosttyKit.xcframework */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
 		873AF9E02F30C1F90054BEC8 /* SlothyTerminal.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = SlothyTerminal.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		87A00002DEAD0000BEEF0002 /* GhosttyKit.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; path = GhosttyKit.xcframework; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -41,7 +42,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				873AF9FE2F30C5F90054BEC8 /* SwiftTerm in Frameworks */,
+				87A00001DEAD0000BEEF0001 /* GhosttyKit.xcframework in Frameworks */,
 				873AFBE02F310CB60054BEC8 /* Sparkle in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -52,6 +53,7 @@
 		873AF9D72F30C1F90054BEC8 = {
 			isa = PBXGroup;
 			children = (
+				87A00002DEAD0000BEEF0002 /* GhosttyKit.xcframework */,
 				873AF9E22F30C1F90054BEC8 /* SlothyTerminal */,
 				873AF9E12F30C1F90054BEC8 /* Products */,
 			);
@@ -85,7 +87,6 @@
 			);
 			name = SlothyTerminal;
 			packageProductDependencies = (
-				873AF9EF2F30C2000054BEC8 /* SwiftTerm */,
 				873AFBDF2F310CB60054BEC8 /* Sparkle */,
 			);
 			productName = SlothyTerminal;
@@ -117,7 +118,6 @@
 			mainGroup = 873AF9D72F30C1F90054BEC8;
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
-				873AF9EE2F30C2000054BEC8 /* XCRemoteSwiftPackageReference "SwiftTerm" */,
 				873AFBDE2F310CB60054BEC8 /* XCRemoteSwiftPackageReference "Sparkle" */,
 			);
 			preferredProjectObjectVersion = 77;
@@ -278,7 +278,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 6;
+				CURRENT_PROJECT_VERSION = 7;
 				DEVELOPMENT_TEAM = EKKL63HDHJ;
 				ENABLE_APP_SANDBOX = NO;
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -294,7 +294,8 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 15.0;
-				MARKETING_VERSION = 2026.2.4;
+				MARKETING_VERSION = 2026.2.5;
+				OTHER_LDFLAGS = "-lstdc++";
 				PRODUCT_BUNDLE_IDENTIFIER = mgorbatyuk.dev.SlothyTerminal;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;
@@ -311,7 +312,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 6;
+				CURRENT_PROJECT_VERSION = 7;
 				DEVELOPMENT_TEAM = EKKL63HDHJ;
 				ENABLE_APP_SANDBOX = NO;
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -327,7 +328,8 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 15.0;
-				MARKETING_VERSION = 2026.2.4;
+				MARKETING_VERSION = 2026.2.5;
+				OTHER_LDFLAGS = "-lstdc++";
 				PRODUCT_BUNDLE_IDENTIFIER = mgorbatyuk.dev.SlothyTerminal;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;
@@ -361,14 +363,6 @@
 /* End XCConfigurationList section */
 
 /* Begin XCRemoteSwiftPackageReference section */
-		873AF9EE2F30C2000054BEC8 /* XCRemoteSwiftPackageReference "SwiftTerm" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/migueldeicaza/SwiftTerm.git";
-			requirement = {
-				kind = upToNextMajorVersion;
-				minimumVersion = 1.0.0;
-			};
-		};
 		873AFBDE2F310CB60054BEC8 /* XCRemoteSwiftPackageReference "Sparkle" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/sparkle-project/Sparkle";
@@ -380,11 +374,6 @@
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
-		873AF9EF2F30C2000054BEC8 /* SwiftTerm */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = 873AF9EE2F30C2000054BEC8 /* XCRemoteSwiftPackageReference "SwiftTerm" */;
-			productName = SwiftTerm;
-		};
 		873AFBDF2F310CB60054BEC8 /* Sparkle */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = 873AFBDE2F310CB60054BEC8 /* XCRemoteSwiftPackageReference "Sparkle" */;

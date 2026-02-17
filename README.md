@@ -1,25 +1,27 @@
 # SlothyTerminal
 
-A native macOS terminal application designed for AI coding assistants with a tabbed interface and session tracking.
+A native macOS terminal application designed for AI coding assistants with a tabbed interface, background task queue, and session tracking.
 
 Privacy-first by design. See the [Privacy Policy](PRIVACY.md).
 
-![macOS](https://img.shields.io/badge/macOS-13.0+-blue)
+![macOS](https://img.shields.io/badge/macOS-15.0+-blue)
+![Apple Silicon](https://img.shields.io/badge/Apple_Silicon-M1+-8A2BE2)
 ![Swift](https://img.shields.io/badge/Swift-5.9+-orange)
 ![License](https://img.shields.io/badge/License-MIT-green)
 
 ## Overview
 
-SlothyTerminal provides a unified macOS workspace for AI coding agents with both:
+SlothyTerminal provides a unified macOS workspace for AI coding agents with:
 - native chat tabs (Claude and OpenCode)
 - classic CLI/TUI terminal tabs
+- a background task queue for headless AI prompt execution
 
-Use Claude CLI, OpenCode, or plain terminal sessions in a clean tabbed interface with real-time session statistics.
+Use Claude CLI, OpenCode, or plain terminal sessions in a clean tabbed interface. Queue prompts for background execution, review risky operations, and track session statistics.
 
 ## Features
 
 ### Multi-Agent Support
-- **Terminal** - Plain shell sessions
+- **Terminal** - Plain shell sessions powered by libghostty (Metal-accelerated)
 - **Claude** - Native chat + Claude CLI/TUI tab support
 - **OpenCode** - Native chat + OpenCode CLI/TUI tab support
 
@@ -34,6 +36,30 @@ Use Claude CLI, OpenCode, or plain terminal sessions in a clean tabbed interface
 
 ![](/docs/assets/open_new_tab.png)
 
+### Task Queue
+- Background AI task execution engine for running prompts headlessly without occupying a chat tab
+- Compose tasks with title, prompt, agent type (Claude or OpenCode), working directory, and priority
+- Priority-then-FIFO scheduling with sequential execution
+- Live log streaming with timestamped entries during task execution
+- Log artifacts persisted per task attempt for later review
+- Auto-retry with exponential backoff for transient failures (up to 3 retries)
+- 30-minute execution timeout per task
+- Preflight validation (prompt non-empty, repo exists, CLI installed)
+- Crash recovery: tasks interrupted by app restart are automatically reset to pending
+- **Risky tool detection**: operations like `git push`, `rm -rf`, writing to `.env`/`.ssh`/credentials are detected and trigger a post-completion approval gate (Approve / Reject / Review)
+- Queue panel in the sidebar with running, pending, and history sections
+- Task composer modal with agent picker, directory selector, and priority
+- Task detail modal with metadata, prompt, result, risky operations, errors, and full log
+
+### GPU-Accelerated Terminal (libghostty)
+- Terminal rendering powered by [libghostty](https://github.com/ghostty-org/ghostty), the same engine behind the Ghostty terminal
+- Metal-accelerated rendering for smooth, high-performance terminal output
+- Full IME support (input method editor) for CJK and other complex input
+- Reads Ghostty's standard config files (`~/.config/ghostty/config`) for terminal customization
+- Proper keyboard, mouse, scroll, and force-touch event forwarding
+- Clipboard integration and cursor shape updates
+- Renderer health monitoring and window occlusion throttling
+
 ### Session Statistics Sidebar
 - Current working directory display
 - Session duration timer
@@ -45,16 +71,17 @@ Use Claude CLI, OpenCode, or plain terminal sessions in a clean tabbed interface
 - Streaming markdown responses with tool-aware rendering
 - Reliable multi-step tool flow handling for Claude stream-json
 - Session recovery and restore across app restarts
-- Composer status bar with:
-  - mode selection (`Build` / `Plan`)
-  - model selection
-  - selected vs resolved metadata
+- Composer status bar with mode selection (`Build` / `Plan`), model selection, and resolved metadata
+- Context-aware streaming indicator showing active tool name
+- Suggestion chips on empty state for quick-start prompts
+- Chat input history navigation with up/down arrow keys
 
 ### OpenCode Chat Enhancements
 - Native OpenCode JSON event transport (`opencode run --format json`)
 - Searchable model picker loaded dynamically from `opencode models`
 - Model groups by provider prefix (for example `anthropic`, `openai`, `github-copilot`, `zai`)
 - Last used OpenCode model/mode remembered for new chats
+- **Ask mode**: instructs the agent to ask clarifying questions before implementing, with a visible badge in the input area
 
 ### Directory Tree Browser
 - Collapsible file tree showing project structure
@@ -82,13 +109,16 @@ Use Claude CLI, OpenCode, or plain terminal sessions in a clean tabbed interface
 ### Settings
 - **General** - Default agent, sidebar preferences, recent folders
 - **Agents** - Custom paths for Claude and OpenCode CLIs
-- **Appearance** - Terminal font family and size, agent accent colors
+- **Appearance** - Terminal font family and size, agent accent colors, chat message text size
+- **Chat** - Markdown rendering mode, send key behavior, message timestamps and token metadata toggles
 - **Shortcuts** - View keyboard shortcuts
 
 ### Additional Features
+- Smart Claude CLI path resolution preferring native Mach-O binaries over Node.js wrappers
 - Recent folders quick access
 - Automatic updates via Sparkle framework
-- Compact native title bar with contextual window title (`📁 <folder> | Slothy Terminal`)
+- Compact native title bar with contextual window title
+- Terminal interaction mode (Host Selection for text selection, App Mouse for TUI forwarding)
 - Native macOS integration
 
 ![](/docs/assets/select_working_folder.png)
@@ -111,7 +141,8 @@ Download the latest DMG from [GitHub Releases](https://github.com/maximgorbatyuk
 
 ### Requirements
 
-- macOS 13.0 or later
+- macOS 15.0 or later
+- Apple Silicon Mac (M1 or later)
 - [Claude CLI](https://claude.ai/code) (optional)
 - [OpenCode](https://opencode.ai) (optional)
 
@@ -164,23 +195,64 @@ Access settings via `Cmd+,` or **SlothyTerminal → Settings**.
 ### Prerequisites
 
 - Xcode 15.0+
-- macOS 13.0+
+- macOS 15.0+
+- [Zig](https://ziglang.org/) 0.14+ (`brew install zig`)
+- [Ghostty](https://github.com/ghostty-org/ghostty) source code cloned locally
 
 ### Dependencies
 
-Add via Swift Package Manager:
-- [SwiftTerm](https://github.com/migueldeicaza/SwiftTerm) - Terminal emulation
-- [Sparkle](https://github.com/sparkle-project/Sparkle) - Auto-updates
+- [libghostty](https://github.com/ghostty-org/ghostty) - GPU-accelerated terminal rendering (Metal) and PTY management via `GhosttyKit.xcframework`
+- [Sparkle](https://github.com/sparkle-project/Sparkle) - Auto-updates (via Swift Package Manager)
 
 ### Build
 
 ```bash
 git clone https://github.com/maximgorbatyuk/slothy-terminal.git
 cd slothy-terminal
+```
+
+#### 1. Build GhosttyKit.xcframework
+
+The terminal rendering backend is powered by libghostty, which must be built from the Ghostty source repo. This produces a `GhosttyKit.xcframework` containing the static library and Metal shaders.
+
+```bash
+# Clone ghostty if you haven't already
+git clone https://github.com/ghostty-org/ghostty.git ~/projects/ghostty
+
+# Build the xcframework (takes ~2-3 minutes)
+cd ~/projects/ghostty
+zig build -Dapp-runtime=none -Demit-xcframework -Dxcframework-target=native
+
+# Copy into the SlothyTerminal project root
+cp -R macos/GhosttyKit.xcframework /path/to/slothy-terminal/
+```
+
+> **Note:** If the build fails with a Metal Toolchain error, install it first:
+> ```bash
+> xcodebuild -downloadComponent MetalToolchain
+> ```
+
+You only need to rebuild the xcframework when:
+- You update the Ghostty source (`git pull` in the ghostty repo)
+- You do a fresh clone of SlothyTerminal
+
+#### 2. Open and run
+
+```bash
 open SlothyTerminal.xcodeproj
 ```
 
 Press `Cmd+R` in Xcode to build and run.
+
+#### CLI build and test
+
+```bash
+# Xcode build
+xcodebuild -project SlothyTerminal.xcodeproj -scheme SlothyTerminal -configuration Debug build
+
+# SwiftPM tests (does not require the xcframework)
+swift test
+```
 
 ## Project Structure
 
@@ -193,12 +265,13 @@ SlothyTerminal/
 ├── Views/
 │   ├── MainView.swift             # Main window layout
 │   ├── TabBarView.swift           # Tab bar with agent indicators
-│   ├── TerminalView.swift         # SwiftTerm wrapper
+│   ├── TerminalView.swift         # Libghostty SwiftUI bridge
 │   ├── TerminalContainerView.swift# Terminal display container
 │   ├── SidebarView.swift          # Session statistics sidebar
-│   ├── SettingsView.swift         # Settings window (4 tabs)
+│   ├── SettingsView.swift         # Settings window
 │   ├── AboutView.swift            # About window
-│   └── FolderSelectorModal.swift  # Folder browser modal
+│   ├── FolderSelectorModal.swift  # Folder browser modal
+│   └── TaskQueue/                 # Task queue UI (panel, composer, detail, row)
 ├── Models/
 │   ├── Tab.swift                  # Tab model for chat/cli modes
 │   ├── AgentType.swift            # Agent type enum (Terminal/Claude/OpenCode)
@@ -212,6 +285,12 @@ SlothyTerminal/
 │   ├── Parser/                    # Stream event parser types
 │   ├── Models/                    # Chat/domain models
 │   └── Views/                     # Chat UI, markdown, tool rendering
+├── TaskQueue/
+│   ├── Models/QueuedTask.swift    # Task model, status, priority, exit reasons
+│   ├── Orchestrator/              # Task scheduling, preflight, timeout, retry
+│   ├── Runner/                    # Claude/OpenCode runners, risky tool detection, log collector
+│   ├── State/TaskQueueState.swift # @Observable queue state and mutations
+│   └── Storage/                   # Queue snapshot persistence
 ├── Agents/
 │   ├── AIAgent.swift              # Agent protocol and factory
 │   ├── ClaudeAgent.swift          # Claude CLI integration
@@ -226,7 +305,8 @@ SlothyTerminal/
 │   ├── ExternalAppManager.swift   # External app integration
 │   └── BuildConfig.swift          # Build environment config
 ├── Terminal/
-│   └── PTYController.swift        # PTY/process management
+│   ├── GhosttyApp.swift           # Libghostty app singleton and callbacks
+│   └── GhosttySurfaceView.swift   # NSView subclass for terminal surfaces
 └── Resources/
     ├── Config.debug.json          # Debug build configuration
     └── Config.release.json        # Release build configuration
@@ -234,7 +314,13 @@ SlothyTerminal/
 
 ## Release Process
 
-See [RELEASE.md](RELEASE.md) for step-by-step release instructions.
+Ensure `GhosttyKit.xcframework` is present in the project root, then:
+
+```bash
+./scripts/build-release.sh 2026.2.6
+```
+
+This archives, notarizes, creates a DMG, and signs for Sparkle updates. See [RELEASE.md](docs/RELEASE.md) for full step-by-step instructions.
 
 ## Changelog
 
@@ -259,5 +345,5 @@ MIT License - see [LICENSE](LICENSE) for details.
 
 ## Acknowledgments
 
-- [SwiftTerm](https://github.com/migueldeicaza/SwiftTerm) by Miguel de Icaza
+- [Ghostty](https://github.com/ghostty-org/ghostty) by Mitchell Hashimoto - GPU-accelerated terminal rendering via libghostty
 - [Sparkle](https://github.com/sparkle-project/Sparkle) for the update framework

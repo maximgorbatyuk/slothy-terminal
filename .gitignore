@@ -8,6 +8,9 @@ build/
 DerivedData/
 *.xcarchive
 
+# Libghostty xcframework (built from ~/projects/ghostty, ~200MB)
+GhosttyKit.xcframework/
+
 # Sparkle private keys - NEVER COMMIT
 sparkle_private_key
 sparkle-keys/

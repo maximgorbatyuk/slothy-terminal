@@ -23,6 +23,9 @@ extension Logger {
   /// Logger for chat engine, transport, and storage operations.
   static let chat = Logger(subsystem: subsystem, category: "Chat")
 
+  /// Logger for task queue operations.
+  static let taskQueue = Logger(subsystem: subsystem, category: "TaskQueue")
+
   /// Logger for general app operations.
   static let app = Logger(subsystem: subsystem, category: "App")
 }

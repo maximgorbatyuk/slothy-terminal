@@ -8,6 +8,7 @@ enum SettingsSection: String, CaseIterable, Identifiable {
   case appearance
   case shortcuts
   case prompts
+  case licenses
 
   var id: String { rawValue }
 
@@ -30,6 +31,9 @@ enum SettingsSection: String, CaseIterable, Identifiable {
 
     case .prompts:
       return "Prompts"
+
+    case .licenses:
+      return "Licenses"
     }
   }
 
@@ -52,6 +56,9 @@ enum SettingsSection: String, CaseIterable, Identifiable {
 
     case .prompts:
       return "text.bubble"
+
+    case .licenses:
+      return "doc.text"
     }
   }
 }
@@ -88,6 +95,9 @@ struct SettingsView: View {
 
         case .prompts:
           PromptsSettingsTab()
+
+        case .licenses:
+          LicensesSettingsTab()
         }
       }
     }
@@ -600,6 +610,19 @@ struct AppearanceSettingsTab: View {
         }
       }
 
+      Section("Terminal Interaction") {
+        Picker("Mouse mode", selection: Bindable(configManager).config.terminalInteractionMode) {
+          ForEach(TerminalInteractionMode.allCases, id: \.self) { mode in
+            Text(mode.displayName).tag(mode)
+          }
+        }
+        .pickerStyle(.segmented)
+
+        Text(configManager.config.terminalInteractionMode.description)
+          .font(.caption)
+          .foregroundColor(.secondary)
+      }
+
       Section("Agent Colors") {
         AgentColorPicker(
           agentType: .claude,
@@ -991,6 +1014,109 @@ struct PromptEditorSheet: View {
     )
     onSave(saved)
     dismiss()
+  }
+}
+
+// MARK: - Licenses Settings Tab
+
+struct LicensesSettingsTab: View {
+  var body: some View {
+    Form {
+      Section("SlothyTerminal") {
+        LicenseSection(
+          name: "SlothyTerminal",
+          description: "AI coding assistant terminal for macOS",
+          licenseFileName: "SLOTHYTERMINAL_LICENSE"
+        )
+      }
+
+      Section("Third-Party Licenses") {
+        Text("SlothyTerminal uses the following open source software:")
+          .font(.caption)
+          .foregroundColor(.secondary)
+
+        LicenseSection(
+          name: "Ghostty",
+          description: "Fast, native, feature-rich terminal emulator",
+          licenseFileName: "GHOSTTY_LICENSE"
+        )
+
+        LicenseSection(
+          name: "Sparkle",
+          description: "Software update framework for macOS",
+          licenseFileName: "SPARKLE_LICENSE"
+        )
+      }
+    }
+    .formStyle(.grouped)
+    .scrollContentBackground(.hidden)
+    .padding()
+    .background(appBackgroundColor)
+  }
+}
+
+struct LicenseSection: View {
+  let name: String
+  let description: String
+  let licenseFileName: String
+
+  @State private var licenseText: String = ""
+  @State private var isExpanded: Bool = false
+
+  var body: some View {
+    Section {
+      HStack {
+        VStack(alignment: .leading, spacing: 4) {
+          Text(name)
+            .font(.headline)
+
+          Text(description)
+            .font(.caption)
+            .foregroundColor(.secondary)
+        }
+
+        Spacer()
+
+        Button {
+          withAnimation {
+            isExpanded.toggle()
+          }
+        } label: {
+          Text(isExpanded ? "Hide License" : "View License")
+            .font(.caption)
+        }
+        .buttonStyle(.bordered)
+      }
+
+      if isExpanded {
+        ScrollView {
+          Text(licenseText)
+            .font(.system(size: 10, design: .monospaced))
+            .foregroundColor(.secondary)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(8)
+        }
+        .frame(maxHeight: 200)
+        .background(appCardColor)
+        .cornerRadius(6)
+      }
+    }
+    .onAppear {
+      loadLicense()
+    }
+  }
+
+  private func loadLicense() {
+    guard let url = Bundle.main.url(forResource: licenseFileName, withExtension: nil) else {
+      licenseText = "License file not found."
+      return
+    }
+
+    if let text = try? String(contentsOf: url, encoding: .utf8) {
+      licenseText = text
+    } else {
+      licenseText = "Could not load license file."
+    }
   }
 }
 
