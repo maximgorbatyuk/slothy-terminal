@@ -133,3 +133,19 @@ Critical items to be aware of:
 - Force unwraps in `ConfigManager` can crash in edge cases
 - `PTYController` uses `nonisolated(unsafe)` for outputContinuation, bypassing concurrency safety
 - PTY layer still has less direct test coverage than parser/engine/store chat layers
+
+## Terminal Environment Variables
+
+When launching terminal sessions, the following environment variables **must** be set to ensure proper shell behavior (cursor movement, line clearing, color support):
+
+- `TERM=xterm-256color` - Tells shell/programs the terminal type for proper escape sequence handling
+- `COLORTERM=truecolor` - Indicates 24-bit color support
+- `TERM_PROGRAM=SlothyTerminal` - Identifies the terminal emulator
+- `TERM_PROGRAM_VERSION` - Version identifier
+
+**Why this matters:** When launched from Finder (not a terminal parent process), `ProcessInfo.processInfo.environment` won't contain these variables. Without them, shells like zsh with fancy prompts (e.g., mathiasbynens/dotfiles) won't properly handle escape sequences like carriage return (`\r`) and clear-line (`\x1b[K`), causing prompt segments to appear on new lines instead of redrawing in place.
+
+These are set in:
+- `TerminalView.makeLaunchEnvironment()` - Primary terminal view
+- `TerminalAgent.environmentVariables` - Plain terminal agent
+- `ClaudeAgent.environmentVariables` / `OpenCodeAgent.environmentVariables` - AI agent tabs
