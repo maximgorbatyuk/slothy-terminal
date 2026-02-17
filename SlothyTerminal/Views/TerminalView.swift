@@ -87,13 +87,14 @@ struct GhosttyTerminalViewRepresentable: NSViewRepresentable {
     }
 
     let defaultPaths = [
+      "\(NSHomeDirectory())/.local/bin",
       "/opt/homebrew/bin",
       "/usr/local/bin",
       "/usr/bin",
       "/bin",
       "/usr/sbin",
       "/sbin",
-      "/opt/homebrew/sbin"
+      "/opt/homebrew/sbin",
     ]
 
     var pathEntries = env["PATH"]?
