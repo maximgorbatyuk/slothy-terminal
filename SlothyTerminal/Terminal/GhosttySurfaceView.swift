@@ -1,6 +1,7 @@
 import AppKit
 import Carbon.HIToolbox
 import GhosttyKit
+import QuartzCore
 import os
 
 /// NSView subclass that hosts a single libghostty terminal surface.
@@ -18,6 +19,11 @@ class GhosttySurfaceView: NSView, NSTextInputClient {
   private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "SlothyTerminal", category: "GhosttySurface")
   private var pendingLaunchRequest: SurfaceLaunchRequest?
   private var occlusionObserver: NSObjectProtocol?
+
+  /// Stored content size for surviving backing property changes.
+  /// Matches Ghostty's approach: during animations, `bounds` may be in transit,
+  /// so we keep the last known-good size separately.
+  private var contentSize: NSSize = .zero
 
   /// Accumulated text from `insertText` during key interpretation.
   private var keyTextAccumulator: [String]?
@@ -151,7 +157,13 @@ class GhosttySurfaceView: NSView, NSTextInputClient {
       return
     }
 
-    applyCurrentSizeAndScale()
+    /// Do NOT call sizeDidChange or set_content_scale here.
+    /// The Metal renderer already initialised the layer, contentsScale, and
+    /// wantsLayer during ghostty_surface_new.
+    /// viewDidChangeBackingProperties handles contentsScale updates.
+    /// layout() is the single source of truth for size — calling it here
+    /// would trigger an early SIGWINCH before SwiftUI has performed layout,
+    /// causing the shell to re-render the prompt at the wrong size.
 
     if let surface {
       ghostty_surface_set_focus(surface, window?.firstResponder == self)
@@ -213,40 +225,84 @@ class GhosttySurfaceView: NSView, NSTextInputClient {
     }
 
     updateTrackingAreas()
-    applyCurrentSizeAndScale()
     updateWindowOcclusion()
     GhosttyApp.shared.tick()
   }
 
   override func layout() {
     super.layout()
-    applyCurrentSizeAndScale()
+    sizeDidChange(bounds.size)
     GhosttyApp.shared.tick()
   }
 
   override func setFrameSize(_ newSize: NSSize) {
     super.setFrameSize(newSize)
-    applyCurrentSizeAndScale()
+
+    /// Do NOT call sizeDidChange here. layout() is the single source of
+    /// truth for size updates (matching Ghostty's SurfaceScrollView approach).
+    /// Calling from both setFrameSize and layout causes duplicate SIGWINCHs
+    /// which make the shell re-render the prompt multiple times.
   }
 
   override func viewDidChangeBackingProperties() {
     super.viewDidChangeBackingProperties()
 
-    applyCurrentSizeAndScale()
-  }
+    /// Update the layer's contentsScale so the compositor doesn't rescale
+    /// the Metal content. Matches Ghostty's approach — see:
+    /// https://developer.apple.com/library/archive/documentation/GraphicsAnimation/Conceptual/HighResolutionOSX/CapturingScreenContents/CapturingScreenContents.html
+    if let window {
+      CATransaction.begin()
+      CATransaction.setDisableActions(true)
+      layer?.contentsScale = window.backingScaleFactor
+      CATransaction.commit()
+    }
 
-  private func applyCurrentSizeAndScale() {
     guard let surface else {
       return
     }
 
-    let scale = window?.backingScaleFactor ?? NSScreen.main?.backingScaleFactor ?? 2.0
-    let backing = convertToBacking(bounds.size)
-    let widthPx = max(Int(backing.width.rounded()), 1)
-    let heightPx = max(Int(backing.height.rounded()), 1)
-    ghostty_surface_set_size(surface, UInt32(widthPx), UInt32(heightPx))
-    ghostty_surface_set_content_scale(surface, scale, scale)
-    ghostty_surface_refresh(surface)
+    /// Calculate x/y scale independently (matches Ghostty).
+    let fbFrame = convertToBacking(frame)
+    guard frame.size.width > 0,
+          frame.size.height > 0
+    else {
+      return
+    }
+
+    let xScale = fbFrame.size.width / frame.size.width
+    let yScale = fbFrame.size.height / frame.size.height
+    ghostty_surface_set_content_scale(surface, xScale, yScale)
+
+    /// Re-send size using the stored contentSize so we don't read stale bounds
+    /// during animations or transitions.
+    let scaledSize = convertToBacking(contentSize)
+    setSurfaceSize(width: UInt32(scaledSize.width), height: UInt32(scaledSize.height))
+  }
+
+  /// Notify libghostty of a size change. Stores the logical size for later reuse
+  /// (e.g. when backing properties change) and converts to framebuffer pixels.
+  /// Skips zero-size updates to avoid sending 0-column terminal dimensions.
+  func sizeDidChange(_ size: CGSize) {
+    guard size.width > 0,
+          size.height > 0
+    else {
+      return
+    }
+
+    let scaledSize = convertToBacking(size)
+    setSurfaceSize(width: UInt32(scaledSize.width), height: UInt32(scaledSize.height))
+    contentSize = size
+  }
+
+  private func setSurfaceSize(width: UInt32, height: UInt32) {
+    guard let surface,
+          width > 0,
+          height > 0
+    else {
+      return
+    }
+
+    ghostty_surface_set_size(surface, width, height)
   }
 
   private func updateWindowOcclusion() {

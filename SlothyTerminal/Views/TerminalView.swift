@@ -37,14 +37,11 @@ struct GhosttyTerminalViewRepresentable: NSViewRepresentable {
       additionalEnvironment: environment
     )
 
-    /// Run the resolved command explicitly for both AI and plain terminal tabs.
-    /// This guarantees shell startup even when Ghostty config has no default command.
-    var resolvedCommand = command.trimmingCharacters(in: .whitespacesAndNewlines)
-    if resolvedCommand.isEmpty, !shouldAutoRunCommand {
-      resolvedCommand = launchEnvironment["SHELL"] ?? "/bin/zsh"
-    }
-
-    if !resolvedCommand.isEmpty {
+    /// For AI tabs we run the explicit command with args.
+    /// For plain terminal tabs we let Ghostty launch its default shell command
+    /// path to preserve native prompt/redraw behavior.
+    let resolvedCommand = command.trimmingCharacters(in: .whitespacesAndNewlines)
+    if shouldAutoRunCommand, !resolvedCommand.isEmpty {
       surfaceView.createSurface(
         command: resolvedCommand,
         args: arguments,
@@ -109,15 +106,17 @@ struct GhosttyTerminalViewRepresentable: NSViewRepresentable {
 
     env["PATH"] = pathEntries.joined(separator: ":")
     env["PWD"] = workingDirectory.path
-    env["TERM"] = env["TERM"] ?? "xterm-256color"
-    env["COLORTERM"] = env["COLORTERM"] ?? "truecolor"
     env["LANG"] = env["LANG"] ?? "en_US.UTF-8"
     env["LC_ALL"] = env["LC_ALL"] ?? "en_US.UTF-8"
     env["HOME"] = env["HOME"] ?? NSHomeDirectory()
     env["USER"] = env["USER"] ?? NSUserName()
     env["SHELL"] = env["SHELL"] ?? "/bin/zsh"
+
+    env["TERM"] = env["TERM"] ?? "xterm-256color"
+    env["COLORTERM"] = env["COLORTERM"] ?? "truecolor"
     env["TERM_PROGRAM"] = "SlothyTerminal"
-    env["FORCE_COLOR"] = "1"
+    env["TERM_PROGRAM_VERSION"] = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0"
+
     env.removeValue(forKey: "CI")
 
     return env

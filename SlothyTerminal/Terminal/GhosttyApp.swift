@@ -306,8 +306,19 @@ private func ghosttyAction(
     return true
 
   case GHOSTTY_ACTION_RENDER:
-    /// Metal-backed surfaces present automatically in the normal render path.
-    /// Treat this as a signal only; avoid forcing extra refresh/draw calls.
+    guard let surface else {
+      return false
+    }
+
+    /// Embedded runtime requests a draw on the app thread.
+    if Thread.isMainThread {
+      ghostty_surface_draw(surface)
+    } else {
+      DispatchQueue.main.async {
+        ghostty_surface_draw(surface)
+      }
+    }
+
     return true
 
   case GHOSTTY_ACTION_CLOSE_WINDOW:
