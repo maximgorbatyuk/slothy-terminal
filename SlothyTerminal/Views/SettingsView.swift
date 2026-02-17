@@ -1022,23 +1022,31 @@ struct PromptEditorSheet: View {
 struct LicensesSettingsTab: View {
   var body: some View {
     Form {
-      Section("Open Source Licenses") {
+      Section("SlothyTerminal") {
+        LicenseSection(
+          name: "SlothyTerminal",
+          description: "AI coding assistant terminal for macOS",
+          licenseFileName: "SLOTHYTERMINAL_LICENSE"
+        )
+      }
+
+      Section("Third-Party Licenses") {
         Text("SlothyTerminal uses the following open source software:")
           .font(.caption)
           .foregroundColor(.secondary)
+
+        LicenseSection(
+          name: "Ghostty",
+          description: "Fast, native, feature-rich terminal emulator",
+          licenseFileName: "GHOSTTY_LICENSE"
+        )
+
+        LicenseSection(
+          name: "Sparkle",
+          description: "Software update framework for macOS",
+          licenseFileName: "SPARKLE_LICENSE"
+        )
       }
-
-      LicenseSection(
-        name: "Ghostty",
-        description: "Fast, native, feature-rich terminal emulator",
-        licenseFileName: "GHOSTTY_LICENSE"
-      )
-
-      LicenseSection(
-        name: "Sparkle",
-        description: "Software update framework for macOS",
-        licenseFileName: "SPARKLE_LICENSE"
-      )
     }
     .formStyle(.grouped)
     .scrollContentBackground(.hidden)
