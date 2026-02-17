@@ -5,6 +5,7 @@ A native macOS terminal application designed for AI coding assistants with a tab
 Privacy-first by design. See the [Privacy Policy](PRIVACY.md).
 
 ![macOS](https://img.shields.io/badge/macOS-15.0+-blue)
+![Apple Silicon](https://img.shields.io/badge/Apple_Silicon-M1+-8A2BE2)
 ![Swift](https://img.shields.io/badge/Swift-5.9+-orange)
 ![License](https://img.shields.io/badge/License-MIT-green)
 
@@ -141,6 +142,7 @@ Download the latest DMG from [GitHub Releases](https://github.com/maximgorbatyuk
 ### Requirements
 
 - macOS 15.0 or later
+- Apple Silicon Mac (M1 or later)
 - [Claude CLI](https://claude.ai/code) (optional)
 - [OpenCode](https://opencode.ai) (optional)
 

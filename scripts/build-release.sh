@@ -72,11 +72,16 @@ rm -rf "$BUILD_DIR"
 mkdir -p "$BUILD_DIR"
 
 # Archive
+# GhosttyKit.xcframework is built for arm64 only (via -Dxcframework-target=native).
+# Restrict the archive to arm64 to match. macOS 15.0+ runs on Apple Silicon
+# (or Rosetta 2), so x86_64 is not needed.
 echo ""
-echo "[2/8] Creating archive..."
+echo "[2/8] Creating archive (arm64)..."
 xcodebuild -scheme "$APP_NAME" \
   -configuration Release \
   -archivePath "$BUILD_DIR/$APP_NAME.xcarchive" \
+  ARCHS=arm64 \
+  ONLY_ACTIVE_ARCH=NO \
   archive \
   2>&1 | grep -E '(Archive Succeeded|BUILD SUCCEEDED|error:|warning:|\*\*)' || true
 
