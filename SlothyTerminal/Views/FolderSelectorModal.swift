@@ -253,21 +253,107 @@ struct PromptPicker: View {
   @Binding var selectedPromptID: UUID?
   let savedPrompts: [SavedPrompt]
 
+  private var selectedPrompt: SavedPrompt? {
+    savedPrompts.find(by: selectedPromptID)
+  }
+
   var body: some View {
     VStack(alignment: .leading, spacing: 8) {
       Text("PROMPT")
         .font(.system(size: 11, weight: .semibold))
         .foregroundColor(.secondary)
 
-      Picker("Prompt", selection: $selectedPromptID) {
-        Text("No prompt").tag(nil as UUID?)
+      Menu {
+        Button {
+          selectedPromptID = nil
+        } label: {
+          PromptMenuRow(
+            title: "No prompt",
+            subtitle: "Start without predefined prompt",
+            isSelected: selectedPromptID == nil
+          )
+        }
+
+        Divider()
 
         ForEach(savedPrompts) { prompt in
-          Text(prompt.name).tag(prompt.id as UUID?)
+          Button {
+            selectedPromptID = prompt.id
+          } label: {
+            PromptMenuRow(
+              title: prompt.name,
+              subtitle: prompt.previewText(),
+              isSelected: selectedPromptID == prompt.id
+            )
+          }
         }
+      } label: {
+        PromptSelectionLabel(
+          title: selectedPrompt?.name ?? "No prompt",
+          subtitle: selectedPrompt?.previewText() ?? "Start without predefined prompt"
+        )
       }
-      .labelsHidden()
-      .pickerStyle(.menu)
+      .menuStyle(.borderlessButton)
+      .fixedSize(horizontal: false, vertical: true)
+    }
+  }
+}
+
+/// The selected prompt label displayed above the prompt options menu.
+private struct PromptSelectionLabel: View {
+  let title: String
+  let subtitle: String
+
+  var body: some View {
+    HStack(spacing: 8) {
+      VStack(alignment: .leading, spacing: 2) {
+        Text(title)
+          .font(.system(size: 12, weight: .medium))
+          .foregroundColor(.primary)
+          .lineLimit(1)
+
+        Text(subtitle)
+          .font(.system(size: 11))
+          .foregroundColor(.secondary)
+          .lineLimit(1)
+      }
+
+      Spacer()
+
+      Image(systemName: "chevron.up.chevron.down")
+        .font(.system(size: 10, weight: .semibold))
+        .foregroundColor(.secondary)
+    }
+    .padding(.horizontal, 10)
+    .padding(.vertical, 8)
+    .frame(maxWidth: .infinity, alignment: .leading)
+    .background(appCardColor)
+    .cornerRadius(8)
+  }
+}
+
+/// A menu row with prompt title and short preview text.
+private struct PromptMenuRow: View {
+  let title: String
+  let subtitle: String
+  let isSelected: Bool
+
+  var body: some View {
+    HStack(alignment: .top, spacing: 8) {
+      Image(systemName: "checkmark")
+        .foregroundColor(.accentColor)
+        .opacity(isSelected ? 1 : 0)
+        .frame(width: 12, alignment: .leading)
+
+      VStack(alignment: .leading, spacing: 2) {
+        Text(title)
+          .lineLimit(1)
+
+        Text(subtitle)
+          .font(.caption)
+          .foregroundColor(.secondary)
+          .lineLimit(1)
+      }
     }
   }
 }

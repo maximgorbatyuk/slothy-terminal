@@ -60,6 +60,21 @@ struct AppConfig: Codable, Equatable {
   /// Saved reusable prompts for AI agent sessions.
   var savedPrompts: [SavedPrompt] = []
 
+  /// Saved reusable tags for prompts.
+  /// Optional for backward-compatible decoding with older config files.
+  var savedPromptTags: [PromptTag]?
+
+  /// Returns persisted prompt tags, defaulting to an empty collection.
+  var promptTags: [PromptTag] {
+    get {
+      savedPromptTags ?? []
+    }
+
+    set {
+      savedPromptTags = newValue
+    }
+  }
+
   // MARK: - Chat Settings
 
   /// Which key sends a chat message (the other key inserts a newline).

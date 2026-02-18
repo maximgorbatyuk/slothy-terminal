@@ -733,47 +733,149 @@ struct ShortcutRow: View {
 // MARK: - Prompts Settings Tab
 
 struct PromptsSettingsTab: View {
+  private enum PromptSortOption: String, CaseIterable, Identifiable {
+    case updatedNewest
+    case updatedOldest
+    case nameAscending
+    case nameDescending
+
+    var id: String {
+      rawValue
+    }
+
+    var displayName: String {
+      switch self {
+      case .updatedNewest:
+        return "Updated (Newest)"
+
+      case .updatedOldest:
+        return "Updated (Oldest)"
+
+      case .nameAscending:
+        return "Name (A-Z)"
+
+      case .nameDescending:
+        return "Name (Z-A)"
+      }
+    }
+  }
+
   private var configManager = ConfigManager.shared
   @State private var editingPrompt: SavedPrompt?
   @State private var isAddingNew = false
   @State private var promptToDelete: SavedPrompt?
+  @State private var selectedPromptID: UUID?
+  @State private var isManagingTags = false
+  @State private var sortOption: PromptSortOption = .updatedNewest
 
-  var body: some View {
-    Form {
-      Section("Saved Prompts") {
-        if configManager.config.savedPrompts.isEmpty {
-          VStack(spacing: 12) {
-            Image(systemName: "text.bubble")
-              .font(.system(size: 32))
-              .foregroundColor(.secondary)
+  private var selectedPrompt: SavedPrompt? {
+    configManager.config.savedPrompts.find(by: selectedPromptID)
+  }
 
-            Text("No saved prompts")
-              .font(.subheadline)
-              .foregroundColor(.secondary)
-
-            Text("Create reusable prompts to attach when opening AI agent tabs.")
-              .font(.caption)
-              .foregroundColor(.secondary)
-              .multilineTextAlignment(.center)
-          }
-          .frame(maxWidth: .infinity)
-          .padding(.vertical, 16)
-        } else {
-          ForEach(configManager.config.savedPrompts) { prompt in
-            SavedPromptRow(
-              prompt: prompt,
-              onEdit: {
-                editingPrompt = prompt
-              },
-              onDelete: {
-                promptToDelete = prompt
-              }
-            )
-          }
-        }
+  private var sortedPrompts: [SavedPrompt] {
+    switch sortOption {
+    case .updatedNewest:
+      return configManager.config.savedPrompts.sorted { lhs, rhs in
+        lhs.updatedAt > rhs.updatedAt
       }
 
-      Section {
+    case .updatedOldest:
+      return configManager.config.savedPrompts.sorted { lhs, rhs in
+        lhs.updatedAt < rhs.updatedAt
+      }
+
+    case .nameAscending:
+      return configManager.config.savedPrompts.sorted { lhs, rhs in
+        lhs.name.localizedCaseInsensitiveCompare(rhs.name) == .orderedAscending
+      }
+
+    case .nameDescending:
+      return configManager.config.savedPrompts.sorted { lhs, rhs in
+        lhs.name.localizedCaseInsensitiveCompare(rhs.name) == .orderedDescending
+      }
+    }
+  }
+
+  var body: some View {
+    VStack(alignment: .leading, spacing: 12) {
+      HStack {
+        Text("Saved Prompts")
+          .font(.headline)
+
+        Spacer()
+
+        Picker("Sort", selection: $sortOption) {
+          ForEach(PromptSortOption.allCases) { option in
+            Text(option.displayName).tag(option)
+          }
+        }
+        .pickerStyle(.menu)
+      }
+
+      if configManager.config.savedPrompts.isEmpty {
+        VStack(spacing: 12) {
+          Image(systemName: "text.bubble")
+            .font(.system(size: 32))
+            .foregroundColor(.secondary)
+
+          Text("No saved prompts")
+            .font(.subheadline)
+            .foregroundColor(.secondary)
+
+          Text("Create reusable prompts to attach when opening AI agent tabs.")
+            .font(.caption)
+            .foregroundColor(.secondary)
+            .multilineTextAlignment(.center)
+        }
+        .frame(maxWidth: .infinity, minHeight: 220)
+      } else {
+        Table(sortedPrompts, selection: $selectedPromptID) {
+          TableColumn("Name") { prompt in
+            Text(prompt.name)
+              .lineLimit(1)
+              .contextMenu {
+                Button("Edit Prompt") {
+                  beginEditing(prompt)
+                }
+
+                Button("Delete Prompt", role: .destructive) {
+                  beginDeletion(prompt)
+                }
+              }
+              .onTapGesture(count: 2) {
+                beginEditing(prompt)
+              }
+          }
+
+          TableColumn("Description") { prompt in
+            Text(prompt.promptDescription.isEmpty ? "-" : prompt.promptDescription)
+              .lineLimit(1)
+              .foregroundColor(prompt.promptDescription.isEmpty ? .secondary : .primary)
+          }
+
+          TableColumn("Tags") { prompt in
+            Text(tagListText(for: prompt))
+              .lineLimit(1)
+              .foregroundColor(prompt.tagIDs.isEmpty ? .secondary : .primary)
+          }
+
+          TableColumn("Prompt") { prompt in
+            Text(prompt.previewText())
+              .font(.system(size: 11, design: .monospaced))
+              .lineLimit(1)
+              .foregroundColor(.secondary)
+          }
+
+          TableColumn("Updated") { prompt in
+            Text(prompt.updatedAt, format: .dateTime.year().month().day().hour().minute())
+              .foregroundColor(.secondary)
+          }
+        }
+        .frame(minHeight: 220)
+        .onDeleteCommand(perform: handleDeleteCommand)
+      }
+
+      HStack(spacing: 8) {
         Button {
           isAddingNew = true
         } label: {
@@ -782,19 +884,58 @@ struct PromptsSettingsTab: View {
             Text("Add Prompt")
           }
         }
+
+        Button {
+          editingPrompt = selectedPrompt
+        } label: {
+          HStack {
+            Image(systemName: "pencil")
+            Text("Edit")
+          }
+        }
+        .disabled(selectedPrompt == nil)
+
+        Button(role: .destructive) {
+          promptToDelete = selectedPrompt
+        } label: {
+          HStack {
+            Image(systemName: "trash")
+            Text("Delete")
+          }
+        }
+        .disabled(selectedPrompt == nil)
+
+        Spacer()
+
+        Button {
+          isManagingTags = true
+        } label: {
+          HStack {
+            Image(systemName: "tag")
+            Text("Manage Tags")
+          }
+        }
       }
+
+      Text("Tags are shared across prompts and can be renamed or deleted globally.")
+        .font(.caption)
+        .foregroundColor(.secondary)
     }
-    .formStyle(.grouped)
-    .scrollContentBackground(.hidden)
     .padding()
     .background(appBackgroundColor)
+    .sheet(isPresented: $isManagingTags) {
+      PromptTagsManagerSheet(tags: configManager.config.promptTags) { updatedTags in
+        applyTagChanges(updatedTags)
+      }
+    }
     .sheet(isPresented: $isAddingNew) {
-      PromptEditorSheet(prompt: nil) { newPrompt in
+      PromptEditorSheet(prompt: nil, availableTags: configManager.config.promptTags) { newPrompt in
         configManager.config.savedPrompts.append(newPrompt)
+        selectedPromptID = newPrompt.id
       }
     }
     .sheet(item: $editingPrompt) { prompt in
-      PromptEditorSheet(prompt: prompt) { updatedPrompt in
+      PromptEditorSheet(prompt: prompt, availableTags: configManager.config.promptTags) { updatedPrompt in
         if let index = configManager.config.savedPrompts.firstIndex(where: { $0.id == updatedPrompt.id }) {
           configManager.config.savedPrompts[index] = updatedPrompt
         }
@@ -813,7 +954,7 @@ struct PromptsSettingsTab: View {
 
       Button("Delete", role: .destructive) {
         if let prompt = promptToDelete {
-          configManager.config.savedPrompts.removeAll { $0.id == prompt.id }
+          deletePrompt(prompt)
         }
         promptToDelete = nil
       }
@@ -823,70 +964,259 @@ struct PromptsSettingsTab: View {
       }
     }
   }
+
+  private func applyTagChanges(_ updatedTags: [PromptTag]) {
+    let previousTagIDs = Set(configManager.config.promptTags.map(\.id))
+    let nextTagIDs = Set(updatedTags.map(\.id))
+    let removedTagIDs = previousTagIDs.subtracting(nextTagIDs)
+    configManager.config.promptTags = updatedTags
+
+    guard !removedTagIDs.isEmpty else {
+      return
+    }
+
+    for index in configManager.config.savedPrompts.indices {
+      let filtered = configManager.config.savedPrompts[index].tagIDs.filter { tagID in
+        !removedTagIDs.contains(tagID)
+      }
+      configManager.config.savedPrompts[index].tagIDs = filtered
+    }
+  }
+
+  private func beginEditing(_ prompt: SavedPrompt) {
+    selectedPromptID = prompt.id
+    editingPrompt = prompt
+  }
+
+  private func beginDeletion(_ prompt: SavedPrompt) {
+    selectedPromptID = prompt.id
+    promptToDelete = prompt
+  }
+
+  private func handleDeleteCommand() {
+    guard let selectedPrompt else {
+      return
+    }
+
+    promptToDelete = selectedPrompt
+  }
+
+  private func deletePrompt(_ prompt: SavedPrompt) {
+    configManager.config.savedPrompts.removeAll { existingPrompt in
+      existingPrompt.id == prompt.id
+    }
+
+    if selectedPromptID == prompt.id {
+      selectedPromptID = nil
+    }
+  }
+
+  private func tagListText(for prompt: SavedPrompt) -> String {
+    let names = prompt.tagIDs.compactMap { tagID in
+      configManager.config.promptTags.find(by: tagID)?.name
+    }
+
+    guard !names.isEmpty else {
+      return "-"
+    }
+
+    return names.joined(separator: ", ")
+  }
 }
 
-/// A row displaying a saved prompt with edit and delete actions.
-struct SavedPromptRow: View {
-  let prompt: SavedPrompt
-  let onEdit: () -> Void
-  let onDelete: () -> Void
+/// A sheet for creating, renaming, and deleting reusable prompt tags.
+struct PromptTagsManagerSheet: View {
+  let onSave: ([PromptTag]) -> Void
+
+  @Environment(\.dismiss) private var dismiss
+  @State private var tags: [PromptTag]
+  @State private var newTagName: String = ""
+  @State private var validationMessage: String?
+
+  init(
+    tags: [PromptTag],
+    onSave: @escaping ([PromptTag]) -> Void
+  ) {
+    self.onSave = onSave
+    _tags = State(initialValue: tags.sorted(by: { lhs, rhs in
+      lhs.name.localizedCaseInsensitiveCompare(rhs.name) == .orderedAscending
+    }))
+  }
+
+  private var canSave: Bool {
+    validationError == nil
+  }
+
+  private var validationError: String? {
+    let normalized = tags.map { normalizeTagName($0.name) }
+
+    if normalized.contains(where: \.isEmpty) {
+      return "Tag names cannot be empty."
+    }
+
+    let uniqueCount = Set(normalized).count
+    if uniqueCount != normalized.count {
+      return "Tag names must be unique."
+    }
+
+    return nil
+  }
 
   var body: some View {
-    VStack(alignment: .leading, spacing: 6) {
+    VStack(spacing: 0) {
       HStack {
-        Text(prompt.name)
-          .font(.system(size: 13, weight: .medium))
+        Text("Manage Prompt Tags")
+          .font(.headline)
 
         Spacer()
 
         Button {
-          onEdit()
+          dismiss()
         } label: {
-          Image(systemName: "pencil")
-            .font(.system(size: 12))
+          Image(systemName: "xmark.circle.fill")
+            .font(.system(size: 20))
+            .foregroundColor(.secondary)
         }
         .buttonStyle(.plain)
-        .foregroundColor(.secondary)
+      }
+      .padding(20)
 
-        Button {
-          onDelete()
-        } label: {
-          Image(systemName: "trash")
-            .font(.system(size: 12))
+      Divider()
+
+      VStack(alignment: .leading, spacing: 12) {
+        HStack(spacing: 8) {
+          TextField("New tag", text: $newTagName)
+            .textFieldStyle(.roundedBorder)
+
+          Button("Add") {
+            addTag()
+          }
+          .disabled(newTagName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
         }
-        .buttonStyle(.plain)
-        .foregroundColor(.secondary)
-      }
 
-      if !prompt.promptDescription.isEmpty {
-        Text(prompt.promptDescription)
-          .font(.system(size: 11))
-          .foregroundColor(.secondary)
-          .lineLimit(1)
-      }
+        if let validationMessage {
+          Text(validationMessage)
+            .font(.caption)
+            .foregroundColor(.red)
+        } else if let validationError {
+          Text(validationError)
+            .font(.caption)
+            .foregroundColor(.red)
+        }
 
-      Text(prompt.promptText)
-        .font(.system(size: 11, design: .monospaced))
-        .foregroundColor(.secondary)
-        .lineLimit(2)
-        .padding(6)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(appCardColor)
-        .cornerRadius(4)
+        if tags.isEmpty {
+          VStack(spacing: 8) {
+            Image(systemName: "tag")
+              .font(.system(size: 24))
+              .foregroundColor(.secondary)
+
+            Text("No tags yet")
+              .font(.subheadline)
+              .foregroundColor(.secondary)
+          }
+          .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else {
+          List {
+            ForEach($tags) { $tag in
+              HStack(spacing: 8) {
+                TextField("Tag name", text: $tag.name)
+                  .textFieldStyle(.roundedBorder)
+
+                Button(role: .destructive) {
+                  deleteTag(tag.id)
+                } label: {
+                  Image(systemName: "trash")
+                }
+                .buttonStyle(.borderless)
+              }
+            }
+          }
+          .listStyle(.inset)
+        }
+      }
+      .padding(20)
+
+      Divider()
+
+      HStack {
+        Button("Cancel") {
+          dismiss()
+        }
+        .keyboardShortcut(.escape)
+
+        Spacer()
+
+        Button("Save") {
+          save()
+        }
+        .buttonStyle(.borderedProminent)
+        .disabled(!canSave)
+        .keyboardShortcut(.return, modifiers: .command)
+      }
+      .padding(16)
     }
-    .padding(.vertical, 4)
+    .frame(width: 460, height: 420)
+    .background(appBackgroundColor)
+  }
+
+  private func addTag() {
+    validationMessage = nil
+    let trimmed = newTagName.trimmingCharacters(in: .whitespacesAndNewlines)
+
+    guard !trimmed.isEmpty else {
+      return
+    }
+
+    let normalized = normalizeTagName(trimmed)
+    let hasDuplicate = tags.contains { tag in
+      normalizeTagName(tag.name) == normalized
+    }
+
+    guard !hasDuplicate else {
+      validationMessage = "Tag \"\(trimmed)\" already exists."
+      return
+    }
+
+    tags.append(PromptTag(name: trimmed))
+    tags.sort { lhs, rhs in
+      lhs.name.localizedCaseInsensitiveCompare(rhs.name) == .orderedAscending
+    }
+    newTagName = ""
+  }
+
+  private func deleteTag(_ tagID: UUID) {
+    tags.removeAll { tag in
+      tag.id == tagID
+    }
+  }
+
+  private func save() {
+    let cleaned = tags.map { tag in
+      PromptTag(id: tag.id, name: tag.name.trimmingCharacters(in: .whitespacesAndNewlines))
+    }
+
+    onSave(cleaned)
+    dismiss()
+  }
+
+  private func normalizeTagName(_ value: String) -> String {
+    value
+      .trimmingCharacters(in: .whitespacesAndNewlines)
+      .lowercased()
   }
 }
 
 /// A sheet for creating or editing a saved prompt.
 struct PromptEditorSheet: View {
   let prompt: SavedPrompt?
+  let availableTags: [PromptTag]
   let onSave: (SavedPrompt) -> Void
 
   @Environment(\.dismiss) private var dismiss
   @State private var name: String = ""
   @State private var promptDescription: String = ""
   @State private var promptText: String = ""
+  @State private var selectedTagIDs: Set<UUID> = []
 
   /// Maximum allowed length for prompt text to stay within CLI argument limits.
   private let maxPromptLength = 10_000
@@ -937,6 +1267,30 @@ struct PromptEditorSheet: View {
 
           TextField("Brief description of this prompt", text: $promptDescription)
             .textFieldStyle(.roundedBorder)
+        }
+
+        if !availableTags.isEmpty {
+          VStack(alignment: .leading, spacing: 6) {
+            Text("Tags")
+              .font(.system(size: 11, weight: .semibold))
+              .foregroundColor(.secondary)
+
+            ScrollView {
+              VStack(alignment: .leading, spacing: 6) {
+                ForEach(sortedAvailableTags) { tag in
+                  Toggle(isOn: tagBinding(for: tag.id)) {
+                    Text(tag.name)
+                      .font(.system(size: 12))
+                  }
+                  .toggleStyle(.checkbox)
+                }
+              }
+            }
+            .frame(maxWidth: .infinity, maxHeight: 110)
+            .padding(10)
+            .background(appCardColor)
+            .cornerRadius(6)
+          }
         }
 
         VStack(alignment: .leading, spacing: 6) {
@@ -990,7 +1344,14 @@ struct PromptEditorSheet: View {
         name = prompt.name
         promptDescription = prompt.promptDescription
         promptText = prompt.promptText
+        selectedTagIDs = Set(prompt.tagIDs)
       }
+    }
+  }
+
+  private var sortedAvailableTags: [PromptTag] {
+    availableTags.sorted { lhs, rhs in
+      lhs.name.localizedCaseInsensitiveCompare(rhs.name) == .orderedAscending
     }
   }
 
@@ -1009,11 +1370,29 @@ struct PromptEditorSheet: View {
       name: trimmedName,
       promptDescription: promptDescription.trimmingCharacters(in: .whitespaces),
       promptText: trimmedText,
+      tagIDs: selectedTagIDs.sorted(by: { lhs, rhs in
+        lhs.uuidString < rhs.uuidString
+      }),
       createdAt: prompt?.createdAt ?? Date(),
       updatedAt: Date()
     )
     onSave(saved)
     dismiss()
+  }
+
+  private func tagBinding(for tagID: UUID) -> Binding<Bool> {
+    Binding(
+      get: {
+        selectedTagIDs.contains(tagID)
+      },
+      set: { isSelected in
+        if isSelected {
+          selectedTagIDs.insert(tagID)
+        } else {
+          selectedTagIDs.remove(tagID)
+        }
+      }
+    )
   }
 }
 
