@@ -27,6 +27,9 @@ struct AppConfig: Codable, Equatable {
   /// Maximum number of recent folders to remember.
   var maxRecentFolders: Int = 10
 
+  /// Last used launch type on the startup page, restored across sessions.
+  var lastUsedLaunchType: LaunchType?
+
   // MARK: - Agent Paths
 
   /// Custom path to Claude CLI (nil uses auto-detection).

@@ -51,8 +51,8 @@ struct SlothyTerminalApp: App {
 
       /// File menu.
       CommandGroup(replacing: .newItem) {
-        Button("New Chat Tab") {
-          appState.showChatFolderSelector()
+        Button("New Session...") {
+          appState.showStartupPage()
         }
         .keyboardShortcut("t", modifiers: .command)
 

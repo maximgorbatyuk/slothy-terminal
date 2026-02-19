@@ -98,7 +98,7 @@ struct NewTabButton: View {
 
   var body: some View {
     Button {
-      appState.showNewTabModal()
+      appState.showStartupPage()
     } label: {
       Image(systemName: "plus")
         .font(.system(size: 12, weight: .medium))

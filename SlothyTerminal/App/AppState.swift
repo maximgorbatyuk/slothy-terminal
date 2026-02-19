@@ -3,7 +3,7 @@ import SwiftUI
 
 /// The type of modal currently being displayed.
 enum ModalType: Identifiable {
-  case newTab(AgentType?)
+  case startupPage
   case folderSelector(AgentType)
   case chatFolderSelector(AgentType)
   case telegramBotFolderSelector
@@ -13,8 +13,8 @@ enum ModalType: Identifiable {
 
   var id: String {
     switch self {
-    case .newTab(let agent):
-      return "newTab-\(agent?.rawValue ?? "none")"
+    case .startupPage:
+      return "startupPage"
     case .folderSelector(let agent):
       return "folderSelector-\(agent.rawValue)"
     case .chatFolderSelector(let agent):
@@ -42,6 +42,10 @@ class AppState {
   var activeModal: ModalType?
   var taskQueueState = TaskQueueState()
   var taskOrchestrator: TaskOrchestrator?
+
+  /// Shared working directory preselected across tabs within this session.
+  var globalWorkingDirectory: URL?
+
   private var configManager = ConfigManager.shared
 
   init() {
@@ -176,9 +180,9 @@ class AppState {
     }
   }
 
-  /// Shows the new tab modal, optionally pre-selecting an agent.
-  func showNewTabModal(agent: AgentType? = nil) {
-    activeModal = .newTab(agent)
+  /// Shows the startup page for creating a new session.
+  func showStartupPage() {
+    activeModal = .startupPage
   }
 
   /// Shows the folder selector for creating a new tab with the specified agent.

@@ -167,72 +167,27 @@ struct EmptyTerminalView: View {
           .font(.title)
           .fontWeight(.semibold)
 
-        Text("Choose a tab type to get started")
+        Text("Open a new session to get started")
           .font(.subheadline)
           .foregroundColor(.secondary)
       }
 
-      VStack(spacing: 12) {
-        /// Chat mode buttons — primary entries.
-        ForEach(AgentType.allCases.filter(\.supportsChatMode)) { agentType in
-          TabTypeButton(chatAgent: agentType) {
-            appState.showChatFolderSelector(for: agentType)
-          }
+      Button {
+        appState.showStartupPage()
+      } label: {
+        HStack(spacing: 8) {
+          Image(systemName: "plus.circle.fill")
+            .font(.system(size: 16))
+          Text("New Session")
+            .font(.system(size: 14, weight: .medium))
         }
-
-        Divider()
-          .padding(.horizontal, 16)
-
-        ForEach(AgentType.allCases) { agentType in
-          TabTypeButton(agentType: agentType) {
-            appState.showFolderSelector(for: agentType)
-          }
-        }
-
-        Divider()
-          .padding(.horizontal, 16)
-
-        TelegramBotButton {
-          appState.showTelegramFolderSelector()
-        }
+        .frame(maxWidth: 200)
       }
-      .frame(maxWidth: 320)
+      .buttonStyle(.borderedProminent)
+      .controlSize(.large)
     }
     .frame(maxWidth: .infinity, maxHeight: .infinity)
     .background(appBackgroundColor)
-  }
-}
-
-/// Button for creating a new Telegram bot tab.
-private struct TelegramBotButton: View {
-  let action: () -> Void
-
-  var body: some View {
-    Button(action: action) {
-      HStack(spacing: 12) {
-        Image(systemName: "paperplane")
-          .font(.system(size: 20))
-          .foregroundColor(Color(red: 0.33, green: 0.67, blue: 0.91))
-          .frame(width: 32)
-
-        VStack(alignment: .leading, spacing: 2) {
-          Text("New Telegram Bot")
-            .font(.system(size: 14, weight: .medium))
-
-          Text("Bot listener with prompt execution")
-            .font(.system(size: 11))
-            .foregroundColor(.secondary)
-        }
-
-        Spacer()
-      }
-      .padding(.horizontal, 16)
-      .padding(.vertical, 12)
-      .frame(maxWidth: .infinity, alignment: .leading)
-      .background(appCardColor)
-      .cornerRadius(8)
-    }
-    .buttonStyle(.plain)
   }
 }
 

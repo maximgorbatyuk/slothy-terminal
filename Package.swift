@@ -56,6 +56,7 @@ let package = Package(
         "Agents/OpenCodeAgent.swift",
         "Agents/TerminalAgent.swift",
         "Models/SavedPrompt.swift",
+        "Models/LaunchType.swift",
 
         /// Chat core (non-UI) — Engine, Models, Parser, Transport, State adapter.
         "Chat/Engine/ChatSessionState.swift",
