@@ -4,6 +4,7 @@ import Foundation
 enum TabMode: String, Codable, CaseIterable {
   case terminal
   case chat
+  case telegramBot
 
   var displayName: String {
     switch self {
@@ -12,6 +13,9 @@ enum TabMode: String, Codable, CaseIterable {
 
     case .chat:
       return "Chat"
+
+    case .telegramBot:
+      return "Telegram Bot"
     }
   }
 }
@@ -35,6 +39,9 @@ class Tab: Identifiable {
 
   /// The chat state for chat-mode tabs.
   var chatState: ChatState?
+
+  /// The Telegram bot runtime for telegram-bot-mode tabs.
+  var telegramRuntime: TelegramBotRuntime?
 
   init(
     id: UUID = UUID(),
@@ -79,13 +86,21 @@ class Tab: Identifiable {
   }
 
   /// Stable tab label shown in the tab bar.
-  /// Examples: "Claude | chat", "Opencode | cli".
+  /// Examples: "Claude | chat", "Opencode | cli", "Telegram | bot".
   var tabName: String {
-    "\(agentNameForTab) | \(modeNameForTab)"
+    if mode == .telegramBot {
+      return "Telegram | bot"
+    }
+
+    return "\(agentNameForTab) | \(modeNameForTab)"
   }
 
   /// Agent label used in tab/window titles.
   private var agentNameForTab: String {
+    if mode == .telegramBot {
+      return "Telegram"
+    }
+
     switch agentType {
     case .claude:
       return "Claude"
@@ -106,6 +121,9 @@ class Tab: Identifiable {
 
     case .terminal:
       return "cli"
+
+    case .telegramBot:
+      return "bot"
     }
   }
 

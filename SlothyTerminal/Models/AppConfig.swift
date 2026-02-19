@@ -109,6 +109,38 @@ struct AppConfig: Codable, Equatable {
   /// Custom keyboard shortcuts.
   var shortcuts: [String: String] = [:]
 
+  // MARK: - Telegram Settings
+
+  /// Bot token for the Telegram Bot API.
+  var telegramBotToken: String?
+
+  /// User ID allowed to interact with the bot.
+  var telegramAllowedUserID: Int64?
+
+  /// Which agent to use for prompt execution.
+  var telegramExecutionAgent: AgentType = .claude
+
+  /// Whether the bot auto-starts when the tab is opened.
+  var telegramAutoStartOnOpen: Bool = true
+
+  /// Default listen mode when the bot starts.
+  var telegramDefaultListenMode: TelegramBotMode = .passive
+
+  /// Optional prefix prepended to bot replies.
+  var telegramReplyPrefix: String?
+
+  /// Root directory path for /open-directory command.
+  var telegramRootDirectoryPath: String?
+
+  /// Predefined subfolder appended to root directory for /open-directory.
+  var telegramPredefinedOpenSubpath: String?
+
+  /// Tab mode for tabs opened via /open-directory.
+  var telegramOpenDirectoryTabMode: TabMode = .chat
+
+  /// Agent type for tabs opened via /open-directory.
+  var telegramOpenDirectoryAgent: AgentType = .claude
+
   // MARK: - Window State
 
   /// Saved window state for restoration.

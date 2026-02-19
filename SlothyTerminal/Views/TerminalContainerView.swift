@@ -33,7 +33,9 @@ struct ActiveTerminalView: View {
     ZStack {
       appCardColor
 
-      if tab.mode == .chat, let chatState = tab.chatState {
+      if tab.mode == .telegramBot, let runtime = tab.telegramRuntime {
+        TelegramBotView(runtime: runtime)
+      } else if tab.mode == .chat, let chatState = tab.chatState {
         ChatView(chatState: chatState)
       } else if let error = agentUnavailableError {
         AgentUnavailableView(agentName: tab.agent.displayName, error: error)
@@ -60,6 +62,15 @@ struct ActiveTerminalView: View {
       }
     }
     .task {
+      /// Telegram bot mode auto-start.
+      if tab.mode == .telegramBot {
+        let config = ConfigManager.shared.config
+        if config.telegramAutoStartOnOpen {
+          tab.telegramRuntime?.start(mode: config.telegramDefaultListenMode)
+        }
+        return
+      }
+
       /// Chat mode doesn't need PTY availability checks.
       if tab.mode == .chat {
         tab.usageStats.startSession()
@@ -178,11 +189,51 @@ struct EmptyTerminalView: View {
             appState.showFolderSelector(for: agentType)
           }
         }
+
+        Divider()
+          .padding(.horizontal, 16)
+
+        TelegramBotButton {
+          appState.showTelegramFolderSelector()
+        }
       }
       .frame(maxWidth: 320)
     }
     .frame(maxWidth: .infinity, maxHeight: .infinity)
     .background(appBackgroundColor)
+  }
+}
+
+/// Button for creating a new Telegram bot tab.
+private struct TelegramBotButton: View {
+  let action: () -> Void
+
+  var body: some View {
+    Button(action: action) {
+      HStack(spacing: 12) {
+        Image(systemName: "paperplane")
+          .font(.system(size: 20))
+          .foregroundColor(Color(red: 0.33, green: 0.67, blue: 0.91))
+          .frame(width: 32)
+
+        VStack(alignment: .leading, spacing: 2) {
+          Text("New Telegram Bot")
+            .font(.system(size: 14, weight: .medium))
+
+          Text("Bot listener with prompt execution")
+            .font(.system(size: 11))
+            .foregroundColor(.secondary)
+        }
+
+        Spacer()
+      }
+      .padding(.horizontal, 16)
+      .padding(.vertical, 12)
+      .frame(maxWidth: .infinity, alignment: .leading)
+      .background(appCardColor)
+      .cornerRadius(8)
+    }
+    .buttonStyle(.plain)
   }
 }
 

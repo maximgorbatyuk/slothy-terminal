@@ -5,6 +5,7 @@ enum SettingsSection: String, CaseIterable, Identifiable {
   case general
   case chat
   case agents
+  case telegram
   case appearance
   case shortcuts
   case prompts
@@ -22,6 +23,9 @@ enum SettingsSection: String, CaseIterable, Identifiable {
 
     case .agents:
       return "Agents"
+
+    case .telegram:
+      return "Telegram"
 
     case .appearance:
       return "Appearance"
@@ -47,6 +51,9 @@ enum SettingsSection: String, CaseIterable, Identifiable {
 
     case .agents:
       return "cpu"
+
+    case .telegram:
+      return "paperplane"
 
     case .appearance:
       return "paintbrush"
@@ -86,6 +93,9 @@ struct SettingsView: View {
 
         case .agents:
           AgentsSettingsTab()
+
+        case .telegram:
+          TelegramSettingsTab()
 
         case .appearance:
           AppearanceSettingsTab()

@@ -79,6 +79,17 @@ let package = Package(
         "Chat/OpenCode/OpenCodeCLITransport.swift",
         "Chat/State/ChatState.swift",
 
+        /// Telegram Bot — Models, API, Runtime.
+        "Telegram/Models/TelegramModels.swift",
+        "Telegram/Models/TelegramAPIModels.swift",
+        "Telegram/Models/TelegramTimelineMessage.swift",
+        "Telegram/Models/TelegramCommand.swift",
+        "Telegram/API/TelegramBotAPIClient.swift",
+        "Telegram/API/TelegramMessageChunker.swift",
+        "Telegram/Runtime/TelegramBotRuntime.swift",
+        "Telegram/Runtime/TelegramCommandHandler.swift",
+        "Telegram/Runtime/TelegramPromptExecutor.swift",
+
         /// Task Queue — Models, Storage, State, Runner, Orchestrator.
         "TaskQueue/Models/QueuedTask.swift",
         "TaskQueue/Storage/TaskQueueSnapshot.swift",

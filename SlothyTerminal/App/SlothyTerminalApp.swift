@@ -77,6 +77,10 @@ struct SlothyTerminalApp: App {
         }
         .keyboardShortcut("t", modifiers: [.command, .shift, .option])
 
+        Button("New Telegram Bot Tab") {
+          appState.showTelegramFolderSelector()
+        }
+
         Divider()
 
         Button("Open Folder...") {

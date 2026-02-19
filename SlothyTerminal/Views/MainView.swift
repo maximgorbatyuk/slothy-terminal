@@ -182,6 +182,11 @@ struct ModalRouter: View {
         appState.createChatTab(agent: agent, directory: selectedDirectory, initialPrompt: selectedPrompt?.promptText)
       }
 
+    case .telegramBotFolderSelector:
+      FolderSelectorModal(agent: .claude) { selectedDirectory, _ in
+        appState.createTelegramBotTab(directory: selectedDirectory)
+      }
+
     case .settings:
       Text("Settings")
         .frame(width: 500, height: 400)
@@ -312,6 +317,14 @@ struct AgentSelectionView: View {
             createTab(agent: agent)
           }
         }
+
+        Divider()
+          .padding(.horizontal, 4)
+
+        /// Telegram bot button.
+        TelegramBotTabButton {
+          createTelegramBotTab()
+        }
       }
       .padding(20)
     }
@@ -334,6 +347,13 @@ struct AgentSelectionView: View {
       ? savedPrompts.find(by: selectedPromptID)
       : nil
     appState.createTab(agent: agent, directory: currentDirectory, initialPrompt: prompt)
+    dismiss()
+  }
+
+  /// Creates a Telegram bot tab with the selected directory.
+  private func createTelegramBotTab() {
+    recentFoldersManager.addRecentFolder(currentDirectory)
+    appState.createTelegramBotTab(directory: currentDirectory)
     dismiss()
   }
 
@@ -433,6 +453,39 @@ struct TabTypeButton: View {
     self.showBadge = true
     self.checkAvailability = { AgentFactory.createAgent(for: agent).isAvailable() }
     self.action = action
+  }
+}
+
+/// Button for creating a new Telegram bot tab in the agent selection modal.
+struct TelegramBotTabButton: View {
+  let action: () -> Void
+
+  var body: some View {
+    Button(action: action) {
+      HStack(spacing: 12) {
+        Image(systemName: "paperplane")
+          .font(.system(size: 20))
+          .foregroundColor(Color(red: 0.33, green: 0.67, blue: 0.91))
+          .frame(width: 32)
+
+        VStack(alignment: .leading, spacing: 2) {
+          Text("New Telegram Bot")
+            .font(.system(size: 14, weight: .medium))
+
+          Text("Bot listener with prompt execution")
+            .font(.system(size: 11))
+            .foregroundColor(.secondary)
+        }
+
+        Spacer()
+      }
+      .padding(.horizontal, 16)
+      .padding(.vertical, 12)
+      .frame(maxWidth: .infinity, alignment: .leading)
+      .background(appCardColor)
+      .cornerRadius(8)
+    }
+    .buttonStyle(.plain)
   }
 }
 
