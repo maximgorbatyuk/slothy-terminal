@@ -31,20 +31,12 @@ class TelegramBotRuntime {
 
   // MARK: - Lifecycle
 
-  /// Starts the bot with the given mode.
-  func start(mode startMode: TelegramBotMode) {
-    guard startMode != .stopped else {
-      return
-    }
-
+  /// Starts the bot in Listen Only (passive) mode.
+  ///
+  /// The bot always starts in passive mode. Execute mode must be
+  /// activated explicitly via `switchMode(.execute)` after the bot is running.
+  func start() {
     guard pollingTask == nil else {
-      if mode != startMode {
-        mode = startMode
-        interactionState = .idle
-        addEvent(.info, "Bot already running. Switched to \(startMode.displayName) mode")
-        addSystemMessage("Switched to \(startMode.displayName) mode")
-      }
-
       return
     }
 
@@ -64,11 +56,11 @@ class TelegramBotRuntime {
       return
     }
 
-    mode = startMode
+    mode = .passive
     status = .running
 
-    addEvent(.info, "Starting bot in \(startMode.displayName) mode")
-    addSystemMessage("Bot started in \(startMode.displayName) mode")
+    addEvent(.info, "Starting bot in \(TelegramBotMode.passive.displayName) mode")
+    addSystemMessage("Bot started in \(TelegramBotMode.passive.displayName) mode")
 
     executor = TelegramPromptExecutor(
       workingDirectory: workingDirectory,
@@ -108,7 +100,7 @@ class TelegramBotRuntime {
     }
 
     guard mode != .stopped else {
-      start(mode: newMode)
+      start()
       return
     }
 
@@ -121,7 +113,7 @@ class TelegramBotRuntime {
   // MARK: - Polling Loop
 
   private func pollingLoop(client: TelegramBotAPIClient) async {
-    var offset: Int64?
+    var offset = await prepareInitialOffset(client: client)
     var backoffSeconds: UInt64 = 1
 
     while !Task.isCancelled {
@@ -151,6 +143,22 @@ class TelegramBotRuntime {
         addEvent(.warning, "Polling error: \(error.localizedDescription)")
         await exponentialBackoff(&backoffSeconds)
       }
+    }
+  }
+
+  private func prepareInitialOffset(client: TelegramBotAPIClient) async -> Int64? {
+    do {
+      let pendingUpdates = try await client.getUpdates(offset: nil, timeout: 0)
+
+      guard let lastUpdate = pendingUpdates.last else {
+        return nil
+      }
+
+      addEvent(.info, "Skipped \(pendingUpdates.count) pending update(s) from before startup")
+      return lastUpdate.updateId + 1
+    } catch {
+      addEvent(.warning, "Failed to drain pending updates on startup: \(error.localizedDescription)")
+      return nil
     }
   }
 
@@ -202,10 +210,16 @@ class TelegramBotRuntime {
       return
     }
 
-    /// In execute mode, run the text as a prompt.
+    /// In execute mode, confirm receipt then run the text as a prompt.
     if mode == .execute {
+      await sendReply("Message received. Processing...", chatId: message.chat.id, client: client)
       await executePrompt(text, message: message, client: client)
     } else {
+      await sendReply(
+        "Message received. Current mode (Listen Only) does not allow execution. Switch to Execute mode to run prompts.",
+        chatId: message.chat.id,
+        client: client
+      )
       addEvent(.info, "Passive mode — not executing prompt")
     }
   }
@@ -224,6 +238,9 @@ class TelegramBotRuntime {
     case .report:
       let report = delegate?.telegramBotRequestReport() ?? "No app state available."
       await sendReply(report, chatId: message.chat.id, client: client)
+
+    case .showMode:
+      await sendReply("Current mode: \(mode.displayName)", chatId: message.chat.id, client: client)
 
     case .openDirectory:
       await handleOpenDirectory(message: message, client: client)
@@ -390,6 +407,11 @@ class TelegramBotRuntime {
     message: TelegramAPIMessage,
     client: TelegramBotAPIClient
   ) async {
+    guard mode == .execute else {
+      addEvent(.info, "Skipped execution — not in Execute mode")
+      return
+    }
+
     guard let executor else {
       await sendReply("Executor not available.", chatId: message.chat.id, client: client)
       return

@@ -64,9 +64,8 @@ struct ActiveTerminalView: View {
     .task {
       /// Telegram bot mode auto-start.
       if tab.mode == .telegramBot {
-        let config = ConfigManager.shared.config
-        if config.telegramAutoStartOnOpen {
-          tab.telegramRuntime?.start(mode: config.telegramDefaultListenMode)
+        if ConfigManager.shared.config.telegramAutoStartOnOpen {
+          tab.telegramRuntime?.start()
         }
         return
       }

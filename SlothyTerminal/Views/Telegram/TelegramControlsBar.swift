@@ -4,19 +4,11 @@ import SwiftUI
 struct TelegramControlsBar: View {
   let runtime: TelegramBotRuntime
 
-  private var configManager: ConfigManager
-
-  init(runtime: TelegramBotRuntime) {
-    self.runtime = runtime
-    self.configManager = ConfigManager.shared
-  }
-
   var body: some View {
     HStack(spacing: 8) {
       if runtime.mode == .stopped {
         Button {
-          let defaultMode = configManager.config.telegramDefaultListenMode
-          runtime.start(mode: defaultMode)
+          runtime.start()
         } label: {
           Label("Start", systemImage: "play.fill")
         }

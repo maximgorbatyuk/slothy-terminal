@@ -13,12 +13,13 @@ enum TelegramCommandHandler {
     """
     Available commands:
     /help - Show this message
+    /show_mode - Show current bot mode
     /report - Show current tab/session status
-    /open-directory - Open a tab for the configured directory
-    /new-task - Create a task via guided flow
+    /open_directory - Open a tab for the configured directory
+    /new_task - Create a task via guided flow
 
     Send any other text to execute it as a prompt (in Execute mode).
-    /new-task scheduling accepts: immediately | queue
+    /new_task scheduling accepts: immediately | queue
     """
   }
 

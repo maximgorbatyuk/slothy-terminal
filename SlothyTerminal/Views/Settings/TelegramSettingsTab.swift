@@ -73,11 +73,9 @@ struct TelegramSettingsTab: View {
           isOn: Bindable(configManager).config.telegramAutoStartOnOpen
         )
 
-        Picker("Default mode", selection: Bindable(configManager).config.telegramDefaultListenMode) {
-          Text("Execute").tag(TelegramBotMode.execute)
-          Text("Listen Only").tag(TelegramBotMode.passive)
-        }
-        .pickerStyle(.segmented)
+        Text("Bot always starts in Listen Only mode. Switch to Execute mode manually.")
+          .font(.caption)
+          .foregroundColor(.secondary)
 
         TextField(
           "Reply prefix (optional)",

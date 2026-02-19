@@ -123,7 +123,8 @@ struct AppConfig: Codable, Equatable {
   /// Whether the bot auto-starts when the tab is opened.
   var telegramAutoStartOnOpen: Bool = true
 
-  /// Default listen mode when the bot starts.
+  /// Deprecated — bot always starts in passive mode now.
+  /// Kept for backward-compatible JSON decoding of existing configs.
   var telegramDefaultListenMode: TelegramBotMode = .passive
 
   /// Optional prefix prepended to bot replies.
