@@ -112,6 +112,7 @@ final class AgentRuntime: AgentRuntimeProtocol, @unchecked Sendable {
     let sseStream = transport.stream(request: prepared)
     let providerID = input.model.providerID
 
+    let anthropicParser = ProviderStreamParser()
     return AsyncThrowingStream { continuation in
       let task = Task {
         do {
@@ -119,7 +120,7 @@ final class AgentRuntime: AgentRuntimeProtocol, @unchecked Sendable {
             let events: [ProviderStreamEvent]
             switch providerID {
             case .anthropic:
-              events = ProviderStreamParser.parseAnthropic(event: sseEvent)
+              events = anthropicParser.parseAnthropic(event: sseEvent)
 
             case .openAI:
               events = ProviderStreamParser.parseOpenAI(event: sseEvent)

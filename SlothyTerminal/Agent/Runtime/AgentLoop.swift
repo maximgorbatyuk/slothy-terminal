@@ -116,11 +116,22 @@ final class AgentLoop: @unchecked Sendable {
       }
 
       for call in accumulated.toolCalls {
+        /// Parse arguments JSON string into a JSONValue object so the
+        /// API receives a proper JSON object, not a JSON-encoded string.
+        let inputValue: JSONValue
+        if let data = call.arguments.data(using: .utf8),
+           let parsed = try? JSONDecoder().decode(JSONValue.self, from: data)
+        {
+          inputValue = parsed
+        } else {
+          inputValue = .object([:])
+        }
+
         assistantContent.append(.object([
           "type": .string("tool_use"),
           "id": .string(call.id),
           "name": .string(call.name),
-          "input": .string(call.arguments),
+          "input": inputValue,
         ]))
       }
 
@@ -190,12 +201,8 @@ final class AgentLoop: @unchecked Sendable {
     let stream = try await runtime.stream(input)
     var result = AccumulatedResponse()
 
-    /// Track tool calls by their real ID (e.g., "toolu_123").
-    var toolCallsByRealID: [String: Int] = [:]
-    /// Track tool calls by their stream index (e.g., "0", "1") for delta/end events.
-    var toolCallsByStreamIndex: [Int: Int] = [:]
-    /// Map stream index to real ID for resolving deltas.
-    var streamIndexToRealID: [Int: String] = [:]
+    /// Track tool calls by their ID (real or provider-assigned).
+    var toolCallsByID: [String: Int] = [:]
 
     for try await event in stream {
       switch event {
@@ -212,50 +219,17 @@ final class AgentLoop: @unchecked Sendable {
         result.toolCalls.append(AccumulatedToolCall(
           id: id, name: name, arguments: ""
         ))
-        toolCallsByRealID[id] = arrayIndex
+        toolCallsByID[id] = arrayIndex
         onEvent?(.toolCallStart(id: id, name: name))
 
-      case .toolCallDelta(let streamID, let delta):
-        /// Try to resolve the stream ID to an array index.
-        /// First try as real ID, then as numeric index.
-        let arrayIndex: Int?
-        if let idx = toolCallsByRealID[streamID] {
-          arrayIndex = idx
-        } else if let numericIndex = Int(streamID),
-                  let idx = toolCallsByStreamIndex[numericIndex]
-        {
-          arrayIndex = idx
-        } else {
-          /// Fallback: assume sequential ordering and use numeric index directly.
-          let numericIndex = Int(streamID) ?? 0
-          if numericIndex < result.toolCalls.count {
-            arrayIndex = numericIndex
-            toolCallsByStreamIndex[numericIndex] = numericIndex
-          } else {
-            arrayIndex = nil
-          }
-        }
-
-        if let idx = arrayIndex, idx < result.toolCalls.count {
+      case .toolCallDelta(let id, let delta):
+        if let idx = toolCallsByID[id], idx < result.toolCalls.count {
           result.toolCalls[idx].arguments += delta
-          let realID = result.toolCalls[idx].id
-          onEvent?(.toolCallDelta(id: realID, argumentsDelta: delta))
+          onEvent?(.toolCallDelta(id: id, argumentsDelta: delta))
         }
 
-      case .toolCallEnd(let streamID):
-        /// Resolve stream ID to array index same as delta.
-        let arrayIndex: Int?
-        if let idx = toolCallsByRealID[streamID] {
-          arrayIndex = idx
-        } else if let numericIndex = Int(streamID),
-                  numericIndex < result.toolCalls.count
-        {
-          arrayIndex = numericIndex
-        } else {
-          arrayIndex = nil
-        }
-
-        if let idx = arrayIndex, idx < result.toolCalls.count {
+      case .toolCallEnd(let id):
+        if let idx = toolCallsByID[id], idx < result.toolCalls.count {
           let call = result.toolCalls[idx]
           onEvent?(.toolCallComplete(
             id: call.id, name: call.name, arguments: call.arguments

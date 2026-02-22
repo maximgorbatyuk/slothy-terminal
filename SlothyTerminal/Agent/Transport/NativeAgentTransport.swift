@@ -27,7 +27,7 @@ extension AgentLoop: AgentLoopProtocol {}
 /// - `toolResult`        → `userToolResult(toolUseId, content, isError)`
 /// - `stepEnd`           → `messageStop`
 /// - `finished`          → `result(text, inputTokens, outputTokens)`
-final class NativeAgentTransport: ChatTransport {
+final class NativeAgentTransport: ChatTransport, @unchecked Sendable {
 
   private let loop: AgentLoopProtocol
   private let model: ModelDescriptor
@@ -135,10 +135,12 @@ final class NativeAgentTransport: ChatTransport {
     var thinkingBlockOpen: Bool { thinkingBlockIndex != nil }
   }
 
+  /// Runs the agent loop on the current task. All mutable state
+  /// mutations and callback dispatches happen on MainActor.
   private func runLoop(userMessage: String) async {
-    /// Reset per-turn token counters.
     turnInputTokens = 0
     turnOutputTokens = 0
+    blockState = BlockState()
 
     let input = RuntimeInput(
       sessionID: sessionID,
@@ -154,33 +156,37 @@ final class NativeAgentTransport: ChatTransport {
       permissions: permissions
     )
 
-    blockState = BlockState()
-
     do {
       let finalText = try await loop.run(
         input: input,
         messages: &messages,
         context: context,
         onEvent: { [weak self] event in
-          guard let self else {
-            return
+          /// Dispatch to MainActor since AgentEventHandler is @Sendable
+          /// and may be called from any isolation domain.
+          Task { @MainActor [weak self] in
+            self?.mapEvent(event)
           }
-          self.mapEvent(event)
         }
       )
 
-      /// Emit the final result event with per-turn tokens.
-      onEvent?(.result(
-        text: finalText,
-        inputTokens: turnInputTokens,
-        outputTokens: turnOutputTokens
-      ))
+      await MainActor.run {
+        onEvent?(.result(
+          text: finalText,
+          inputTokens: turnInputTokens,
+          outputTokens: turnOutputTokens
+        ))
+      }
     } catch is CancellationError {
-      onTerminated?(.cancelled)
+      await MainActor.run {
+        onTerminated?(.cancelled)
+      }
       return
     } catch {
-      onError?(error)
-      onTerminated?(.crash(exitCode: 1, stderr: error.localizedDescription))
+      await MainActor.run {
+        onError?(error)
+        onTerminated?(.crash(exitCode: 1, stderr: error.localizedDescription))
+      }
     }
   }
 
@@ -248,9 +254,8 @@ final class NativeAgentTransport: ChatTransport {
         text: delta
       ))
 
-    case .toolCallComplete(let id, _, _):
+    case .toolCallComplete:
       onEvent?(.contentBlockStop(index: blockState.toolBlockIndex))
-      _ = id
 
     case .toolResult(let id, _, let output, let isError):
       onEvent?(.userToolResult(

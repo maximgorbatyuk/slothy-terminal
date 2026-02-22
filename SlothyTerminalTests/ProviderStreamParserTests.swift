@@ -6,6 +6,8 @@ import Testing
 @Suite("ProviderStreamParser")
 struct ProviderStreamParserTests {
 
+  private let parser = ProviderStreamParser()
+
   // MARK: - Anthropic: Text
 
   @Test("Anthropic text_delta produces textDelta event")
@@ -17,7 +19,7 @@ struct ProviderStreamParserTests {
         """
     )
 
-    let events = ProviderStreamParser.parseAnthropic(event: event)
+    let events = parser.parseAnthropic(event: event)
 
     #expect(events.count == 1)
     if case .textDelta(let text) = events[0] {
@@ -38,7 +40,7 @@ struct ProviderStreamParserTests {
         """
     )
 
-    let events = ProviderStreamParser.parseAnthropic(event: event)
+    let events = parser.parseAnthropic(event: event)
 
     #expect(events.count == 1)
     if case .thinkingDelta(let text) = events[0] {
@@ -59,7 +61,7 @@ struct ProviderStreamParserTests {
         """
     )
 
-    let events = ProviderStreamParser.parseAnthropic(event: event)
+    let events = parser.parseAnthropic(event: event)
 
     #expect(events.count == 1)
     if case .toolCallStart(let id, let name) = events[0] {
@@ -70,39 +72,59 @@ struct ProviderStreamParserTests {
     }
   }
 
-  @Test("Anthropic input_json_delta produces toolCallDelta")
+  @Test("Anthropic input_json_delta produces toolCallDelta with real ID")
   func anthropicToolCallDelta() {
-    let event = SSEEvent(
+    /// Register the tool call first so the parser maps index → real ID.
+    let startEvent = SSEEvent(
+      event: "content_block_start",
+      data: """
+        {"type":"content_block_start","index":1,"content_block":{"type":"tool_use","id":"toolu_123","name":"bash"}}
+        """
+    )
+    _ = parser.parseAnthropic(event: startEvent)
+
+    let deltaEvent = SSEEvent(
       event: "content_block_delta",
       data: """
         {"type":"content_block_delta","index":1,"delta":{"type":"input_json_delta","partial_json":"{\\"command\\":"}}
         """
     )
 
-    let events = ProviderStreamParser.parseAnthropic(event: event)
+    let events = parser.parseAnthropic(event: deltaEvent)
 
     #expect(events.count == 1)
-    if case .toolCallDelta(_, let delta) = events[0] {
+    if case .toolCallDelta(let id, let delta) = events[0] {
+      #expect(id == "toolu_123")
       #expect(delta.contains("command"))
     } else {
       Issue.record("Expected toolCallDelta")
     }
   }
 
-  @Test("Anthropic content_block_stop produces toolCallEnd")
+  @Test("Anthropic content_block_stop produces toolCallEnd with real ID")
   func anthropicContentBlockStop() {
-    let event = SSEEvent(
+    /// First register the tool call via content_block_start so the parser
+    /// can map the block index to the real tool call ID.
+    let startEvent = SSEEvent(
+      event: "content_block_start",
+      data: """
+        {"type":"content_block_start","index":1,"content_block":{"type":"tool_use","id":"toolu_456","name":"read"}}
+        """
+    )
+    _ = parser.parseAnthropic(event: startEvent)
+
+    let stopEvent = SSEEvent(
       event: "content_block_stop",
       data: """
         {"type":"content_block_stop","index":1}
         """
     )
 
-    let events = ProviderStreamParser.parseAnthropic(event: event)
+    let events = parser.parseAnthropic(event: stopEvent)
 
     #expect(events.count == 1)
     if case .toolCallEnd(let id) = events[0] {
-      #expect(id == "1")
+      #expect(id == "toolu_456")
     } else {
       Issue.record("Expected toolCallEnd")
     }
@@ -119,7 +141,7 @@ struct ProviderStreamParserTests {
         """
     )
 
-    let events = ProviderStreamParser.parseAnthropic(event: event)
+    let events = parser.parseAnthropic(event: event)
 
     #expect(events.count == 1)
     if case .usage(let input, let output) = events[0] {
@@ -139,7 +161,7 @@ struct ProviderStreamParserTests {
         """
     )
 
-    let events = ProviderStreamParser.parseAnthropic(event: event)
+    let events = parser.parseAnthropic(event: event)
 
     #expect(events.count == 2)
 
@@ -169,7 +191,7 @@ struct ProviderStreamParserTests {
         """
     )
 
-    let events = ProviderStreamParser.parseAnthropic(event: event)
+    let events = parser.parseAnthropic(event: event)
 
     #expect(events.count == 1)
     if case .messageComplete(let reason) = events[0] {
@@ -188,7 +210,7 @@ struct ProviderStreamParserTests {
         """
     )
 
-    let events = ProviderStreamParser.parseAnthropic(event: event)
+    let events = parser.parseAnthropic(event: event)
 
     #expect(events.count == 1)
     if case .error(let msg) = events[0] {
@@ -349,7 +371,7 @@ struct ProviderStreamParserTests {
   func invalidJSON() {
     let event = SSEEvent(event: nil, data: "not json")
 
-    let anthropic = ProviderStreamParser.parseAnthropic(event: event)
+    let anthropic = parser.parseAnthropic(event: event)
     let openai = ProviderStreamParser.parseOpenAI(event: event)
 
     #expect(anthropic.isEmpty)

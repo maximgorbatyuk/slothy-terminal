@@ -67,24 +67,43 @@ struct BashTool: AgentTool {
       )
     }
 
-    let deadline = DispatchTime.now() + timeout
-    let group = DispatchGroup()
-    group.enter()
+    /// Read pipes concurrently to prevent deadlock when output fills
+    /// the pipe buffer (waitUntilExit would block forever otherwise).
+    var outData = Data()
+    var errData = Data()
+    let outHandle = stdoutPipe.fileHandleForReading
+    let errHandle = stderrPipe.fileHandleForReading
+
+    let readGroup = DispatchGroup()
+    readGroup.enter()
     DispatchQueue.global().async {
-      process.waitUntilExit()
-      group.leave()
+      outData = outHandle.readDataToEndOfFile()
+      readGroup.leave()
+    }
+    readGroup.enter()
+    DispatchQueue.global().async {
+      errData = errHandle.readDataToEndOfFile()
+      readGroup.leave()
     }
 
-    if group.wait(timeout: deadline) == .timedOut {
+    let deadline = DispatchTime.now() + timeout
+    let waitGroup = DispatchGroup()
+    waitGroup.enter()
+    DispatchQueue.global().async {
+      process.waitUntilExit()
+      waitGroup.leave()
+    }
+
+    if waitGroup.wait(timeout: deadline) == .timedOut {
       process.terminate()
+      readGroup.wait()
       return ToolResult(
         output: "Error: Command timed out after \(Int(timeout))s",
         isError: true
       )
     }
 
-    let outData = stdoutPipe.fileHandleForReading.readDataToEndOfFile()
-    let errData = stderrPipe.fileHandleForReading.readDataToEndOfFile()
+    readGroup.wait()
     let outStr = String(data: outData, encoding: .utf8) ?? ""
     let errStr = String(data: errData, encoding: .utf8) ?? ""
 

@@ -35,11 +35,24 @@ enum ProviderStreamEvent: Sendable {
 /// Handles two provider formats:
 /// - **Anthropic**: `message_start`, `content_block_start/delta/stop`, `message_delta`, `message_stop`
 /// - **OpenAI**: `choices[0].delta` with `content`, `tool_calls`, `finish_reason`
-enum ProviderStreamParser {
+///
+/// For Anthropic, use an instance to track per-block tool call IDs.
+/// For OpenAI, the static method is sufficient (IDs come in each delta).
+final class ProviderStreamParser: @unchecked Sendable {
+
+  /// Maps Anthropic content block index → real tool call ID.
+  /// Populated on `content_block_start` for tool_use blocks,
+  /// consulted on `content_block_delta` and `content_block_stop`.
+  private var toolCallIDByIndex: [Int: String] = [:]
+
+  /// Resets parser state for a new message stream.
+  func reset() {
+    toolCallIDByIndex = [:]
+  }
 
   /// Parse an SSE event from an Anthropic Messages API stream.
-  static func parseAnthropic(event: SSEEvent) -> [ProviderStreamEvent] {
-    guard let json = parseJSON(event.data) else {
+  func parseAnthropic(event: SSEEvent) -> [ProviderStreamEvent] {
+    guard let json = Self.parseJSON(event.data) else {
       return []
     }
 
@@ -65,6 +78,8 @@ enum ProviderStreamParser {
       if blockType == "tool_use" {
         let id = block["id"] as? String ?? ""
         let name = block["name"] as? String ?? ""
+        let index = json["index"] as? Int ?? 0
+        toolCallIDByIndex[index] = id
         return [.toolCallStart(id: id, name: name)]
       }
       return []
@@ -89,9 +104,9 @@ enum ProviderStreamParser {
 
       case "input_json_delta":
         if let partial = delta["partial_json"] as? String {
-          /// Determine the tool call ID from the parent event index.
           let index = json["index"] as? Int ?? 0
-          return [.toolCallDelta(id: "\(index)", argumentsDelta: partial)]
+          let realID = toolCallIDByIndex[index] ?? "\(index)"
+          return [.toolCallDelta(id: realID, argumentsDelta: partial)]
         }
 
       default:
@@ -101,10 +116,8 @@ enum ProviderStreamParser {
 
     case "content_block_stop":
       let index = json["index"] as? Int ?? 0
-      /// content_block_stop for tool_use blocks signals tool call end.
-      /// We emit toolCallEnd with the index as a placeholder ID.
-      /// The actual tool call ID is tracked by the consumer.
-      return [.toolCallEnd(id: "\(index)")]
+      let realID = toolCallIDByIndex[index] ?? "\(index)"
+      return [.toolCallEnd(id: realID)]
 
     case "message_delta":
       var events: [ProviderStreamEvent] = []
@@ -215,7 +228,7 @@ enum ProviderStreamParser {
 
   // MARK: - Private
 
-  private static func parseJSON(_ string: String) -> [String: Any]? {
+  fileprivate static func parseJSON(_ string: String) -> [String: Any]? {
     guard let data = string.data(using: .utf8) else {
       return nil
     }

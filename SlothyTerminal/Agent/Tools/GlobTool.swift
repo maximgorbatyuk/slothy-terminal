@@ -153,6 +153,10 @@ struct GlobTool: AgentTool {
   }
 
   /// Matches `*` within a single path component.
+  ///
+  /// Handles multiple wildcards by checking that each literal segment
+  /// appears in order within the string (e.g., `*test*` matches any
+  /// string containing "test").
   private func matchWildcard(pattern: String, string: String) -> Bool {
     if pattern == "*" {
       return true
@@ -164,18 +168,39 @@ struct GlobTool: AgentTool {
 
     let parts = pattern.components(separatedBy: "*")
 
-    guard parts.count == 2 else {
-      /// Multiple wildcards — fall back to simple prefix/suffix check.
-      let prefix = parts.first ?? ""
-      let suffix = parts.last ?? ""
-      return string.hasPrefix(prefix) && string.hasSuffix(suffix)
+    /// Walk through each literal segment in order, ensuring each
+    /// appears sequentially in the string.
+    var remaining = string[...]
+
+    for (i, part) in parts.enumerated() {
+      guard !part.isEmpty else {
+        continue
+      }
+
+      if i == 0 {
+        /// First segment must be a prefix.
+        guard remaining.hasPrefix(part) else {
+          return false
+        }
+
+        remaining = remaining.dropFirst(part.count)
+      } else if i == parts.count - 1 {
+        /// Last segment must be a suffix.
+        guard remaining.hasSuffix(part) else {
+          return false
+        }
+
+        remaining = remaining.dropLast(part.count)
+      } else {
+        /// Middle segments must appear somewhere in remaining.
+        guard let range = remaining.range(of: part) else {
+          return false
+        }
+
+        remaining = remaining[range.upperBound...]
+      }
     }
 
-    let prefix = parts[0]
-    let suffix = parts[1]
-
-    return string.hasPrefix(prefix)
-      && string.hasSuffix(suffix)
-      && string.count >= prefix.count + suffix.count
+    return true
   }
 }

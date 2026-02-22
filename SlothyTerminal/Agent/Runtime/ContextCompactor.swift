@@ -15,11 +15,6 @@ import Foundation
 /// to generate a summary of pruned content.
 enum ContextCompactor {
 
-  /// Default token budget as a fraction of the model's output limit.
-  /// Context window is typically 4-8x the output limit, so we use
-  /// a conservative multiplier.
-  static let defaultContextMultiplier = 4
-
   /// Minimum number of recent messages to always preserve fully.
   static let defaultMinPreserved = 6
 
@@ -41,7 +36,7 @@ enum ContextCompactor {
     contextBudget: Int? = nil,
     minPreserved: Int = defaultMinPreserved
   ) -> Bool {
-    let budget = contextBudget ?? (model.outputLimit * defaultContextMultiplier)
+    let budget = contextBudget ?? model.contextWindow
     let estimated = TokenEstimator.estimate(messages: messages)
 
     guard estimated > budget else {

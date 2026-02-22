@@ -79,10 +79,28 @@ struct GrepTool: AgentTool {
       )
     }
 
-    process.waitUntilExit()
+    /// Read pipes concurrently to prevent deadlock when output fills
+    /// the pipe buffer (waitUntilExit would block forever otherwise).
+    var outData = Data()
+    var errData = Data()
+    let outHandle = stdoutPipe.fileHandleForReading
+    let errHandle = stderrPipe.fileHandleForReading
 
-    let outData = stdoutPipe.fileHandleForReading.readDataToEndOfFile()
-    let errData = stderrPipe.fileHandleForReading.readDataToEndOfFile()
+    let readGroup = DispatchGroup()
+    readGroup.enter()
+    DispatchQueue.global().async {
+      outData = outHandle.readDataToEndOfFile()
+      readGroup.leave()
+    }
+    readGroup.enter()
+    DispatchQueue.global().async {
+      errData = errHandle.readDataToEndOfFile()
+      readGroup.leave()
+    }
+
+    process.waitUntilExit()
+    readGroup.wait()
+
     var output = String(data: outData, encoding: .utf8) ?? ""
     let errStr = String(data: errData, encoding: .utf8) ?? ""
 
