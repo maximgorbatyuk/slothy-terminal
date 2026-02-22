@@ -45,9 +45,9 @@ final class NativeAgentTransport: ChatTransport {
   private var messages: [[String: JSONValue]] = []
   private var sessionID: String = ""
 
-  /// Accumulated token counts across all steps.
-  private var totalInputTokens: Int = 0
-  private var totalOutputTokens: Int = 0
+  /// Token counts for the current turn only (reset before each runLoop).
+  private var turnInputTokens: Int = 0
+  private var turnOutputTokens: Int = 0
 
   /// Tracks which content blocks are currently open during event mapping.
   private var blockState = BlockState()
@@ -124,15 +124,22 @@ final class NativeAgentTransport: ChatTransport {
 
   // MARK: - Private
 
-  /// Tracks which content blocks are currently open.
+  /// Tracks which content blocks are currently open and their indices.
   private struct BlockState {
-    var textBlockOpen = false
-    var thinkingBlockOpen = false
+    var textBlockIndex: Int?
+    var thinkingBlockIndex: Int?
     var toolBlockIndex = 0
     var nextBlockIndex = 0
+
+    var textBlockOpen: Bool { textBlockIndex != nil }
+    var thinkingBlockOpen: Bool { thinkingBlockIndex != nil }
   }
 
   private func runLoop(userMessage: String) async {
+    /// Reset per-turn token counters.
+    turnInputTokens = 0
+    turnOutputTokens = 0
+
     let input = RuntimeInput(
       sessionID: sessionID,
       model: model,
@@ -162,11 +169,11 @@ final class NativeAgentTransport: ChatTransport {
         }
       )
 
-      /// Emit the final result event.
+      /// Emit the final result event with per-turn tokens.
       onEvent?(.result(
         text: finalText,
-        inputTokens: totalInputTokens,
-        outputTokens: totalOutputTokens
+        inputTokens: turnInputTokens,
+        outputTokens: turnOutputTokens
       ))
     } catch is CancellationError {
       onTerminated?(.cancelled)
@@ -182,45 +189,52 @@ final class NativeAgentTransport: ChatTransport {
     switch event {
     case .textDelta(let text):
       if !blockState.textBlockOpen {
+        let idx = blockState.nextBlockIndex
         onEvent?(.contentBlockStart(
-          index: blockState.nextBlockIndex,
+          index: idx,
           blockType: "text",
           id: nil,
           name: nil
         ))
-        blockState.textBlockOpen = true
+        blockState.textBlockIndex = idx
         blockState.nextBlockIndex += 1
       }
-      onEvent?(.contentBlockDelta(
-        index: blockState.nextBlockIndex - 1,
-        deltaType: "text_delta",
-        text: text
-      ))
+      if let idx = blockState.textBlockIndex {
+        onEvent?(.contentBlockDelta(
+          index: idx,
+          deltaType: "text_delta",
+          text: text
+        ))
+      }
 
     case .thinkingDelta(let text):
       if !blockState.thinkingBlockOpen {
+        let idx = blockState.nextBlockIndex
         onEvent?(.contentBlockStart(
-          index: blockState.nextBlockIndex,
+          index: idx,
           blockType: "thinking",
           id: nil,
           name: nil
         ))
-        blockState.thinkingBlockOpen = true
+        blockState.thinkingBlockIndex = idx
         blockState.nextBlockIndex += 1
       }
-      onEvent?(.contentBlockDelta(
-        index: blockState.nextBlockIndex - 1,
-        deltaType: "thinking_delta",
-        text: text
-      ))
+      if let idx = blockState.thinkingBlockIndex {
+        onEvent?(.contentBlockDelta(
+          index: idx,
+          deltaType: "thinking_delta",
+          text: text
+        ))
+      }
 
     case .toolCallStart(let id, let name):
       /// Close any open text/thinking blocks first.
       closeOpenBlocks()
 
-      blockState.toolBlockIndex = blockState.nextBlockIndex
+      let idx = blockState.nextBlockIndex
+      blockState.toolBlockIndex = idx
       onEvent?(.contentBlockStart(
-        index: blockState.nextBlockIndex,
+        index: idx,
         blockType: "tool_use",
         id: id,
         name: name
@@ -256,8 +270,8 @@ final class NativeAgentTransport: ChatTransport {
       blockState.nextBlockIndex = 0
 
     case .usage(let input, let output):
-      totalInputTokens += input
-      totalOutputTokens += output
+      turnInputTokens += input
+      turnOutputTokens += output
 
     case .finished:
       closeOpenBlocks()
@@ -269,13 +283,13 @@ final class NativeAgentTransport: ChatTransport {
 
   /// Close any text or thinking blocks that are still open.
   private func closeOpenBlocks() {
-    if blockState.textBlockOpen {
-      onEvent?(.contentBlockStop(index: blockState.nextBlockIndex - 1))
-      blockState.textBlockOpen = false
+    if let idx = blockState.textBlockIndex {
+      onEvent?(.contentBlockStop(index: idx))
+      blockState.textBlockIndex = nil
     }
-    if blockState.thinkingBlockOpen {
-      onEvent?(.contentBlockStop(index: blockState.nextBlockIndex - 1))
-      blockState.thinkingBlockOpen = false
+    if let idx = blockState.thinkingBlockIndex {
+      onEvent?(.contentBlockStop(index: idx))
+      blockState.thinkingBlockIndex = nil
     }
   }
 }

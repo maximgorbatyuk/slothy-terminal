@@ -74,6 +74,8 @@ final class ClaudeAdapter: ProviderAdapter, @unchecked Sendable {
     headers["anthropic-beta"] = merged.joined(separator: ",")
 
     guard let auth = context.auth else {
+      /// No auth — still set required headers.
+      headers["anthropic-version"] = "2023-06-01"
       req.headers = headers
       return req
     }
@@ -87,6 +89,7 @@ final class ClaudeAdapter: ProviderAdapter, @unchecked Sendable {
       let active = try await refreshIfNeeded(token)
       headers.removeValue(forKey: "x-api-key")
       headers["Authorization"] = "Bearer \(active.accessToken)"
+      headers["anthropic-version"] = "2023-06-01"
     }
 
     req.headers = headers

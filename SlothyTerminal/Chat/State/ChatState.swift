@@ -404,7 +404,11 @@ class ChatState {
         .init(toolPattern: "grep", action: .allow),
         .init(toolPattern: "webfetch", action: .allow),
       ],
-      fallbackHandler: { _, _ in .once }
+      fallbackHandler: { tool, _ in
+        /// Reject write/edit/bash by default for safety.
+        /// User must explicitly allow via rules or UI prompt.
+        .reject
+      }
     )
 
     return AgentRuntimeFactory.makeTransport(

@@ -107,11 +107,12 @@ struct ClaudeAdapterTests {
 
     #expect(prepared.headers["Authorization"] == "Bearer oauth-access-abc")
     #expect(prepared.headers["x-api-key"] == nil)
+    #expect(prepared.headers["anthropic-version"] == "2023-06-01")
   }
 
   // MARK: - No Auth
 
-  @Test("No auth still sets beta header")
+  @Test("No auth still sets anthropic-version and beta headers")
   func noAuth() async throws {
     let context = RequestContext(
       sessionID: "s1",
@@ -124,6 +125,7 @@ struct ClaudeAdapterTests {
 
     #expect(prepared.headers["x-api-key"] == nil)
     #expect(prepared.headers["Authorization"] == nil)
+    #expect(prepared.headers["anthropic-version"] == "2023-06-01")
     #expect(prepared.headers["anthropic-beta"]?.contains("interleaved-thinking") == true)
   }
 
