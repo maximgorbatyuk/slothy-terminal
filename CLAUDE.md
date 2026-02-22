@@ -19,8 +19,9 @@ open SlothyTerminal.xcodeproj
 # SPM build & test (chat core, parsers, engine — no UI)
 swift build
 swift test
-# NOTE: Package.swift uses an explicit `sources:` list for the test target.
-# New source files must be added to that list manually or swift test will fail.
+# NOTE: Package.swift uses an explicit `sources:` list for the main library target (SlothyTerminalLib).
+# New non-UI source files must be added to that list manually or swift build/test will fail.
+# The test target auto-discovers files — no manual list needed for new tests.
 
 # Release build with notarization (requires .env with Apple credentials)
 ./scripts/build-release.sh [VERSION]
@@ -66,7 +67,7 @@ User Action → AppState.createChatTab() → Tab(mode: .chat, ChatState)
 - **GhosttyApp** (`Terminal/GhosttyApp.swift`) - Process-wide singleton managing the libghostty app instance and runtime callbacks
 - **GhosttySurfaceView** (`Terminal/GhosttySurfaceView.swift`) - NSView bridge to libghostty terminal surface; handles PTY, rendering, and input
 - **AIAgent protocol** (`Agents/AIAgent.swift`) - Defines agent interface; implementations: ClaudeAgent, OpenCodeAgent, TerminalAgent
-- **AgentFactory** - Creates appropriate agent instance based on AgentType enum
+- **AgentFactory** (in `Agents/AIAgent.swift`) - Creates appropriate agent instance based on AgentType enum
 - **ConfigManager** (`Services/ConfigManager.swift`) - Singleton for persisting config to `~/Library/Application Support/SlothyTerminal/config.json`
 - **ChatState** (`Chat/State/ChatState.swift`) - View-facing coordinator: user intents, transport wiring, persistence triggers, model/mode UI state
 - **ChatSessionEngine** (`Chat/Engine/ChatSessionEngine.swift`) - Provider-agnostic chat state machine and event reducer
@@ -176,6 +177,7 @@ Background task execution with preflight checks and log collection.
 - **TaskRunner** (`TaskQueue/Runner/TaskRunner.swift`) - Protocol; implementations: `ClaudeTaskRunner`, `OpenCodeTaskRunner`
 - **RiskyToolDetector** (`TaskQueue/Runner/RiskyToolDetector.swift`) - Flags potentially destructive tool calls
 - **TaskLogCollector** (`TaskQueue/Runner/TaskLogCollector.swift`) - Captures task execution logs
+- **TaskQueueSnapshot** (`TaskQueue/Storage/TaskQueueSnapshot.swift`) - Codable snapshot models for queue state
 - **TaskQueueStore** (`TaskQueue/Storage/TaskQueueStore.swift`) - Snapshot persistence (same pattern as ChatSessionStore)
 
 ## Native Agent System
@@ -199,12 +201,12 @@ ChatState → NativeAgentTransport → AgentLoop → AgentRuntime → HTTP API
 | `Agent/Adapters/ZAI/` | Z.AI/GLM adapter (shared for `.zai` and `.zhipuAI` providers) |
 | `Agent/Adapters/Variants/` | `DefaultVariantMapper` — reasoning variant options per provider |
 | `Agent/Tools/` | `ToolRegistry` + 7 built-in tools (bash, read, write, edit, glob, grep, webfetch) + `TaskTool` (subagent) |
-| `Agent/Runtime/` | `AgentRuntime`, `AgentLoop`, `RequestBuilder`, `ProviderStreamParser`, `ContextCompactor`, `SystemPromptBuilder`, `TokenEstimator` |
+| `Agent/Runtime/` | `AgentRuntime`, `AgentLoop`, `AgentLoopError`, `RequestBuilder`, `ProviderStreamParser`, `ContextCompactor`, `SystemPromptBuilder`, `TokenEstimator` |
 | `Agent/Transport/` | `SSEParser`, `URLSessionHTTPTransport`, `NativeAgentTransport` |
 | `Agent/Permission/` | `RuleBasedPermissions` — rule-based tool permission checker |
 | `Agent/Definitions/` | `AgentDefinition` — presets: `.build`, `.plan`, `.explore`, `.general`, `.compaction` |
 | `Agent/Storage/` | `KeychainTokenStore` — Keychain-based credential persistence |
-| `Agent/Auth/` | `OAuthCallbackServer` — local HTTP server for OAuth redirects |
+| `Agent/Auth/` | `OAuthCallbackServer` (local HTTP server for OAuth redirects), `OAuthFlowManager` (PKCE flow orchestrator with observable state) |
 | `AgentRuntimeFactory.swift` | Single composition point assembling runtime, loop, and transport |
 
 ### Key Runtime Concepts
@@ -219,6 +221,8 @@ ChatState → NativeAgentTransport → AgentLoop → AgentRuntime → HTTP API
 Tab mode `.telegramBot` enables a Telegram bot that relays messages to a Claude chat session.
 
 - **TelegramBotRuntime** (`Telegram/Runtime/TelegramBotRuntime.swift`) - Long-poll loop, message dispatch
+- **TelegramCommandHandler** (`Telegram/Runtime/TelegramCommandHandler.swift`) - Slash command parsing and execution
 - **TelegramPromptExecutor** (`Telegram/Runtime/TelegramPromptExecutor.swift`) - Bridges Telegram messages into chat engine turns
 - **TelegramBotAPIClient** (`Telegram/API/TelegramBotAPIClient.swift`) - Telegram Bot API HTTP client
+- **TelegramMessageChunker** (`Telegram/API/TelegramMessageChunker.swift`) - Splits long messages for Telegram's size limits
 - Settings UI in `Views/Settings/TelegramSettingsTab.swift`

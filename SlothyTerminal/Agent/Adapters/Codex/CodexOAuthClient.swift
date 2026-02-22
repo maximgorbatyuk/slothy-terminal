@@ -18,6 +18,9 @@ struct CodexOAuthStart: Sendable {
 final class CodexOAuthClient: OAuthClient, @unchecked Sendable {
   typealias StartPayload = CodexOAuthStart
 
+  /// Default OAuth client ID for the Codex CLI authorization flow.
+  static let defaultClientID = "app_EMoamEEZ73f0CkXaXp7hrann"
+
   private let clientID: String
   private let issuer = URL(string: "https://auth.openai.com")!
   private let redirectURI: String
@@ -52,7 +55,6 @@ final class CodexOAuthClient: OAuthClient, @unchecked Sendable {
       .init(name: "state", value: state),
       .init(name: "id_token_add_organizations", value: "true"),
       .init(name: "codex_cli_simplified_flow", value: "true"),
-      .init(name: "originator", value: "slothy-terminal"),
     ]
 
     guard let url = components.url else {

@@ -1,4 +1,5 @@
 import Foundation
+import OSLog
 
 /// Adapts requests for the OpenAI / Codex API.
 ///
@@ -8,10 +9,12 @@ import Foundation
 /// - URL rewrite from standard endpoints to `chatgpt.com/backend-api/codex/responses`
 /// - Model filtering: OAuth mode restricts to Codex-compatible models
 /// - Default `reasoningEffort` for GPT-5 family models
+/// - Automatic OAuth token refresh via `CodexOAuthClient`
 final class CodexAdapter: ProviderAdapter, @unchecked Sendable {
   let providerID: ProviderID = .openAI
 
   private let tokenStore: any TokenStore
+  private let oauthClient: CodexOAuthClient
   private let codexEndpoint = URL(string: "https://chatgpt.com/backend-api/codex/responses")!
   private let refreshSkew: TimeInterval = 30
 
@@ -24,8 +27,15 @@ final class CodexAdapter: ProviderAdapter, @unchecked Sendable {
     "gpt-5.3-codex",
   ]
 
-  init(tokenStore: any TokenStore) {
+  init(
+    tokenStore: any TokenStore,
+    oauthClient: CodexOAuthClient? = nil
+  ) {
     self.tokenStore = tokenStore
+    self.oauthClient = oauthClient ?? CodexOAuthClient(
+      clientID: CodexOAuthClient.defaultClientID,
+      redirectURI: "http://localhost:1455/auth/callback"
+    )
   }
 
   func allowedModels(
@@ -112,8 +122,10 @@ final class CodexAdapter: ProviderAdapter, @unchecked Sendable {
       return token
     }
 
-    /// Token refresh is not yet implemented — will be wired in Phase 9
-    /// when the CodexOAuthClient is fully connected.
-    return token
+    Logger.agent.info("Codex OAuth token expiring soon, refreshing…")
+    let refreshed = try await oauthClient.refresh(token: token)
+    try await tokenStore.save(provider: .openAI, auth: .oauth(refreshed))
+    Logger.agent.info("Codex OAuth token refreshed successfully")
+    return refreshed
   }
 }

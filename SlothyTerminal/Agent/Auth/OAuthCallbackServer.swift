@@ -10,7 +10,7 @@ import OSLog
 ///
 /// Usage:
 /// ```swift
-/// let server = OAuthCallbackServer(port: 19876)
+/// let server = OAuthCallbackServer(port: 1455)
 /// try await server.start { code in
 ///   let token = try await oauthClient.exchange(code: code)
 /// }
@@ -23,10 +23,10 @@ final class OAuthCallbackServer: @unchecked Sendable {
 
   /// The redirect URI that should be registered with the OAuth provider.
   var redirectURI: String {
-    "http://localhost:\(port)/callback"
+    "http://localhost:\(port)/auth/callback"
   }
 
-  init(port: UInt16 = 19876) {
+  init(port: UInt16 = 1455) {
     self.port = port
   }
 

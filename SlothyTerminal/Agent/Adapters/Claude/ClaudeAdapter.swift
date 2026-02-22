@@ -1,4 +1,5 @@
 import Foundation
+import OSLog
 
 /// Adapts requests for the Anthropic Messages API.
 ///
@@ -103,9 +104,11 @@ final class ClaudeAdapter: ProviderAdapter, @unchecked Sendable {
       return token
     }
 
-    /// Token refresh is not yet implemented — will be wired in Phase 9
-    /// when the ClaudeOAuthClient is fully connected.
-    /// For now, return the existing token and let the API reject if expired.
+    /// Claude OAuth refresh is not yet supported — return the expired token
+    /// and let the API reject it. The user will need to re-authenticate.
+    Logger.agent.warning(
+      "Claude OAuth token expired but refresh is not supported — API call may fail"
+    )
     return token
   }
 }

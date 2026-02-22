@@ -154,8 +154,9 @@ let package = Package(
         /// Agent — Factory for assembling runtime components.
         "Agent/AgentRuntimeFactory.swift",
 
-        /// Agent — OAuth callback server for authorization flows.
+        /// Agent — OAuth callback server and flow manager for authorization flows.
         "Agent/Auth/OAuthCallbackServer.swift",
+        "Agent/Auth/OAuthFlowManager.swift",
 
         /// Agent — Context compaction, system prompt, token estimation, subagents.
         "Agent/Runtime/ContextCompactor.swift",

@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 /// Settings tab for the native agent system.
@@ -5,6 +6,7 @@ import SwiftUI
 /// Provides:
 /// - Master toggle for native agent mode
 /// - Per-provider API key entry with connection status
+/// - OAuth sign-in for providers that support it (OpenAI/Codex)
 /// - Default provider and model selection
 struct NativeAgentSettingsTab: View {
   private var configManager = ConfigManager.shared
@@ -21,7 +23,23 @@ struct NativeAgentSettingsTab: View {
 
   @State private var isLoading = false
 
+  @State private var oauthManager: OAuthFlowManager
+
   private let tokenStore: TokenStore = KeychainTokenStore()
+
+  init() {
+    let store = KeychainTokenStore()
+    _oauthManager = State(
+      initialValue: OAuthFlowManager(
+        tokenStore: store,
+        urlOpener: { url in
+          DispatchQueue.main.async {
+            NSWorkspace.shared.open(url)
+          }
+        }
+      )
+    )
+  }
 
   var body: some View {
     Form {
@@ -53,8 +71,13 @@ struct NativeAgentSettingsTab: View {
           providerName: "OpenAI (Codex)",
           providerIcon: "cpu",
           apiKeyBinding: $openAIKey,
-          authStatus: openAIStatus
+          authStatus: openAIStatus,
+          onOAuthLogin: {
+            oauthManager.startFlow(for: .openAI)
+          }
         )
+
+        oauthFlowStatus
 
         Divider()
 
@@ -116,6 +139,79 @@ struct NativeAgentSettingsTab: View {
     .background(appBackgroundColor)
     .task {
       await loadCredentials()
+    }
+    .onChange(of: oauthManager.flowState[.openAI]) { _, newState in
+      if newState == .succeeded {
+        Task {
+          openAIStatus = await statusFor(.openAI)
+        }
+      }
+    }
+  }
+
+  // MARK: - OAuth Flow Status
+
+  @ViewBuilder
+  private var oauthFlowStatus: some View {
+    let state = oauthManager.flowState[.openAI] ?? .idle
+
+    switch state {
+    case .idle:
+      EmptyView()
+
+    case .authorizing:
+      HStack(spacing: 6) {
+        ProgressView()
+          .controlSize(.small)
+
+        Text("Waiting for browser authorization...")
+          .font(.caption)
+          .foregroundColor(.secondary)
+      }
+      .padding(.leading, 28)
+
+    case .exchanging:
+      HStack(spacing: 6) {
+        ProgressView()
+          .controlSize(.small)
+
+        Text("Exchanging token...")
+          .font(.caption)
+          .foregroundColor(.secondary)
+      }
+      .padding(.leading, 28)
+
+    case .succeeded:
+      HStack(spacing: 4) {
+        Image(systemName: "checkmark.circle.fill")
+          .foregroundColor(.green)
+          .font(.system(size: 12))
+
+        Text("Connected successfully")
+          .font(.caption)
+          .foregroundColor(.green)
+      }
+      .padding(.leading, 28)
+
+    case .failed(let message):
+      VStack(alignment: .leading, spacing: 4) {
+        HStack(spacing: 4) {
+          Image(systemName: "exclamationmark.triangle.fill")
+            .foregroundColor(.red)
+            .font(.system(size: 12))
+
+          Text(message)
+            .font(.caption)
+            .foregroundColor(.red)
+        }
+
+        Button("Retry") {
+          oauthManager.startFlow(for: .openAI)
+        }
+        .font(.caption)
+        .buttonStyle(.link)
+      }
+      .padding(.leading, 28)
     }
   }
 
