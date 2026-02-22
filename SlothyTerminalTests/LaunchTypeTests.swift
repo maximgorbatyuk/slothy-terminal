@@ -46,6 +46,15 @@ final class LaunchTypeTests: XCTestCase {
     XCTAssertFalse(LaunchType.telegramBot.requiresPrompt)
   }
 
+  func testRequiresPredefinedPrompt() {
+    XCTAssertFalse(LaunchType.terminal.requiresPredefinedPrompt)
+    XCTAssertFalse(LaunchType.claudeChat.requiresPredefinedPrompt)
+    XCTAssertFalse(LaunchType.opencodeChat.requiresPredefinedPrompt)
+    XCTAssertTrue(LaunchType.claudeDesktop.requiresPredefinedPrompt)
+    XCTAssertTrue(LaunchType.codexDesktop.requiresPredefinedPrompt)
+    XCTAssertFalse(LaunchType.telegramBot.requiresPredefinedPrompt)
+  }
+
   func testAgentTypeMapping() {
     XCTAssertEqual(LaunchType.terminal.agentType, .terminal)
     XCTAssertEqual(LaunchType.claudeChat.agentType, .claude)

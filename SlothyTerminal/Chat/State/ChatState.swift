@@ -78,6 +78,14 @@ class ChatState {
   /// Prevent duplicate OpenCode model catalog loads.
   private var didLoadOpenCodeModels = false
 
+  /// Whether the native agent transport should be used for this session.
+  ///
+  /// Returns `true` when the feature flag is enabled in config and the
+  /// agent type is Claude (native transport currently supports Anthropic API).
+  var useNativeTransport: Bool {
+    configManager.config.nativeAgentEnabled && agentType == .claude
+  }
+
   init(
     workingDirectory: URL,
     agentType: AgentType = .claude,
@@ -300,11 +308,15 @@ class ChatState {
       )
 
     default:
-      newTransport = ClaudeCLITransport(
-        workingDirectory: workingDirectory,
-        resumeSessionId: resumeSessionId,
-        selectedModel: selectedModel
-      )
+      if useNativeTransport {
+        newTransport = makeNativeTransport(workingDirectory: workingDirectory)
+      } else {
+        newTransport = ClaudeCLITransport(
+          workingDirectory: workingDirectory,
+          resumeSessionId: resumeSessionId,
+          selectedModel: selectedModel
+        )
+      }
       transportModel = selectedModel
     }
     self.transport = newTransport
@@ -364,6 +376,42 @@ class ChatState {
   /// Exponential backoff for recovery attempts: 1s, 2s, 4s.
   private func recoveryBackoff(attempt: Int) -> Double {
     pow(2.0, Double(attempt - 1))
+  }
+
+  // MARK: - Native agent transport
+
+  /// Creates a `NativeAgentTransport` from current config settings.
+  private func makeNativeTransport(
+    workingDirectory: URL
+  ) -> NativeAgentTransport {
+    let config = configManager.config
+    let providerID = ProviderID(rawValue: config.nativeDefaultProvider ?? "anthropic") ?? .anthropic
+    let modelID = config.nativeDefaultModel ?? "claude-sonnet-4-6"
+
+    let model = ModelDescriptor(
+      providerID: providerID,
+      modelID: modelID,
+      packageID: "@ai-sdk/\(providerID.rawValue)",
+      supportsReasoning: true,
+      releaseDate: "",
+      outputLimit: 16_384
+    )
+
+    let permissions = RuleBasedPermissions(
+      rules: [
+        .init(toolPattern: "read", action: .allow),
+        .init(toolPattern: "glob", action: .allow),
+        .init(toolPattern: "grep", action: .allow),
+        .init(toolPattern: "webfetch", action: .allow),
+      ],
+      fallbackHandler: { _, _ in .once }
+    )
+
+    return AgentRuntimeFactory.makeTransport(
+      model: model,
+      workingDirectory: workingDirectory,
+      permissions: permissions
+    )
   }
 
   // MARK: - Model catalog

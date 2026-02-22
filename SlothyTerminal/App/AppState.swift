@@ -5,7 +5,6 @@ import SwiftUI
 enum ModalType: Identifiable {
   case startupPage
   case folderSelector(AgentType)
-  case chatFolderSelector(AgentType)
   case telegramBotFolderSelector
   case settings
   case addTask
@@ -17,8 +16,6 @@ enum ModalType: Identifiable {
       return "startupPage"
     case .folderSelector(let agent):
       return "folderSelector-\(agent.rawValue)"
-    case .chatFolderSelector(let agent):
-      return "chatFolderSelector-\(agent.rawValue)"
     case .telegramBotFolderSelector:
       return "telegramBotFolderSelector"
     case .settings:
@@ -100,11 +97,6 @@ class AppState {
     {
       tab.chatState?.sendMessage(prompt)
     }
-  }
-
-  /// Shows the chat folder selector modal for the specified agent.
-  func showChatFolderSelector(for agent: AgentType = .claude) {
-    activeModal = .chatFolderSelector(agent)
   }
 
   /// Creates a new Telegram bot tab with the specified working directory.

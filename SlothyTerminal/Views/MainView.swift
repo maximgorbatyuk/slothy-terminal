@@ -177,11 +177,6 @@ struct ModalRouter: View {
         appState.createTab(agent: agent, directory: selectedDirectory, initialPrompt: selectedPrompt)
       }
 
-    case .chatFolderSelector(let agent):
-      FolderSelectorModal(agent: agent) { selectedDirectory, selectedPrompt in
-        appState.createChatTab(agent: agent, directory: selectedDirectory, initialPrompt: selectedPrompt?.promptText)
-      }
-
     case .telegramBotFolderSelector:
       FolderSelectorModal(agent: .claude) { selectedDirectory, _ in
         appState.createTelegramBotTab(directory: selectedDirectory)

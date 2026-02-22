@@ -107,6 +107,18 @@ struct AppConfig: Codable, Equatable {
   /// Used to preselect Ask mode in new OpenCode chat tabs.
   var lastUsedOpenCodeAskModeEnabled: Bool = false
 
+  // MARK: - Native Agent Settings
+
+  /// Whether to use the native agent transport instead of CLI subprocesses.
+  /// When enabled, chat mode talks directly to provider APIs.
+  var nativeAgentEnabled: Bool = false
+
+  /// Default provider for native agent mode (e.g. "anthropic", "openai").
+  var nativeDefaultProvider: String?
+
+  /// Default model ID for native agent mode (e.g. "claude-sonnet-4-6").
+  var nativeDefaultModel: String?
+
   // MARK: - Keyboard Shortcuts
 
   /// Custom keyboard shortcuts.

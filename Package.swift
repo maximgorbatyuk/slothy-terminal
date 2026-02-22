@@ -103,6 +103,65 @@ let package = Package(
         "TaskQueue/Orchestrator/TaskOrchestrator.swift",
         "TaskQueue/Runner/RiskyToolDetector.swift",
         "TaskQueue/Orchestrator/TaskPreflight.swift",
+
+        /// Agent — Core models and protocols for native multi-provider agent system.
+        "Agent/Core/Models/ProviderID.swift",
+        "Agent/Core/Models/ModelDescriptor.swift",
+        "Agent/Core/Models/AuthState.swift",
+        "Agent/Core/Models/ReasoningVariant.swift",
+        "Agent/Core/Models/JSONValue.swift",
+        "Agent/Core/Models/AgentMode.swift",
+        "Agent/Core/Protocols/TokenStore.swift",
+        "Agent/Core/Protocols/OAuthClient.swift",
+        "Agent/Core/Protocols/ProviderAdapter.swift",
+        "Agent/Core/Protocols/VariantMapper.swift",
+        "Agent/Core/Protocols/AgentToolProtocol.swift",
+        "Agent/Core/Protocols/PermissionDelegate.swift",
+        "Agent/Storage/KeychainTokenStore.swift",
+        "Agent/Adapters/Claude/ClaudeAdapter.swift",
+        "Agent/Adapters/Claude/ClaudeOAuthClient.swift",
+        "Agent/Adapters/Codex/CodexAdapter.swift",
+        "Agent/Adapters/Codex/CodexOAuthClient.swift",
+        "Agent/Adapters/ZAI/ZAIAdapter.swift",
+        "Agent/Adapters/Variants/DefaultVariantMapper.swift",
+
+        /// Agent — Tool system for native agent execution.
+        "Agent/Tools/ToolRegistry.swift",
+        "Agent/Tools/BashTool.swift",
+        "Agent/Tools/ReadFileTool.swift",
+        "Agent/Tools/WriteFileTool.swift",
+        "Agent/Tools/EditFileTool.swift",
+        "Agent/Tools/GlobTool.swift",
+        "Agent/Tools/GrepTool.swift",
+        "Agent/Tools/WebFetchTool.swift",
+
+        /// Agent — SSE streaming, HTTP transport, request builder, stream parser.
+        "Agent/Transport/SSEParser.swift",
+        "Agent/Transport/URLSessionHTTPTransport.swift",
+        "Agent/Runtime/RequestBuilder.swift",
+        "Agent/Runtime/ProviderStreamParser.swift",
+
+        /// Agent — Runtime, loop, permissions, definitions.
+        "Agent/Runtime/AgentRuntime.swift",
+        "Agent/Runtime/AgentLoop.swift",
+        "Agent/Runtime/AgentLoopError.swift",
+        "Agent/Permission/RuleBasedPermissions.swift",
+        "Agent/Definitions/AgentDefinition.swift",
+
+        /// Agent — NativeAgentTransport (ChatTransport bridge).
+        "Agent/Transport/NativeAgentTransport.swift",
+
+        /// Agent — Factory for assembling runtime components.
+        "Agent/AgentRuntimeFactory.swift",
+
+        /// Agent — OAuth callback server for authorization flows.
+        "Agent/Auth/OAuthCallbackServer.swift",
+
+        /// Agent — Context compaction, system prompt, token estimation, subagents.
+        "Agent/Runtime/ContextCompactor.swift",
+        "Agent/Runtime/SystemPromptBuilder.swift",
+        "Agent/Runtime/TokenEstimator.swift",
+        "Agent/Tools/TaskTool.swift",
       ]
     ),
     .testTarget(
