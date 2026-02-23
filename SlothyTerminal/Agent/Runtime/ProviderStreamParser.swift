@@ -226,6 +226,113 @@ final class ProviderStreamParser: @unchecked Sendable {
     return events
   }
 
+  /// Parse an SSE event from the OpenAI Responses API stream
+  /// (used by Codex subscription endpoint).
+  ///
+  /// Event types:
+  /// - `response.output_text.delta` → textDelta
+  /// - `response.function_call_arguments.delta` → toolCallDelta
+  /// - `response.output_item.added` (function_call) → toolCallStart
+  /// - `response.output_item.done` (function_call) → toolCallEnd
+  /// - `response.completed` → usage + messageComplete
+  /// - `response.reasoning_summary_text.delta` → thinkingDelta
+  static func parseCodexResponses(event: SSEEvent) -> [ProviderStreamEvent] {
+    guard let json = parseJSON(event.data) else {
+      return []
+    }
+
+    let eventType = event.event ?? (json["type"] as? String ?? "")
+
+    switch eventType {
+    case "response.output_text.delta":
+      if let delta = json["delta"] as? String {
+        return [.textDelta(delta)]
+      }
+      return []
+
+    case "response.reasoning_summary_text.delta":
+      if let delta = json["delta"] as? String {
+        return [.thinkingDelta(delta)]
+      }
+      return []
+
+    case "response.output_item.added":
+      guard let item = json["item"] as? [String: Any],
+            let itemType = item["type"] as? String
+      else {
+        return []
+      }
+
+      if itemType == "function_call" {
+        let callID = item["call_id"] as? String ?? item["id"] as? String ?? ""
+        let name = item["name"] as? String ?? ""
+        return [.toolCallStart(id: callID, name: name)]
+      }
+      return []
+
+    case "response.function_call_arguments.delta":
+      let callID = json["call_id"] as? String ?? json["item_id"] as? String ?? ""
+      let delta = json["delta"] as? String ?? ""
+      if !delta.isEmpty {
+        return [.toolCallDelta(id: callID, argumentsDelta: delta)]
+      }
+      return []
+
+    case "response.function_call_arguments.done":
+      let callID = json["call_id"] as? String ?? json["item_id"] as? String ?? ""
+      return [.toolCallEnd(id: callID)]
+
+    case "response.output_item.done":
+      guard let item = json["item"] as? [String: Any],
+            let itemType = item["type"] as? String
+      else {
+        return []
+      }
+
+      if itemType == "function_call" {
+        let callID = item["call_id"] as? String ?? item["id"] as? String ?? ""
+        return [.toolCallEnd(id: callID)]
+      }
+      return []
+
+    case "response.completed":
+      var events: [ProviderStreamEvent] = []
+
+      if let response = json["response"] as? [String: Any] {
+        if let usage = response["usage"] as? [String: Any] {
+          let input = usage["input_tokens"] as? Int ?? 0
+          let output = usage["output_tokens"] as? Int ?? 0
+          events.append(.usage(input: input, output: output))
+        }
+
+        let status = response["status"] as? String
+        events.append(.messageComplete(stopReason: status))
+      } else {
+        events.append(.messageComplete(stopReason: nil))
+      }
+
+      return events
+
+    case "response.failed":
+      if let response = json["response"] as? [String: Any],
+         let error = response["error"] as? [String: Any]
+      {
+        let msg = error["message"] as? String ?? "Unknown Codex API error"
+        return [.error(msg)]
+      }
+      return [.error("Codex API request failed")]
+
+    case "error":
+      let msg = (json["error"] as? [String: Any])?["message"] as? String
+        ?? json["detail"] as? String
+        ?? "Unknown API error"
+      return [.error(msg)]
+
+    default:
+      return []
+    }
+  }
+
   // MARK: - Private
 
   fileprivate static func parseJSON(_ string: String) -> [String: Any]? {

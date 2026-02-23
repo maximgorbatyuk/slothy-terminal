@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-SlothyTerminal is a native macOS terminal application (Swift/SwiftUI) for AI coding assistants. It features a tabbed interface supporting Claude CLI, OpenCode, and plain terminal sessions with real-time session statistics.
+SlothyTerminal is a native macOS terminal application (Swift/SwiftUI) for AI coding assistants. It features a tabbed interface supporting Claude CLI, OpenCode, native API agents (direct LLM calls without CLI), and plain terminal sessions with real-time session statistics.
 
 - **Platform:** macOS 14.0+ (SPM), macOS 15.0 (Xcode deployment target)
 - **Language:** Swift 5.9+
@@ -63,10 +63,10 @@ User Action → AppState.createChatTab() → Tab(mode: .chat, ChatState)
 ### Key Components
 
 - **AppState** (`App/AppState.swift`) - @Observable global state: tabs, active tab, sidebar, modals
-- **Tab** (`Models/Tab.swift`) - Session model supporting `.terminal`, `.chat`, and `.telegramBot` modes
+- **Tab** (`Models/Tab.swift`) - Session model supporting `.terminal`, `.chat`, and `.telegramBot` modes; `nativeProviderID` routes native agent tabs to the correct provider
 - **GhosttyApp** (`Terminal/GhosttyApp.swift`) - Process-wide singleton managing the libghostty app instance and runtime callbacks
 - **GhosttySurfaceView** (`Terminal/GhosttySurfaceView.swift`) - NSView bridge to libghostty terminal surface; handles PTY, rendering, and input
-- **AIAgent protocol** (`Agents/AIAgent.swift`) - Defines agent interface; implementations: ClaudeAgent, OpenCodeAgent, TerminalAgent
+- **AIAgent protocol** (`Agents/AIAgent.swift`) - Defines agent interface; implementations: ClaudeAgent, OpenCodeAgent, TerminalAgent, NativeAgentPlaceholder
 - **AgentFactory** (in `Agents/AIAgent.swift`) - Creates appropriate agent instance based on AgentType enum
 - **ConfigManager** (`Services/ConfigManager.swift`) - Singleton for persisting config to `~/Library/Application Support/SlothyTerminal/config.json`
 - **ChatState** (`Chat/State/ChatState.swift`) - View-facing coordinator: user intents, transport wiring, persistence triggers, model/mode UI state
@@ -82,6 +82,7 @@ User Action → AppState.createChatTab() → Tab(mode: .chat, ChatState)
 2. Implement: `command`, `defaultArgs`, `environmentVariables`, `contextWindowLimit`, `parseStats()`, `isAvailable()`
 3. Add case to `AgentType` enum
 4. Update `AgentFactory.createAgent()`
+5. Audit all exhaustive `switch` on `AgentType` — files include: `ConfigManager.swift`, `ChatComposerStatusBar.swift`, `TaskOrchestrator.swift`, `TelegramPromptExecutor.swift`
 
 ### Adding a New Provider (Native Agent System)
 
@@ -182,7 +183,11 @@ Background task execution with preflight checks and log collection.
 
 ## Native Agent System
 
-Multi-provider agent that talks directly to LLM APIs, executes tools in-process, and manages the agent loop natively. Enabled via `nativeAgentEnabled` in AppConfig; when active, `ChatState` creates `NativeAgentTransport` instead of CLI transports.
+Multi-provider agent that talks directly to LLM APIs, executes tools in-process, and manages the agent loop natively. Two activation paths:
+- **Dedicated tab types**: `.claudeNative` / `.codexNative` launch types create tabs with `agentType: .nativeAgent` and explicit `nativeProviderID` (`.anthropic` / `.openAI`). No config flag needed.
+- **Legacy config flag**: `nativeAgentEnabled` in AppConfig enables native transport for Claude CLI chat tabs (fallback path).
+
+`ChatState.useNativeTransport` returns `true` when `nativeProviderID != nil` OR the legacy flag is set. `makeNativeTransport` picks default model per provider.
 
 ```
 ChatState → NativeAgentTransport → AgentLoop → AgentRuntime → HTTP API

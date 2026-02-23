@@ -78,24 +78,33 @@ class ChatState {
   /// Prevent duplicate OpenCode model catalog loads.
   private var didLoadOpenCodeModels = false
 
+  /// The native provider ID for this session, if using native transport.
+  let nativeProviderID: ProviderID?
+
   /// Whether the native agent transport should be used for this session.
   ///
-  /// Returns `true` when the feature flag is enabled in config and the
-  /// agent type is Claude (native transport currently supports Anthropic API).
+  /// Returns `true` when a native provider ID is explicitly set, or
+  /// when the feature flag is enabled in config and the agent type is Claude.
   var useNativeTransport: Bool {
-    configManager.config.nativeAgentEnabled && agentType == .claude
+    if nativeProviderID != nil {
+      return true
+    }
+
+    return configManager.config.nativeAgentEnabled && agentType == .claude
   }
 
   init(
     workingDirectory: URL,
     agentType: AgentType = .claude,
     store: ChatSessionStore = .shared,
-    configManager: ConfigManager = .shared
+    configManager: ConfigManager = .shared,
+    nativeProviderID: ProviderID? = nil
   ) {
     self.engine = ChatSessionEngine(workingDirectory: workingDirectory)
     self.store = store
     self.configManager = configManager
     self.agentType = agentType
+    self.nativeProviderID = nativeProviderID
 
     applyLastOpenCodeSelectionIfNeeded()
 
@@ -115,12 +124,14 @@ class ChatState {
     agentType: AgentType = .claude,
     resumeSessionId: String,
     store: ChatSessionStore = .shared,
-    configManager: ConfigManager = .shared
+    configManager: ConfigManager = .shared,
+    nativeProviderID: ProviderID? = nil
   ) {
     self.engine = ChatSessionEngine(workingDirectory: workingDirectory)
     self.store = store
     self.configManager = configManager
     self.agentType = agentType
+    self.nativeProviderID = nativeProviderID
 
     if let snapshot = store.loadSnapshot(sessionId: resumeSessionId) {
       engine.conversation.restore(from: snapshot)
@@ -162,12 +173,12 @@ class ChatState {
     )
 
     switch agentType {
-    case .claude:
+    case .claude, .nativeAgent:
       /// If model changed since transport started, restart it.
       if selectedModel != transportModel,
          transport != nil
       {
-        Logger.chat.info("Model changed, restarting Claude transport")
+        Logger.chat.info("Model changed, restarting transport")
         transport?.terminate()
         transport = nil
       }
@@ -385,8 +396,26 @@ class ChatState {
     workingDirectory: URL
   ) -> NativeAgentTransport {
     let config = configManager.config
-    let providerID = ProviderID(rawValue: config.nativeDefaultProvider ?? "anthropic") ?? .anthropic
-    let modelID = config.nativeDefaultModel ?? "claude-sonnet-4-6"
+
+    let providerID: ProviderID
+    let modelID: String
+
+    if let override = nativeProviderID {
+      providerID = override
+      switch override {
+      case .anthropic:
+        modelID = config.nativeDefaultModel ?? "claude-sonnet-4-6"
+
+      case .openAI:
+        modelID = config.nativeDefaultModel ?? "gpt-5.1-codex"
+
+      default:
+        modelID = config.nativeDefaultModel ?? "claude-sonnet-4-6"
+      }
+    } else {
+      providerID = ProviderID(rawValue: config.nativeDefaultProvider ?? "anthropic") ?? .anthropic
+      modelID = config.nativeDefaultModel ?? "claude-sonnet-4-6"
+    }
 
     let model = ModelDescriptor(
       providerID: providerID,

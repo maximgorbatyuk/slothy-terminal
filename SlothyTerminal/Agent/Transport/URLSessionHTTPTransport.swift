@@ -1,4 +1,5 @@
 import Foundation
+import OSLog
 
 /// HTTP transport that executes a `PreparedRequest` and returns
 /// a streaming `AsyncThrowingStream` of SSE events.
@@ -24,19 +25,29 @@ final class URLSessionHTTPTransport: @unchecked Sendable {
       let task = Task {
         do {
           let urlRequest = Self.makeURLRequest(from: request)
+          Logger.agent.info(
+            "[HTTP] \(request.method) \(request.url.absoluteString)"
+          )
+
           let (bytes, response) = try await session.bytes(for: urlRequest)
 
-          if let httpResponse = response as? HTTPURLResponse,
-             !(200..<300).contains(httpResponse.statusCode)
-          {
-            var body = ""
-            for try await line in bytes.lines {
-              body += line + "\n"
+          if let httpResponse = response as? HTTPURLResponse {
+            Logger.agent.info("[HTTP] Response status: \(httpResponse.statusCode)")
+
+            if !(200..<300).contains(httpResponse.statusCode) {
+              var body = ""
+              for try await line in bytes.lines {
+                body += line + "\n"
+              }
+
+              Logger.agent.error(
+                "[HTTP] Error body: \(body.prefix(2000))"
+              )
+              throw URLSessionHTTPTransportError.httpError(
+                statusCode: httpResponse.statusCode,
+                body: body
+              )
             }
-            throw URLSessionHTTPTransportError.httpError(
-              statusCode: httpResponse.statusCode,
-              body: body
-            )
           }
 
           let parser = SSEParser()
@@ -117,10 +128,55 @@ enum URLSessionHTTPTransportError: Error, LocalizedError {
   var errorDescription: String? {
     switch self {
     case .httpError(let code, let body):
+      if let parsed = Self.parseAPIError(statusCode: code, body: body) {
+        return parsed
+      }
+
       return "HTTP \(code): \(body.prefix(500))"
 
     case .invalidResponse:
       return "Invalid HTTP response"
     }
+  }
+
+  /// Attempts to extract a human-readable message from known API error formats.
+  private static func parseAPIError(statusCode: Int, body: String) -> String? {
+    guard let data = body.data(using: .utf8),
+          let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+    else {
+      return nil
+    }
+
+    /// OpenAI / Codex format: {"error": {"message": "...", "type": "...", "resets_at": ...}}
+    if let error = json["error"] as? [String: Any],
+       let message = error["message"] as? String
+    {
+      var result = "HTTP \(statusCode): \(message)"
+
+      if let resetsAt = error["resets_at"] as? TimeInterval {
+        let resetDate = Date(timeIntervalSince1970: resetsAt)
+        let remaining = resetDate.timeIntervalSinceNow
+
+        if remaining > 0 {
+          let hours = Int(remaining) / 3600
+          let minutes = (Int(remaining) % 3600) / 60
+
+          if hours > 0 {
+            result += " (resets in \(hours)h \(minutes)m)"
+          } else {
+            result += " (resets in \(minutes)m)"
+          }
+        }
+      }
+
+      return result
+    }
+
+    /// Anthropic format: {"error": {"message": "..."}} or {"detail": "..."}
+    if let detail = json["detail"] as? String {
+      return "HTTP \(statusCode): \(detail)"
+    }
+
+    return nil
   }
 }

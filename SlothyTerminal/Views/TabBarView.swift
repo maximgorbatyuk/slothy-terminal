@@ -57,10 +57,22 @@ struct TabItemView: View {
     appState.activeTabID == tab.id
   }
 
+  private var tabIconName: String {
+    if tab.agentType == .nativeAgent {
+      return "bolt.fill"
+    }
+
+    if tab.mode == .chat {
+      return "bubble.left.and.bubble.right"
+    }
+
+    return tab.agentType.iconName
+  }
+
   var body: some View {
     HStack(spacing: 6) {
-      /// Agent icon — chat mode uses a chat bubble icon.
-      Image(systemName: tab.mode == .chat ? "bubble.left.and.bubble.right" : tab.agentType.iconName)
+      /// Agent icon — native agent uses bolt, chat mode uses bubble, others use agent icon.
+      Image(systemName: tabIconName)
         .foregroundColor(isActive ? tab.agentType.accentColor : .gray)
         .font(.system(size: 12))
 

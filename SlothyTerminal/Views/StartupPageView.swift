@@ -16,6 +16,7 @@ struct StartupPageView: View {
   @State private var selectedLaunchType: LaunchType
   @State private var selectedPromptID: UUID?
   @State private var showFolderSelector = false
+  @State private var nativeAuthStatus: [ProviderID: Bool] = [:]
 
   init() {
     let config = ConfigManager.shared.config
@@ -107,6 +108,12 @@ struct StartupPageView: View {
     .frame(width: 440)
     .fixedSize(horizontal: false, vertical: true)
     .background(appBackgroundColor)
+    .task {
+      async let anthropicAuth = AgentRuntimeFactory.hasAuth(for: .anthropic)
+      async let openAIAuth = AgentRuntimeFactory.hasAuth(for: .openAI)
+      nativeAuthStatus[.anthropic] = await anthropicAuth
+      nativeAuthStatus[.openAI] = await openAIAuth
+    }
     .sheet(isPresented: $showFolderSelector) {
       FolderSelectorSheet(
         currentDirectory: currentDirectory,
@@ -325,6 +332,22 @@ struct StartupPageView: View {
     case .opencodeChat:
       appState.createChatTab(agent: .opencode, directory: directory, initialPrompt: prompt?.promptText)
 
+    case .claudeNative:
+      appState.createChatTab(
+        agent: .nativeAgent,
+        directory: directory,
+        initialPrompt: prompt?.promptText,
+        nativeProviderID: .anthropic
+      )
+
+    case .codexNative:
+      appState.createChatTab(
+        agent: .nativeAgent,
+        directory: directory,
+        initialPrompt: prompt?.promptText,
+        nativeProviderID: .openAI
+      )
+
     case .claudeDesktop:
       guard let prompt,
             !prompt.promptText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
@@ -387,6 +410,12 @@ struct StartupPageView: View {
     case .opencodeChat:
       return AgentFactory.createAgent(for: .opencode).isAvailable()
 
+    case .claudeNative:
+      return nativeAuthStatus[.anthropic] ?? false
+
+    case .codexNative:
+      return nativeAuthStatus[.openAI] ?? false
+
     case .claudeDesktop:
       return externalAppManager.knownApps
         .first(where: { $0.id == "com.anthropic.claudefordesktop" })?.isInstalled ?? false
@@ -409,6 +438,9 @@ struct StartupPageView: View {
     case .claudeChat, .opencodeChat:
       return "CLI not found"
 
+    case .claudeNative, .codexNative:
+      return "No API key or OAuth"
+
     case .claudeDesktop, .codexDesktop:
       return "Not installed"
 
@@ -424,6 +456,12 @@ struct StartupPageView: View {
 
     case .claudeChat, .claudeDesktop:
       return Color(red: 0.85, green: 0.47, blue: 0.34)
+
+    case .claudeNative:
+      return Color(red: 0.85, green: 0.47, blue: 0.34)
+
+    case .codexNative:
+      return .purple
 
     case .opencodeChat:
       return Color(red: 0.29, green: 0.78, blue: 0.49)

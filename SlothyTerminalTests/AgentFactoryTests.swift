@@ -134,7 +134,7 @@ final class AgentFactoryTests: XCTestCase {
 final class AgentTypeTests: XCTestCase {
 
   func testAllCasesCount() {
-    XCTAssertEqual(AgentType.allCases.count, 3)
+    XCTAssertEqual(AgentType.allCases.count, 4)
   }
 
   func testRawValues() {

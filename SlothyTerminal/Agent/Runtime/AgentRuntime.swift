@@ -1,4 +1,5 @@
 import Foundation
+import OSLog
 
 /// Input for a single LLM call within the agent loop.
 struct RuntimeInput: Sendable {
@@ -108,22 +109,45 @@ final class AgentRuntime: AgentRuntimeProtocol, @unchecked Sendable {
     )
     let prepared = try await adapter.prepare(request: base, context: context)
 
+    Logger.agent.info(
+      "[AgentRuntime] \(input.model.providerID.rawValue) request → \(prepared.url.absoluteString)"
+    )
+    Logger.agent.debug(
+      "[AgentRuntime] Headers: \(prepared.headers.map { "\($0.key): \($0.value.prefix(20))…" }.joined(separator: ", "))"
+    )
+    if let bodyString = String(data: prepared.body.prefix(2000), encoding: .utf8) {
+      Logger.agent.debug("[AgentRuntime] Body (truncated): \(bodyString)")
+    }
+
     /// Stream SSE and parse into provider events.
     let sseStream = transport.stream(request: prepared)
     let providerID = input.model.providerID
+    let usesResponsesAPI = prepared.url.absoluteString.contains("/responses")
 
     let anthropicParser = ProviderStreamParser()
     return AsyncThrowingStream { continuation in
       let task = Task {
         do {
+          var eventCount = 0
           for try await sseEvent in sseStream {
+            eventCount += 1
+            if eventCount <= 5 {
+              Logger.agent.debug(
+                "[AgentRuntime] SSE[\(eventCount)] event=\(sseEvent.event ?? "nil") data=\(sseEvent.data.prefix(300))"
+              )
+            }
+
             let events: [ProviderStreamEvent]
             switch providerID {
             case .anthropic:
               events = anthropicParser.parseAnthropic(event: sseEvent)
 
             case .openAI:
-              events = ProviderStreamParser.parseOpenAI(event: sseEvent)
+              if usesResponsesAPI {
+                events = ProviderStreamParser.parseCodexResponses(event: sseEvent)
+              } else {
+                events = ProviderStreamParser.parseOpenAI(event: sseEvent)
+              }
 
             case .zai, .zhipuAI:
               events = ProviderStreamParser.parseOpenAI(event: sseEvent)
@@ -133,8 +157,11 @@ final class AgentRuntime: AgentRuntimeProtocol, @unchecked Sendable {
               continuation.yield(event)
             }
           }
+
+          Logger.agent.info("[AgentRuntime] Stream finished after \(eventCount) SSE events")
           continuation.finish()
         } catch {
+          Logger.agent.error("[AgentRuntime] Stream error: \(error.localizedDescription)")
           continuation.finish(throwing: error)
         }
       }

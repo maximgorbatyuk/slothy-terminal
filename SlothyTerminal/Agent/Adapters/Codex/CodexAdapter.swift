@@ -104,15 +104,186 @@ final class CodexAdapter: ProviderAdapter, @unchecked Sendable {
         headers["ChatGPT-Account-Id"] = account
       }
 
-      /// Rewrite standard API endpoints to the Codex subscription endpoint.
+      /// Rewrite standard API endpoints to the Codex subscription endpoint
+      /// and transform the body from Chat Completions to Responses API format.
       let path = req.url.path
       if path.contains("/v1/responses") || path.contains("/chat/completions") {
         req.url = codexEndpoint
+        req.body = transformToResponsesBody(req.body)
       }
     }
 
     req.headers = headers
     return req
+  }
+
+  // MARK: - Body transformation
+
+  /// Transforms a Chat Completions body into the Codex Responses API format.
+  ///
+  /// Key differences:
+  /// - System message extracted → top-level `instructions`
+  /// - `messages` → `input` array of typed items
+  /// - Anthropic `tool_use` / `tool_result` → `function_call` / `function_call_output`
+  /// - `tools` entries unwrapped from `{"type":"function","function":{…}}` to flat form
+  /// - `reasoningEffort` / `reasoningSummary` → `reasoning` object
+  private func transformToResponsesBody(_ body: Data) -> Data {
+    guard var root = try? JSONSerialization.jsonObject(with: body) as? [String: Any] else {
+      Logger.agent.warning("[CodexAdapter] Failed to decode body for Responses transform")
+      return body
+    }
+
+    /// Extract system message → instructions.
+    var instructions: String?
+    if let messages = root["messages"] as? [[String: Any]] {
+      var inputItems: [[String: Any]] = []
+
+      for msg in messages {
+        let role = msg["role"] as? String ?? ""
+
+        if role == "system" {
+          instructions = msg["content"] as? String
+          continue
+        }
+
+        /// Convert each message into Responses API input items.
+        let items = convertMessageToInputItems(msg)
+        inputItems.append(contentsOf: items)
+      }
+
+      root.removeValue(forKey: "messages")
+      root["input"] = inputItems
+    }
+
+    root["instructions"] = instructions ?? "You are a helpful coding assistant."
+
+    /// Unwrap tool definitions from Chat Completions wrapper.
+    if let tools = root["tools"] as? [[String: Any]] {
+      root["tools"] = tools.map { unwrapToolDefinition($0) }
+    }
+
+    /// Transform reasoning options into a nested object.
+    var reasoning: [String: Any] = [:]
+    if let effort = root["reasoningEffort"] as? String {
+      reasoning["effort"] = effort
+      root.removeValue(forKey: "reasoningEffort")
+    }
+    if let summary = root["reasoningSummary"] as? String {
+      reasoning["summary"] = summary
+      root.removeValue(forKey: "reasoningSummary")
+    }
+    if !reasoning.isEmpty {
+      root["reasoning"] = reasoning
+    }
+
+    guard let data = try? JSONSerialization.data(withJSONObject: root) else {
+      Logger.agent.warning("[CodexAdapter] Failed to re-encode Responses body")
+      return body
+    }
+
+    return data
+  }
+
+  /// Converts a single Anthropic-format message into Responses API input items.
+  private func convertMessageToInputItems(
+    _ msg: [String: Any]
+  ) -> [[String: Any]] {
+    let role = msg["role"] as? String ?? ""
+
+    /// Plain text content (string).
+    if let text = msg["content"] as? String {
+      return [["type": "message", "role": role, "content": text]]
+    }
+
+    /// Array content — may contain text, tool_use, or tool_result blocks.
+    guard let blocks = msg["content"] as? [[String: Any]] else {
+      return [["type": "message", "role": role, "content": ""]]
+    }
+
+    var items: [[String: Any]] = []
+    var textParts: [String] = []
+
+    for block in blocks {
+      let blockType = block["type"] as? String ?? ""
+
+      switch blockType {
+      case "text":
+        if let text = block["text"] as? String {
+          textParts.append(text)
+        }
+
+      case "tool_use":
+        /// Flush accumulated text first.
+        if !textParts.isEmpty {
+          items.append([
+            "type": "message",
+            "role": role,
+            "content": textParts.joined(),
+          ])
+          textParts = []
+        }
+
+        let callID = block["id"] as? String ?? ""
+        let name = block["name"] as? String ?? ""
+        let input = block["input"] ?? [String: Any]()
+
+        /// Serialize input back to JSON string for function_call arguments.
+        let argsString: String
+        if let inputData = try? JSONSerialization.data(withJSONObject: input),
+           let s = String(data: inputData, encoding: .utf8)
+        {
+          argsString = s
+        } else {
+          argsString = "{}"
+        }
+
+        items.append([
+          "type": "function_call",
+          "name": name,
+          "call_id": callID,
+          "arguments": argsString,
+        ])
+
+      case "tool_result":
+        let callID = block["tool_use_id"] as? String ?? ""
+        let content = block["content"] as? String ?? ""
+        items.append([
+          "type": "function_call_output",
+          "call_id": callID,
+          "output": content,
+        ])
+
+      default:
+        break
+      }
+    }
+
+    /// Flush remaining text.
+    if !textParts.isEmpty {
+      items.append([
+        "type": "message",
+        "role": role,
+        "content": textParts.joined(),
+      ])
+    }
+
+    return items
+  }
+
+  /// Unwraps Chat Completions tool format to Responses API format.
+  ///
+  /// Chat Completions: `{"type":"function","function":{"name":…,"description":…,"parameters":…}}`
+  /// Responses API: `{"type":"function","name":…,"description":…,"parameters":…}`
+  private func unwrapToolDefinition(_ tool: [String: Any]) -> [String: Any] {
+    guard let fn = tool["function"] as? [String: Any] else {
+      return tool
+    }
+
+    var result: [String: Any] = ["type": "function"]
+    result["name"] = fn["name"]
+    result["description"] = fn["description"]
+    result["parameters"] = fn["parameters"]
+    return result
   }
 
   // MARK: - Private
