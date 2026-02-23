@@ -117,4 +117,66 @@ struct ZAIAdapterTests {
     let zhipuAdapter = ZAIAdapter(providerID: .zhipuAI)
     #expect(zhipuAdapter.providerID == .zhipuAI)
   }
+
+  // MARK: - Endpoint Override
+
+  @Test("Custom endpoint URL overrides request URL")
+  func customEndpointOverridesURL() async throws {
+    let customURL = URL(string: "https://api.z.ai/api/paas/v4/chat/completions")!
+    let customAdapter = ZAIAdapter(providerID: .zai, endpointURL: customURL)
+
+    let context = RequestContext(
+      sessionID: "s1",
+      model: glmModel,
+      auth: .apiKey("key"),
+      variant: nil
+    )
+
+    let prepared = try await customAdapter.prepare(request: makeRequest(), context: context)
+
+    #expect(prepared.url == customURL)
+  }
+
+  @Test("Coding Plan endpoint URL is set correctly")
+  func codingPlanEndpoint() async throws {
+    let codingURL = URL(string: "https://api.z.ai/api/coding/paas/v4/chat/completions")!
+    let codingAdapter = ZAIAdapter(providerID: .zai, endpointURL: codingURL)
+
+    let context = RequestContext(
+      sessionID: "s1",
+      model: glmModel,
+      auth: .apiKey("key"),
+      variant: nil
+    )
+
+    let prepared = try await codingAdapter.prepare(request: makeRequest(), context: context)
+
+    #expect(prepared.url == codingURL)
+  }
+
+  // MARK: - ZAIEndpoint URLs
+
+  @Test("ZAIEndpoint China URL is correct")
+  func chinaEndpointURL() {
+    #expect(
+      ZAIEndpoint.china.chatCompletionsURL.absoluteString
+      == "https://open.bigmodel.cn/api/paas/v4/chat/completions"
+    )
+  }
+
+  @Test("ZAIEndpoint International URL is correct")
+  func internationalEndpointURL() {
+    #expect(
+      ZAIEndpoint.international.chatCompletionsURL.absoluteString
+      == "https://api.z.ai/api/paas/v4/chat/completions"
+    )
+  }
+
+  @Test("ZAIEndpoint Coding Plan URL is correct")
+  func codingPlanEndpointURL() {
+    #expect(
+      ZAIEndpoint.codingPlan.chatCompletionsURL.absoluteString
+      == "https://api.z.ai/api/coding/paas/v4/chat/completions"
+    )
+  }
 }

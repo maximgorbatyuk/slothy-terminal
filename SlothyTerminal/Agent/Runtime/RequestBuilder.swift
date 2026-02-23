@@ -17,9 +17,7 @@ enum RequestBuilder {
   static let openAIURL = URL(string: "https://api.openai.com/v1/chat/completions")!
 
   /// Default Z.AI API endpoint.
-  static let zaiURL = URL(
-    string: "https://open.bigmodel.cn/api/paas/v4/chat/completions"
-  )!
+  static let zaiURL = ZAIEndpoint.china.chatCompletionsURL
 
   /// Maximum tokens for the response.
   private static let defaultMaxTokens = 16_384

@@ -4,12 +4,31 @@ import Foundation
 ///
 /// Z.AI uses an OpenAI-compatible API surface, so auth is a simple
 /// Bearer token. Thinking is enabled by default with no manual variants.
+///
+/// Supports three endpoint regions (China, International, Coding Plan)
+/// and falls back to `ZHIPU_API_KEY` / `ZAI_API_KEY` environment
+/// variables when no Keychain credentials are available.
 final class ZAIAdapter: ProviderAdapter, Sendable {
   let providerID: ProviderID
 
+  /// The API endpoint URL to use for requests.
+  private let endpointURL: URL
+
+  /// Environment variable names checked (in order) as auth fallback.
+  private static let envVarNames = ["ZAI_API_KEY", "ZHIPU_API_KEY"]
+
   /// Creates an adapter for either `.zai` or `.zhipuAI` provider IDs.
-  init(providerID: ProviderID = .zai) {
+  ///
+  /// - Parameters:
+  ///   - providerID: The provider identifier.
+  ///   - endpointURL: The chat completions endpoint. Defaults to the
+  ///     China mainland endpoint (`open.bigmodel.cn`).
+  init(
+    providerID: ProviderID = .zai,
+    endpointURL: URL = ZAIEndpoint.china.chatCompletionsURL
+  ) {
     self.providerID = providerID
+    self.endpointURL = endpointURL
   }
 
   func allowedModels(
@@ -45,20 +64,40 @@ final class ZAIAdapter: ProviderAdapter, Sendable {
     var req = request
     var headers = req.headers
 
-    guard let auth = context.auth else {
-      req.headers = headers
-      return req
-    }
+    /// Override the endpoint URL from RequestBuilder's default.
+    req.url = endpointURL
 
-    switch auth {
-    case .apiKey(let key):
-      headers["Authorization"] = "Bearer \(key)"
+    /// Resolve auth: Keychain → env vars.
+    let resolvedAuth = context.auth ?? Self.authFromEnvironment()
 
-    case .oauth(let token):
-      headers["Authorization"] = "Bearer \(token.accessToken)"
+    if let auth = resolvedAuth {
+      switch auth {
+      case .apiKey(let key):
+        headers["Authorization"] = "Bearer \(key)"
+
+      case .oauth(let token):
+        headers["Authorization"] = "Bearer \(token.accessToken)"
+      }
     }
 
     req.headers = headers
     return req
+  }
+
+  // MARK: - Environment variable fallback
+
+  /// Checks `ZAI_API_KEY` and `ZHIPU_API_KEY` environment variables.
+  ///
+  /// Returns the first non-empty value found, or nil.
+  static func authFromEnvironment() -> AuthMode? {
+    for name in envVarNames {
+      if let value = ProcessInfo.processInfo.environment[name],
+         !value.isEmpty
+      {
+        return .apiKey(value)
+      }
+    }
+
+    return nil
   }
 }

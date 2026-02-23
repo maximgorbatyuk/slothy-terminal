@@ -90,8 +90,16 @@ enum AgentRuntimeFactory {
     tokenStore: TokenStore = KeychainTokenStore()
   ) async -> Bool {
     do {
-      let auth = try await tokenStore.load(provider: provider)
-      return auth != nil
+      if try await tokenStore.load(provider: provider) != nil {
+        return true
+      }
+
+      /// Z.AI providers fall back to environment variables.
+      if provider == .zai || provider == .zhipuAI {
+        return ZAIAdapter.authFromEnvironment() != nil
+      }
+
+      return false
     } catch {
       return false
     }
@@ -101,13 +109,16 @@ enum AgentRuntimeFactory {
 
   /// Creates adapter instances for all supported providers.
   private static func makeAdapters(
-    tokenStore: TokenStore
+    tokenStore: TokenStore,
+    zaiEndpoint: ZAIEndpoint = ConfigManager.shared.config.zaiEndpoint
   ) -> [ProviderID: any ProviderAdapter] {
-    [
+    let zaiURL = zaiEndpoint.chatCompletionsURL
+
+    return [
       .anthropic: ClaudeAdapter(tokenStore: tokenStore),
       .openAI: CodexAdapter(tokenStore: tokenStore),
-      .zai: ZAIAdapter(providerID: .zai),
-      .zhipuAI: ZAIAdapter(providerID: .zhipuAI),
+      .zai: ZAIAdapter(providerID: .zai, endpointURL: zaiURL),
+      .zhipuAI: ZAIAdapter(providerID: .zhipuAI, endpointURL: zaiURL),
     ]
   }
 }

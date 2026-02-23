@@ -119,6 +119,9 @@ struct AppConfig: Codable, Equatable {
   /// Default model ID for native agent mode (e.g. "claude-sonnet-4-6").
   var nativeDefaultModel: String?
 
+  /// Z.AI API endpoint region. Defaults to China mainland.
+  var zaiEndpoint: ZAIEndpoint = .china
+
   // MARK: - Keyboard Shortcuts
 
   /// Custom keyboard shortcuts.
@@ -225,6 +228,47 @@ enum TerminalInteractionMode: String, Codable, CaseIterable {
 
     case .appMouse:
       return "Send mouse events to the running TUI for in-app interactions."
+    }
+  }
+}
+
+/// Z.AI API endpoint regions.
+///
+/// Z.AI exposes the same OpenAI-compatible API surface from multiple
+/// base URLs. The choice depends on geography and subscription plan.
+enum ZAIEndpoint: String, Codable, CaseIterable {
+  /// China mainland — `open.bigmodel.cn`.
+  case china = "china"
+
+  /// International — `api.z.ai`.
+  case international = "international"
+
+  /// Z.AI Coding Plan — `api.z.ai/api/coding/...`.
+  case codingPlan = "coding_plan"
+
+  var displayName: String {
+    switch self {
+    case .china:
+      return "China (open.bigmodel.cn)"
+
+    case .international:
+      return "International (api.z.ai)"
+
+    case .codingPlan:
+      return "Coding Plan (api.z.ai/coding)"
+    }
+  }
+
+  var chatCompletionsURL: URL {
+    switch self {
+    case .china:
+      return URL(string: "https://open.bigmodel.cn/api/paas/v4/chat/completions")!
+
+    case .international:
+      return URL(string: "https://api.z.ai/api/paas/v4/chat/completions")!
+
+    case .codingPlan:
+      return URL(string: "https://api.z.ai/api/coding/paas/v4/chat/completions")!
     }
   }
 }

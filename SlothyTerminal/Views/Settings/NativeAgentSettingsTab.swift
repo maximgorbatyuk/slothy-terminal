@@ -108,7 +108,10 @@ struct NativeAgentSettingsTab: View {
         }
         .padding(.top, 4)
 
-        Text("API keys are stored securely in the macOS Keychain.")
+        Text(
+          "API keys are stored securely in the macOS Keychain. "
+          + "Z.AI also reads ZAI_API_KEY / ZHIPU_API_KEY environment variables as fallback."
+        )
           .font(.caption)
           .foregroundColor(.secondary)
       }
@@ -136,7 +139,21 @@ struct NativeAgentSettingsTab: View {
         )
         .textFieldStyle(.roundedBorder)
 
-        Text("Provider and model used when starting a new native chat session.")
+        if configManager.config.nativeDefaultProvider == "zai" {
+          Picker(
+            "Z.AI Endpoint",
+            selection: Bindable(configManager).config.zaiEndpoint
+          ) {
+            ForEach(ZAIEndpoint.allCases, id: \.self) { endpoint in
+              Text(endpoint.displayName).tag(endpoint)
+            }
+          }
+        }
+
+        Text(
+          "Provider and model for new native chat sessions. "
+          + "Z.AI endpoint takes effect on the next session."
+        )
           .font(.caption)
           .foregroundColor(.secondary)
       }
@@ -324,6 +341,14 @@ struct NativeAgentSettingsTab: View {
           return .error("Token expired")
         }
       }
+
+      /// Z.AI providers fall back to environment variables.
+      if (provider == .zai || provider == .zhipuAI),
+         ZAIAdapter.authFromEnvironment() != nil
+      {
+        return .connected
+      }
+
       return .disconnected
     } catch {
       return .error(error.localizedDescription)
