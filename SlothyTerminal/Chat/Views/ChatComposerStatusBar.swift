@@ -254,8 +254,8 @@ struct ChatComposerStatusBar: View {
         ),
         ChatModelSelection(
           providerID: "zai",
-          modelID: "glm-4.7",
-          displayName: "zai/glm-4.7"
+          modelID: "glm-5",
+          displayName: "zai/glm-5"
         ),
       ]
 
@@ -268,8 +268,8 @@ struct ChatComposerStatusBar: View {
         ),
         ChatModelSelection(
           providerID: "openai",
-          modelID: "gpt-5.1-codex",
-          displayName: "gpt-5.1-codex"
+          modelID: "gpt-5.3-codex",
+          displayName: "gpt-5.3-codex"
         ),
       ]
 

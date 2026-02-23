@@ -126,6 +126,9 @@ class Tab: Identifiable {
       case .openAI:
         return "Codex"
 
+      case .zai, .zhipuAI:
+        return "Z.AI"
+
       default:
         return "Native"
       }

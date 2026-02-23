@@ -25,7 +25,7 @@ final class ZAIAdapter: ProviderAdapter, Sendable {
   ///     China mainland endpoint (`open.bigmodel.cn`).
   init(
     providerID: ProviderID = .zai,
-    endpointURL: URL = ZAIEndpoint.china.chatCompletionsURL
+    endpointURL: URL = ZAIEndpoint.codingPlan.chatCompletionsURL
   ) {
     self.providerID = providerID
     self.endpointURL = endpointURL

@@ -407,10 +407,10 @@ class ChatState {
         modelID = config.nativeDefaultModel ?? "claude-sonnet-4-6"
 
       case .openAI:
-        modelID = config.nativeDefaultModel ?? "gpt-5.1-codex"
+        modelID = config.nativeDefaultModel ?? "gpt-5.3-codex"
 
-      default:
-        modelID = config.nativeDefaultModel ?? "claude-sonnet-4-6"
+      case .zai, .zhipuAI:
+        modelID = config.nativeDefaultModel ?? "glm-5"
       }
     } else {
       providerID = ProviderID(rawValue: config.nativeDefaultProvider ?? "anthropic") ?? .anthropic

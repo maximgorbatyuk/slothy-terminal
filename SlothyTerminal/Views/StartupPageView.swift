@@ -111,8 +111,10 @@ struct StartupPageView: View {
     .task {
       async let anthropicAuth = AgentRuntimeFactory.hasAuth(for: .anthropic)
       async let openAIAuth = AgentRuntimeFactory.hasAuth(for: .openAI)
+      async let zaiAuth = AgentRuntimeFactory.hasAuth(for: .zai)
       nativeAuthStatus[.anthropic] = await anthropicAuth
       nativeAuthStatus[.openAI] = await openAIAuth
+      nativeAuthStatus[.zai] = await zaiAuth
     }
     .sheet(isPresented: $showFolderSelector) {
       FolderSelectorSheet(
@@ -348,6 +350,14 @@ struct StartupPageView: View {
         nativeProviderID: .openAI
       )
 
+    case .zaiNative:
+      appState.createChatTab(
+        agent: .nativeAgent,
+        directory: directory,
+        initialPrompt: prompt?.promptText,
+        nativeProviderID: .zai
+      )
+
     case .claudeDesktop:
       guard let prompt,
             !prompt.promptText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
@@ -416,6 +426,9 @@ struct StartupPageView: View {
     case .codexNative:
       return nativeAuthStatus[.openAI] ?? false
 
+    case .zaiNative:
+      return nativeAuthStatus[.zai] ?? false
+
     case .claudeDesktop:
       return externalAppManager.knownApps
         .first(where: { $0.id == "com.anthropic.claudefordesktop" })?.isInstalled ?? false
@@ -438,7 +451,7 @@ struct StartupPageView: View {
     case .claudeChat, .opencodeChat:
       return "CLI not found"
 
-    case .claudeNative, .codexNative:
+    case .claudeNative, .codexNative, .zaiNative:
       return "No API key or OAuth"
 
     case .claudeDesktop, .codexDesktop:
@@ -462,6 +475,9 @@ struct StartupPageView: View {
 
     case .codexNative:
       return .purple
+
+    case .zaiNative:
+      return Color(red: 0.20, green: 0.60, blue: 0.86)
 
     case .opencodeChat:
       return Color(red: 0.29, green: 0.78, blue: 0.49)

@@ -119,8 +119,8 @@ struct AppConfig: Codable, Equatable {
   /// Default model ID for native agent mode (e.g. "claude-sonnet-4-6").
   var nativeDefaultModel: String?
 
-  /// Z.AI API endpoint region. Defaults to China mainland.
-  var zaiEndpoint: ZAIEndpoint = .china
+  /// Z.AI API endpoint region. Defaults to Coding Plan.
+  var zaiEndpoint: ZAIEndpoint = .codingPlan
 
   // MARK: - Keyboard Shortcuts
 
@@ -167,9 +167,75 @@ struct AppConfig: Codable, Equatable {
 
   // MARK: - Default Config
 
+  /// Creates a configuration with all default values.
+  init() {}
+
   /// Returns the default configuration.
   static var `default`: AppConfig {
     AppConfig()
+  }
+
+  // MARK: - Resilient Decoding
+
+  /// Decodes each field individually so that missing or unknown keys
+  /// fall back to their default values instead of failing the entire decode.
+  /// This prevents settings from being silently reset when new fields
+  /// are added to `AppConfig`.
+  init(from decoder: Decoder) throws {
+    let c = try decoder.container(keyedBy: CodingKeys.self)
+    let d = AppConfig()
+
+    sidebarWidth = (try? c.decode(CGFloat.self, forKey: .sidebarWidth)) ?? d.sidebarWidth
+    showSidebarByDefault = (try? c.decode(Bool.self, forKey: .showSidebarByDefault)) ?? d.showSidebarByDefault
+    sidebarPosition = (try? c.decode(SidebarPosition.self, forKey: .sidebarPosition)) ?? d.sidebarPosition
+    sidebarTab = (try? c.decode(SidebarTab.self, forKey: .sidebarTab)) ?? d.sidebarTab
+
+    defaultTabMode = (try? c.decode(TabMode.self, forKey: .defaultTabMode)) ?? d.defaultTabMode
+    defaultAgent = (try? c.decode(AgentType.self, forKey: .defaultAgent)) ?? d.defaultAgent
+    maxRecentFolders = (try? c.decode(Int.self, forKey: .maxRecentFolders)) ?? d.maxRecentFolders
+    lastUsedLaunchType = try? c.decode(LaunchType.self, forKey: .lastUsedLaunchType)
+
+    claudePath = try? c.decode(String.self, forKey: .claudePath)
+    opencodePath = try? c.decode(String.self, forKey: .opencodePath)
+
+    colorScheme = (try? c.decode(AppColorScheme.self, forKey: .colorScheme)) ?? d.colorScheme
+    terminalFontName = (try? c.decode(String.self, forKey: .terminalFontName)) ?? d.terminalFontName
+    terminalFontSize = (try? c.decode(CGFloat.self, forKey: .terminalFontSize)) ?? d.terminalFontSize
+    terminalInteractionMode = (try? c.decode(TerminalInteractionMode.self, forKey: .terminalInteractionMode)) ?? d.terminalInteractionMode
+    claudeAccentColor = try? c.decode(CodableColor.self, forKey: .claudeAccentColor)
+    opencodeAccentColor = try? c.decode(CodableColor.self, forKey: .opencodeAccentColor)
+
+    savedPrompts = (try? c.decode([SavedPrompt].self, forKey: .savedPrompts)) ?? d.savedPrompts
+    savedPromptTags = try? c.decode([PromptTag].self, forKey: .savedPromptTags)
+
+    chatSendKey = (try? c.decode(ChatSendKey.self, forKey: .chatSendKey)) ?? d.chatSendKey
+    chatRenderMode = (try? c.decode(ChatRenderMode.self, forKey: .chatRenderMode)) ?? d.chatRenderMode
+    chatMessageTextSize = (try? c.decode(ChatMessageTextSize.self, forKey: .chatMessageTextSize)) ?? d.chatMessageTextSize
+    chatShowTimestamps = (try? c.decode(Bool.self, forKey: .chatShowTimestamps)) ?? d.chatShowTimestamps
+    chatShowTokenMetadata = (try? c.decode(Bool.self, forKey: .chatShowTokenMetadata)) ?? d.chatShowTokenMetadata
+    lastUsedOpenCodeModel = try? c.decode(ChatModelSelection.self, forKey: .lastUsedOpenCodeModel)
+    lastUsedOpenCodeMode = try? c.decode(ChatMode.self, forKey: .lastUsedOpenCodeMode)
+    lastUsedOpenCodeAskModeEnabled = (try? c.decode(Bool.self, forKey: .lastUsedOpenCodeAskModeEnabled)) ?? d.lastUsedOpenCodeAskModeEnabled
+
+    nativeAgentEnabled = (try? c.decode(Bool.self, forKey: .nativeAgentEnabled)) ?? d.nativeAgentEnabled
+    nativeDefaultProvider = try? c.decode(String.self, forKey: .nativeDefaultProvider)
+    nativeDefaultModel = try? c.decode(String.self, forKey: .nativeDefaultModel)
+    zaiEndpoint = (try? c.decode(ZAIEndpoint.self, forKey: .zaiEndpoint)) ?? d.zaiEndpoint
+
+    shortcuts = (try? c.decode([String: String].self, forKey: .shortcuts)) ?? d.shortcuts
+
+    telegramBotToken = try? c.decode(String.self, forKey: .telegramBotToken)
+    telegramAllowedUserID = try? c.decode(Int64.self, forKey: .telegramAllowedUserID)
+    telegramExecutionAgent = (try? c.decode(AgentType.self, forKey: .telegramExecutionAgent)) ?? d.telegramExecutionAgent
+    telegramAutoStartOnOpen = (try? c.decode(Bool.self, forKey: .telegramAutoStartOnOpen)) ?? d.telegramAutoStartOnOpen
+    telegramDefaultListenMode = (try? c.decode(TelegramBotMode.self, forKey: .telegramDefaultListenMode)) ?? d.telegramDefaultListenMode
+    telegramReplyPrefix = try? c.decode(String.self, forKey: .telegramReplyPrefix)
+    telegramRootDirectoryPath = try? c.decode(String.self, forKey: .telegramRootDirectoryPath)
+    telegramPredefinedOpenSubpath = try? c.decode(String.self, forKey: .telegramPredefinedOpenSubpath)
+    telegramOpenDirectoryTabMode = (try? c.decode(TabMode.self, forKey: .telegramOpenDirectoryTabMode)) ?? d.telegramOpenDirectoryTabMode
+    telegramOpenDirectoryAgent = (try? c.decode(AgentType.self, forKey: .telegramOpenDirectoryAgent)) ?? d.telegramOpenDirectoryAgent
+
+    windowState = try? c.decode(WindowState.self, forKey: .windowState)
   }
 }
 

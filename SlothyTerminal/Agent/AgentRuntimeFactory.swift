@@ -1,4 +1,5 @@
 import Foundation
+import OSLog
 
 /// Assembles a fully configured `AgentRuntime` from application configuration.
 ///
@@ -91,16 +92,21 @@ enum AgentRuntimeFactory {
   ) async -> Bool {
     do {
       if try await tokenStore.load(provider: provider) != nil {
+        Logger.agent.debug("hasAuth(\(provider.rawValue)): found in Keychain")
         return true
       }
 
       /// Z.AI providers fall back to environment variables.
       if provider == .zai || provider == .zhipuAI {
-        return ZAIAdapter.authFromEnvironment() != nil
+        let envAuth = ZAIAdapter.authFromEnvironment() != nil
+        Logger.agent.debug("hasAuth(\(provider.rawValue)): env fallback = \(envAuth)")
+        return envAuth
       }
 
+      Logger.agent.debug("hasAuth(\(provider.rawValue)): no credentials found")
       return false
     } catch {
+      Logger.agent.error("hasAuth(\(provider.rawValue)): Keychain error: \(error.localizedDescription)")
       return false
     }
   }

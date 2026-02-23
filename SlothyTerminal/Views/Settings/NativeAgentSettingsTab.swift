@@ -139,20 +139,19 @@ struct NativeAgentSettingsTab: View {
         )
         .textFieldStyle(.roundedBorder)
 
-        if configManager.config.nativeDefaultProvider == "zai" {
-          Picker(
-            "Z.AI Endpoint",
-            selection: Bindable(configManager).config.zaiEndpoint
-          ) {
-            ForEach(ZAIEndpoint.allCases, id: \.self) { endpoint in
-              Text(endpoint.displayName).tag(endpoint)
-            }
+        Picker(
+          "Z.AI Endpoint",
+          selection: Bindable(configManager).config.zaiEndpoint
+        ) {
+          ForEach(ZAIEndpoint.allCases, id: \.self) { endpoint in
+            Text(endpoint.displayName).tag(endpoint)
           }
         }
 
         Text(
           "Provider and model for new native chat sessions. "
-          + "Z.AI endpoint takes effect on the next session."
+          + "Coding Plan subscribers must select the Coding Plan endpoint — "
+          + "the standard endpoints require separate pay-as-you-go credit."
         )
           .font(.caption)
           .foregroundColor(.secondary)

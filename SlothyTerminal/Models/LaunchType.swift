@@ -7,6 +7,7 @@ enum LaunchType: String, CaseIterable, Identifiable, Codable {
   case opencodeChat
   case claudeNative
   case codexNative
+  case zaiNative
   case claudeDesktop
   case codexDesktop
   case telegramBot
@@ -30,6 +31,9 @@ enum LaunchType: String, CaseIterable, Identifiable, Codable {
 
     case .codexNative:
       return "Codex Native"
+
+    case .zaiNative:
+      return "Z.AI Native"
 
     case .claudeDesktop:
       return "Claude Desktop"
@@ -58,6 +62,9 @@ enum LaunchType: String, CaseIterable, Identifiable, Codable {
       return "Direct API — no CLI required"
 
     case .codexNative:
+      return "Direct API — no CLI required"
+
+    case .zaiNative:
       return "Direct API — no CLI required"
 
     case .claudeDesktop:
@@ -89,6 +96,9 @@ enum LaunchType: String, CaseIterable, Identifiable, Codable {
     case .codexNative:
       return "bolt.fill"
 
+    case .zaiNative:
+      return "bolt.fill"
+
     case .claudeDesktop:
       return "desktopcomputer"
 
@@ -105,7 +115,7 @@ enum LaunchType: String, CaseIterable, Identifiable, Codable {
   var requiresPrompt: Bool {
     switch self {
     case .terminal, .claudeChat, .opencodeChat, .claudeNative, .codexNative,
-         .claudeDesktop, .codexDesktop:
+         .zaiNative, .claudeDesktop, .codexDesktop:
       return true
 
     case .telegramBot:
@@ -121,7 +131,7 @@ enum LaunchType: String, CaseIterable, Identifiable, Codable {
       return true
 
     case .terminal, .claudeChat, .opencodeChat, .claudeNative, .codexNative,
-         .telegramBot:
+         .zaiNative, .telegramBot:
       return false
     }
   }
@@ -138,7 +148,7 @@ enum LaunchType: String, CaseIterable, Identifiable, Codable {
     case .opencodeChat:
       return .opencode
 
-    case .claudeNative, .codexNative:
+    case .claudeNative, .codexNative, .zaiNative:
       return .nativeAgent
 
     case .codexDesktop, .telegramBot:
@@ -154,6 +164,9 @@ enum LaunchType: String, CaseIterable, Identifiable, Codable {
 
     case .codexNative:
       return .openAI
+
+    case .zaiNative:
+      return .zai
 
     default:
       return nil

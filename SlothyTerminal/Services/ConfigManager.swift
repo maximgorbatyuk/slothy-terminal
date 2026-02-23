@@ -10,7 +10,9 @@ class ConfigManager {
   /// The current configuration.
   var config: AppConfig {
     didSet {
-      if config != oldValue {
+      if !isSuppressingSave,
+         config != oldValue
+      {
         saveDebounced()
       }
     }
@@ -18,6 +20,10 @@ class ConfigManager {
 
   /// Whether the config has unsaved changes.
   private(set) var hasUnsavedChanges: Bool = false
+
+  /// Suppresses `didSet` saves during `load()` to avoid
+  /// unnecessary disk writes on launch.
+  private var isSuppressingSave = false
 
   /// Debounce timer for saving.
   private var saveTimer: Timer?
@@ -58,6 +64,9 @@ class ConfigManager {
       /// No config file exists, use defaults.
       return
     }
+
+    isSuppressingSave = true
+    defer { isSuppressingSave = false }
 
     do {
       let data = try Data(contentsOf: configFileURL)
