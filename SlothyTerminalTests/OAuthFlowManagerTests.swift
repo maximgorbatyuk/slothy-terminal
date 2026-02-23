@@ -20,18 +20,18 @@ struct OAuthFlowManagerTests {
 
   // MARK: - supportsOAuth
 
-  @Test("supportsOAuth returns true only for OpenAI")
+  @Test("supportsOAuth returns true for OpenAI")
   func supportsOAuthOpenAI() {
     let manager = makeManager()
 
     #expect(manager.supportsOAuth(for: .openAI) == true)
   }
 
-  @Test("supportsOAuth returns false for Anthropic")
+  @Test("supportsOAuth returns true for Anthropic")
   func supportsOAuthAnthropic() {
     let manager = makeManager()
 
-    #expect(manager.supportsOAuth(for: .anthropic) == false)
+    #expect(manager.supportsOAuth(for: .anthropic) == true)
   }
 
   @Test("supportsOAuth returns false for Z.AI")
@@ -46,9 +46,17 @@ struct OAuthFlowManagerTests {
   @Test("startFlow for unsupported provider stays idle")
   func startFlowUnsupportedProvider() {
     let manager = makeManager()
+    manager.startFlow(for: .zai)
+
+    #expect(manager.flowState[.zai] == nil)
+  }
+
+  @Test("startFlow for Anthropic sets authorizing state")
+  func startFlowAnthropicSetsAuthorizing() {
+    let manager = makeManager()
     manager.startFlow(for: .anthropic)
 
-    #expect(manager.flowState[.anthropic] == nil)
+    #expect(manager.flowState[.anthropic] == .authorizing)
   }
 
   // MARK: - PKCE utilities (via CodexOAuthClient)
@@ -130,5 +138,31 @@ struct OAuthFlowManagerTests {
     manager.startFlow(for: .openAI)
 
     #expect(manager.flowState[.openAI] == .authorizing)
+  }
+
+  // MARK: - Cancel flow
+
+  @Test("cancelFlow resets state to idle")
+  func cancelFlowResetsToIdle() {
+    let manager = makeManager()
+    manager.startFlow(for: .anthropic)
+
+    #expect(manager.flowState[.anthropic] == .authorizing)
+
+    manager.cancelFlow(for: .anthropic)
+
+    #expect(manager.flowState[.anthropic] == .idle)
+  }
+
+  // MARK: - submitCode guard
+
+  @Test("submitCode without awaitingCode state is no-op")
+  func submitCodeWithoutAwaitingCodeIsNoOp() {
+    let manager = makeManager()
+
+    /// No flow started — submitCode should do nothing.
+    manager.submitCode("test-code", for: .anthropic)
+
+    #expect(manager.flowState[.anthropic] == nil)
   }
 }

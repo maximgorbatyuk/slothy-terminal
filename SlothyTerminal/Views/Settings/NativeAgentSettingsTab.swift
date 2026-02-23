@@ -6,7 +6,7 @@ import SwiftUI
 /// Provides:
 /// - Master toggle for native agent mode
 /// - Per-provider API key entry with connection status
-/// - OAuth sign-in for providers that support it (OpenAI/Codex)
+/// - OAuth sign-in for providers that support it (Anthropic, OpenAI/Codex)
 /// - Default provider and model selection
 struct NativeAgentSettingsTab: View {
   private var configManager = ConfigManager.shared
@@ -22,6 +22,9 @@ struct NativeAgentSettingsTab: View {
   @State private var zaiStatus: AuthStatus = .disconnected
 
   @State private var isLoading = false
+
+  /// Authorization code pasted by the user for hosted-callback flows.
+  @State private var pastedAuthCode = ""
 
   @State private var oauthManager: OAuthFlowManager
 
@@ -62,8 +65,13 @@ struct NativeAgentSettingsTab: View {
           providerName: "Anthropic (Claude)",
           providerIcon: "brain.head.profile",
           apiKeyBinding: $anthropicKey,
-          authStatus: anthropicStatus
+          authStatus: anthropicStatus,
+          onOAuthLogin: {
+            oauthManager.startFlow(for: .anthropic)
+          }
         )
+
+        oauthFlowStatusView(for: .anthropic)
 
         Divider()
 
@@ -77,7 +85,7 @@ struct NativeAgentSettingsTab: View {
           }
         )
 
-        oauthFlowStatus
+        oauthFlowStatusView(for: .openAI)
 
         Divider()
 
@@ -147,13 +155,20 @@ struct NativeAgentSettingsTab: View {
         }
       }
     }
+    .onChange(of: oauthManager.flowState[.anthropic]) { _, newState in
+      if newState == .succeeded {
+        Task {
+          anthropicStatus = await statusFor(.anthropic)
+        }
+      }
+    }
   }
 
   // MARK: - OAuth Flow Status
 
   @ViewBuilder
-  private var oauthFlowStatus: some View {
-    let state = oauthManager.flowState[.openAI] ?? .idle
+  private func oauthFlowStatusView(for provider: ProviderID) -> some View {
+    let state = oauthManager.flowState[provider] ?? .idle
 
     switch state {
     case .idle:
@@ -167,6 +182,39 @@ struct NativeAgentSettingsTab: View {
         Text("Waiting for browser authorization...")
           .font(.caption)
           .foregroundColor(.secondary)
+      }
+      .padding(.leading, 28)
+
+    case .awaitingCode:
+      VStack(alignment: .leading, spacing: 6) {
+        Text("Paste the authorization code from the browser page:")
+          .font(.caption)
+          .foregroundColor(.secondary)
+
+        HStack(spacing: 8) {
+          TextField("Authorization code", text: $pastedAuthCode)
+            .textFieldStyle(.roundedBorder)
+            .font(.system(.caption, design: .monospaced))
+
+          Button("Submit") {
+            let code = pastedAuthCode.trimmingCharacters(in: .whitespacesAndNewlines)
+
+            guard !code.isEmpty else {
+              return
+            }
+
+            oauthManager.submitCode(code, for: provider)
+            pastedAuthCode = ""
+          }
+          .disabled(pastedAuthCode.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+
+          Button("Cancel") {
+            oauthManager.cancelFlow(for: provider)
+            pastedAuthCode = ""
+          }
+          .buttonStyle(.plain)
+          .foregroundColor(.secondary)
+        }
       }
       .padding(.leading, 28)
 
@@ -206,7 +254,7 @@ struct NativeAgentSettingsTab: View {
         }
 
         Button("Retry") {
-          oauthManager.startFlow(for: .openAI)
+          oauthManager.startFlow(for: provider)
         }
         .font(.caption)
         .buttonStyle(.link)

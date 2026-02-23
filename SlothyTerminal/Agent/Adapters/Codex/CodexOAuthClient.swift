@@ -64,13 +64,6 @@ final class CodexOAuthClient: OAuthClient, @unchecked Sendable {
     return CodexOAuthStart(authorizeURL: url, state: state, verifier: verifier)
   }
 
-  /// Exchanges an authorization code for tokens.
-  ///
-  /// Use `exchange(code:verifier:)` instead — the basic form throws.
-  func exchange(code: String) async throws -> OAuthToken {
-    throw CodexOAuthError.useExchangeWithVerifier
-  }
-
   /// Exchanges an authorization code + PKCE verifier for tokens.
   func exchange(code: String, verifier: String) async throws -> OAuthToken {
     var request = URLRequest(url: issuer.appendingPathComponent("oauth/token"))
@@ -95,9 +88,14 @@ final class CodexOAuthClient: OAuthClient, @unchecked Sendable {
     }
 
     let payload = try JSONDecoder().decode(TokenResponse.self, from: data)
+
+    guard let refreshToken = payload.refreshToken else {
+      throw CodexOAuthError.exchangeFailed
+    }
+
     return OAuthToken(
       accessToken: payload.accessToken,
-      refreshToken: payload.refreshToken,
+      refreshToken: refreshToken,
       expiresAt: Date().addingTimeInterval(TimeInterval(payload.expiresIn ?? 3600)),
       accountID: Self.extractAccountID(
         idToken: payload.idToken,
@@ -127,7 +125,7 @@ final class CodexOAuthClient: OAuthClient, @unchecked Sendable {
     let payload = try JSONDecoder().decode(TokenResponse.self, from: data)
     return OAuthToken(
       accessToken: payload.accessToken,
-      refreshToken: payload.refreshToken,
+      refreshToken: payload.refreshToken ?? token.refreshToken,
       expiresAt: Date().addingTimeInterval(TimeInterval(payload.expiresIn ?? 3600)),
       accountID: Self.extractAccountID(
         idToken: payload.idToken,
@@ -141,7 +139,8 @@ final class CodexOAuthClient: OAuthClient, @unchecked Sendable {
   private struct TokenResponse: Codable {
     let idToken: String?
     let accessToken: String
-    let refreshToken: String
+    /// Optional per RFC 6749 section 5.1 — refresh responses may omit this.
+    let refreshToken: String?
     let expiresIn: Int?
 
     enum CodingKeys: String, CodingKey {
@@ -229,10 +228,18 @@ final class CodexOAuthClient: OAuthClient, @unchecked Sendable {
     return nil
   }
 
+  /// Characters allowed unescaped in `application/x-www-form-urlencoded`.
+  /// Only alphanumerics and `-._~` — notably excludes `+`, `=`, `&`, `#`.
+  private static let formAllowed: CharacterSet = {
+    var set = CharacterSet.alphanumerics
+    set.insert(charactersIn: "-._~")
+    return set
+  }()
+
   private static func formURLEncoded(_ map: [String: String]) -> String {
-    map.map { key, value in
-      let k = key.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? key
-      let v = value.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? value
+    map.sorted(by: { $0.key < $1.key }).map { key, value in
+      let k = key.addingPercentEncoding(withAllowedCharacters: formAllowed) ?? key
+      let v = value.addingPercentEncoding(withAllowedCharacters: formAllowed) ?? value
       return "\(k)=\(v)"
     }.joined(separator: "&")
   }
@@ -240,16 +247,12 @@ final class CodexOAuthClient: OAuthClient, @unchecked Sendable {
 
 /// Errors specific to the Codex OAuth flow.
 enum CodexOAuthError: Error, LocalizedError {
-  case useExchangeWithVerifier
   case exchangeFailed
   case refreshFailed
   case invalidAuthorizeURL
 
   var errorDescription: String? {
     switch self {
-    case .useExchangeWithVerifier:
-      return "Use exchange(code:verifier:) for PKCE flow"
-
     case .exchangeFailed:
       return "Codex OAuth token exchange failed"
 

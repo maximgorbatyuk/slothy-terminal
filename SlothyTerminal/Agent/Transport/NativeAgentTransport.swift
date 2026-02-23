@@ -184,8 +184,15 @@ final class NativeAgentTransport: ChatTransport, @unchecked Sendable {
       return
     } catch {
       await MainActor.run {
-        onError?(error)
-        onTerminated?(.crash(exitCode: 1, stderr: error.localizedDescription))
+        if NativeAgentTransport.isAPIError(error) {
+          /// Non-transient API errors (rate limits, auth failures) —
+          /// surface directly without recovery retries.
+          onError?(error)
+        } else {
+          /// Transport-level errors — let the engine attempt recovery.
+          onError?(error)
+          onTerminated?(.crash(exitCode: 1, stderr: error.localizedDescription))
+        }
       }
     }
   }
@@ -284,6 +291,18 @@ final class NativeAgentTransport: ChatTransport, @unchecked Sendable {
     case .error(let msg):
       Logger.chat.error("Agent loop error: \(msg)")
     }
+  }
+
+  /// Returns true for HTTP API errors (4xx/5xx) that should not
+  /// trigger transport recovery retries.
+  private static func isAPIError(_ error: Error) -> Bool {
+    if let httpError = error as? URLSessionHTTPTransportError,
+       case .httpError = httpError
+    {
+      return true
+    }
+
+    return false
   }
 
   /// Close any text or thinking blocks that are still open.

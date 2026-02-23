@@ -104,11 +104,24 @@ final class ClaudeAdapter: ProviderAdapter, @unchecked Sendable {
       return token
     }
 
-    /// Claude OAuth refresh is not yet supported — return the expired token
-    /// and let the API reject it. The user will need to re-authenticate.
-    Logger.agent.warning(
-      "Claude OAuth token expired but refresh is not supported — API call may fail"
+    Logger.agent.info("Claude OAuth token near expiry — refreshing")
+
+    /// redirectURI is unused for refresh grant — only needed for authorization.
+    let client = ClaudeOAuthClient(
+      clientID: ClaudeOAuthClient.defaultClientID,
+      redirectURI: "unused"
     )
-    return token
+
+    do {
+      let refreshed = try await client.refresh(token: token)
+      try await tokenStore.save(provider: .anthropic, auth: .oauth(refreshed))
+      Logger.agent.info("Claude OAuth token refreshed successfully")
+      return refreshed
+    } catch {
+      Logger.agent.error(
+        "Claude OAuth token refresh failed: \(error.localizedDescription) — using expired token"
+      )
+      return token
+    }
   }
 }

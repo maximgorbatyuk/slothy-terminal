@@ -5,19 +5,38 @@ import OSLog
 enum OAuthFlowState: Sendable, Equatable {
   case idle
   case authorizing
+
+  /// Browser opened — waiting for the user to paste the authorization code.
+  ///
+  /// Used for providers whose OAuth server does not support localhost
+  /// redirect URIs (e.g. Anthropic). The browser redirects to a hosted
+  /// page that displays the code for manual copy-paste.
+  case awaitingCode
+
   case exchanging
   case succeeded
   case failed(String)
 }
 
+/// Error when the OAuth callback `state` parameter doesn't match
+/// the value sent in the authorization request (CSRF protection).
+enum OAuthFlowError: Error, LocalizedError {
+  case stateMismatch
+
+  var errorDescription: String? {
+    "OAuth state parameter mismatch — possible CSRF attack"
+  }
+}
+
 /// Orchestrates the OAuth PKCE authorization flow for providers that support it.
 ///
-/// Coordinates between the OAuth client, callback server, browser, and token store:
-/// 1. Generates PKCE verifier + authorization URL via `CodexOAuthClient`
-/// 2. Starts `OAuthCallbackServer` to receive the redirect
-/// 3. Opens the browser for user authorization
-/// 4. Exchanges the authorization code for tokens
-/// 5. Persists tokens to `KeychainTokenStore`
+/// Two flow variants:
+/// - **Localhost callback** (OpenAI/Codex): Starts `OAuthCallbackServer`,
+///   browser redirects back to localhost, code captured automatically.
+/// - **Hosted callback** (Anthropic): Uses Anthropic's hosted redirect URI
+///   (`console.anthropic.com/oauth/code/callback`). The browser shows the
+///   code on the page — user copies it and pastes into the app via
+///   `submitCode(_:for:)`.
 ///
 /// UI binds directly to `flowState` for real-time feedback.
 @Observable
@@ -29,6 +48,10 @@ final class OAuthFlowManager {
   private let tokenStore: any TokenStore
   private let urlOpener: @Sendable (URL) -> Void
   private let callbackPort: UInt16
+
+  /// PKCE verifier stored between `startFlow` and `submitCode` for
+  /// hosted-callback providers (Anthropic).
+  private var pendingVerifier: [ProviderID: String] = [:]
 
   init(
     tokenStore: any TokenStore,
@@ -42,7 +65,7 @@ final class OAuthFlowManager {
 
   /// Whether the given provider supports OAuth sign-in.
   func supportsOAuth(for provider: ProviderID) -> Bool {
-    provider == .openAI
+    provider == .openAI || provider == .anthropic
   }
 
   /// Starts the OAuth PKCE flow for the given provider.
@@ -56,7 +79,8 @@ final class OAuthFlowManager {
     }
 
     guard flowState[provider] != .authorizing,
-          flowState[provider] != .exchanging
+          flowState[provider] != .exchanging,
+          flowState[provider] != .awaitingCode
     else {
       Logger.agent.info("OAuth flow already in progress for \(provider.rawValue)")
       return
@@ -65,11 +89,46 @@ final class OAuthFlowManager {
     flowState[provider] = .authorizing
 
     Task {
-      await runCodexFlow()
+      switch provider {
+      case .openAI:
+        await runCodexFlow()
+
+      case .anthropic:
+        await runClaudeFlow()
+
+      default:
+        break
+      }
     }
   }
 
-  // MARK: - Private
+  /// Submits a manually-copied authorization code for hosted-callback flows.
+  ///
+  /// Called by the UI after the user pastes the code from the browser.
+  func submitCode(_ code: String, for provider: ProviderID) {
+    guard flowState[provider] == .awaitingCode else {
+      return
+    }
+
+    guard let verifier = pendingVerifier[provider] else {
+      flowState[provider] = .failed("Missing PKCE verifier — please restart the flow")
+      return
+    }
+
+    flowState[provider] = .exchanging
+
+    Task {
+      await exchangeClaudeCode(code, verifier: verifier)
+    }
+  }
+
+  /// Cancels a pending code-paste flow and resets to idle.
+  func cancelFlow(for provider: ProviderID) {
+    pendingVerifier.removeValue(forKey: provider)
+    flowState[provider] = .idle
+  }
+
+  // MARK: - Private — Codex (localhost callback)
 
   private func runCodexFlow() async {
     let server = OAuthCallbackServer(port: callbackPort)
@@ -82,39 +141,119 @@ final class OAuthFlowManager {
     do {
       let start = try await client.startAuthorization()
 
-      /// Start the callback server, open the browser, then wait for the code.
-      let code = try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<String, Error>) in
-        do {
-          try server.start { code in
-            continuation.resume(returning: code)
-          }
-
-          /// Open browser after server is listening so redirect is caught.
-          self.urlOpener(start.authorizeURL)
-        } catch {
-          continuation.resume(throwing: error)
-        }
-      }
+      let result = try await waitForCallback(
+        server: server,
+        authorizeURL: start.authorizeURL,
+        expectedState: start.state
+      )
 
       flowState[.openAI] = .exchanging
 
-      let token = try await client.exchange(code: code, verifier: start.verifier)
+      let token = try await client.exchange(code: result.code, verifier: start.verifier)
 
       try await tokenStore.save(provider: .openAI, auth: .oauth(token))
 
       flowState[.openAI] = .succeeded
       Logger.agent.info("Codex OAuth flow completed successfully")
 
-      /// Auto-reset to idle after a brief success display.
       try? await Task.sleep(for: .seconds(2))
       if flowState[.openAI] == .succeeded {
         flowState[.openAI] = .idle
       }
 
     } catch {
-      server.stop()
       flowState[.openAI] = .failed(error.localizedDescription)
       Logger.agent.error("Codex OAuth flow failed: \(error.localizedDescription)")
     }
+  }
+
+  // MARK: - Private — Claude (hosted redirect, manual code paste)
+
+  /// Opens the browser for Claude OAuth. The user authorizes, then the
+  /// browser redirects to Anthropic's hosted page which displays the code.
+  /// State transitions to `.awaitingCode` — the UI shows a text field
+  /// for the user to paste the code.
+  private func runClaudeFlow() async {
+    let client = ClaudeOAuthClient(
+      clientID: ClaudeOAuthClient.defaultClientID,
+      redirectURI: ClaudeOAuthClient.hostedRedirectURI
+    )
+
+    do {
+      let start = try await client.startAuthorization()
+
+      /// Store verifier for later exchange when the user pastes the code.
+      pendingVerifier[.anthropic] = start.verifier
+
+      urlOpener(start.authorizeURL)
+
+      flowState[.anthropic] = .awaitingCode
+
+    } catch {
+      flowState[.anthropic] = .failed(error.localizedDescription)
+      Logger.agent.error("Claude OAuth flow failed to start: \(error.localizedDescription)")
+    }
+  }
+
+  /// Exchanges a manually-pasted Claude authorization code for tokens.
+  private func exchangeClaudeCode(_ code: String, verifier: String) async {
+    let client = ClaudeOAuthClient(
+      clientID: ClaudeOAuthClient.defaultClientID,
+      redirectURI: ClaudeOAuthClient.hostedRedirectURI
+    )
+
+    do {
+      let token = try await client.exchange(code: code, verifier: verifier)
+
+      try await tokenStore.save(provider: .anthropic, auth: .oauth(token))
+
+      pendingVerifier.removeValue(forKey: .anthropic)
+      flowState[.anthropic] = .succeeded
+      Logger.agent.info("Claude OAuth flow completed successfully")
+
+      try? await Task.sleep(for: .seconds(2))
+      if flowState[.anthropic] == .succeeded {
+        flowState[.anthropic] = .idle
+      }
+
+    } catch {
+      flowState[.anthropic] = .failed(error.localizedDescription)
+      Logger.agent.error("Claude OAuth exchange failed: \(error.localizedDescription)")
+    }
+  }
+
+  // MARK: - Private — Localhost callback helper
+
+  /// Starts the callback server, opens the browser, waits for the redirect,
+  /// validates the `state` parameter, and returns the callback result.
+  ///
+  /// Always stops the server when done (success or failure).
+  private func waitForCallback(
+    server: OAuthCallbackServer,
+    authorizeURL: URL,
+    expectedState: String
+  ) async throws -> OAuthCallbackResult {
+    let result = try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<OAuthCallbackResult, Error>) in
+      do {
+        try server.start { result in
+          continuation.resume(returning: result)
+        }
+
+        self.urlOpener(authorizeURL)
+      } catch {
+        continuation.resume(throwing: error)
+      }
+    }
+
+    defer { server.stop() }
+
+    /// Validate state to prevent CSRF attacks (RFC 6749 section 10.12).
+    if let returnedState = result.state,
+       returnedState != expectedState
+    {
+      throw OAuthFlowError.stateMismatch
+    }
+
+    return result
   }
 }
