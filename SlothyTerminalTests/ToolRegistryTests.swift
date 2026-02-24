@@ -87,11 +87,14 @@ struct ToolRegistryTests {
       StubTool(id: "glob", toolDescription: "Glob"),
       StubTool(id: "grep", toolDescription: "Grep"),
       StubTool(id: "webfetch", toolDescription: "WebFetch"),
+      StubTool(id: "open", toolDescription: "Open"),
+      StubTool(id: "applescript", toolDescription: "AppleScript"),
+      StubTool(id: "system_info", toolDescription: "System Info"),
     ])
 
     let tools = registry.tools(for: .readOnly)
     let ids = Set(tools.map(\.id))
-    #expect(ids == ["bash", "read", "glob", "grep", "webfetch"])
+    #expect(ids == ["bash", "read", "glob", "grep", "webfetch", "open", "applescript", "system_info"])
     #expect(!ids.contains("write"))
     #expect(!ids.contains("edit"))
   }

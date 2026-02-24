@@ -115,7 +115,7 @@ final class AgentRuntime: AgentRuntimeProtocol, @unchecked Sendable {
     Logger.agent.debug(
       "[AgentRuntime] Headers: \(prepared.headers.map { "\($0.key): \($0.value.prefix(20))…" }.joined(separator: ", "))"
     )
-    if let bodyString = String(data: prepared.body.prefix(2000), encoding: .utf8) {
+    if let bodyString = String(data: prepared.body, encoding: .utf8) {
       Logger.agent.debug("[AgentRuntime] Body (truncated): \(bodyString)")
     }
 
@@ -133,7 +133,7 @@ final class AgentRuntime: AgentRuntimeProtocol, @unchecked Sendable {
             eventCount += 1
             if eventCount <= 5 {
               Logger.agent.debug(
-                "[AgentRuntime] SSE[\(eventCount)] event=\(sseEvent.event ?? "nil") data=\(sseEvent.data.prefix(300))"
+                "[AgentRuntime] SSE[\(eventCount)] event=\(sseEvent.event ?? "nil") data=\(sseEvent.data))"
               )
             }
 

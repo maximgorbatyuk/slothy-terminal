@@ -77,9 +77,16 @@ final class ProviderStreamParser: @unchecked Sendable {
 
       if blockType == "tool_use" {
         let id = block["id"] as? String ?? ""
-        let name = block["name"] as? String ?? ""
+        var name = block["name"] as? String ?? ""
         let index = json["index"] as? Int ?? 0
         toolCallIDByIndex[index] = id
+
+        /// Strip `mcp_` prefix added by ClaudeAdapter for OAuth requests.
+        /// The internal tool registry uses un-prefixed names.
+        if name.hasPrefix(ClaudeAdapter.toolPrefix) {
+          name = String(name.dropFirst(ClaudeAdapter.toolPrefix.count))
+        }
+
         return [.toolCallStart(id: id, name: name)]
       }
       return []
@@ -116,7 +123,10 @@ final class ProviderStreamParser: @unchecked Sendable {
 
     case "content_block_stop":
       let index = json["index"] as? Int ?? 0
-      let realID = toolCallIDByIndex[index] ?? "\(index)"
+      /// Only emit toolCallEnd for actual tool_use blocks.
+      guard let realID = toolCallIDByIndex[index] else {
+        return []
+      }
       return [.toolCallEnd(id: realID)]
 
     case "message_delta":

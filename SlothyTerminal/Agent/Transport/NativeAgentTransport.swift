@@ -272,7 +272,14 @@ final class NativeAgentTransport: ChatTransport, @unchecked Sendable {
       ))
 
     case .stepStart:
-      break
+      /// Emit `.messageStart` so the engine creates a fresh
+      /// `currentMessage` for this step. After `.messageStop`
+      /// (emitted at the previous `.stepEnd`) the engine clears
+      /// `currentMessage`, causing all subsequent content-block
+      /// events to be silently dropped.  The engine's handler
+      /// guards with `if currentMessage == nil`, making this a
+      /// no-op when a message already exists (step 0).
+      onEvent?(.messageStart(inputTokens: 0))
 
     case .stepEnd:
       /// Close any open blocks and emit messageStop.

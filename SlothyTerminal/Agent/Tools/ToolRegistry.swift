@@ -11,7 +11,8 @@ final class ToolRegistry: @unchecked Sendable {
 
   /// Tool IDs allowed in read-only mode.
   private let readOnlyIDs: Set<String> = [
-    "bash", "read", "glob", "grep", "webfetch"
+    "bash", "read", "glob", "grep", "webfetch",
+    "open", "applescript", "system_info",
   ]
 
   init() {}
@@ -38,6 +39,9 @@ final class ToolRegistry: @unchecked Sendable {
       GlobTool(),
       GrepTool(),
       WebFetchTool(),
+      OpenTool(),
+      AppleScriptTool(),
+      SystemInfoTool(),
     ]
 
     /// Register TaskTool only for primary mode with a factory.

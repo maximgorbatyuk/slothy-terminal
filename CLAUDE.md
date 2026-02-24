@@ -10,6 +10,14 @@ SlothyTerminal is a native macOS terminal application (Swift/SwiftUI) for AI cod
 - **Language:** Swift 5.9+
 - **Build System:** Xcode 15.0+ with SPM
 
+## Project reference
+
+The app SlothyTerminal combines terminal and AI agent system like opencode and openclaw do. Source code of the apps:
+
+- opencode: `~/projects/opencode`
+- openclaw: `~/projects/openclaw`
+
+
 ## Build Commands
 
 ```bash
@@ -147,9 +155,19 @@ Key rules:
 - OpenCode model catalog for UI should come from `opencode models` (dynamic), not hardcoded model lists.
 - OpenCode metadata reconciliation (resolved provider/model/mode) can be refreshed from `opencode export <sessionId>`.
 
-## Known Issues
+## Known Issues & Pitfalls
 
 - `BuildConfig` uses `fatalError()` on missing config files — should degrade gracefully
+
+### `AsyncLineSequence` (`bytes.lines`) silently drops empty lines
+
+**Never use `bytes.lines` for SSE streams.** Swift's `AsyncLineSequence` (the `.lines` property on `URLSession.AsyncBytes`) skips empty lines. The SSE protocol uses blank lines (`\n\n`) as event delimiters — without them the `SSEParser` accumulates all `event:` / `data:` fields into a single giant event instead of emitting individual events.
+
+`URLSessionHTTPTransport.stream()` iterates raw bytes (`for try await byte in bytes`) and splits on `\n` manually, preserving empty lines. Do not refactor this back to `bytes.lines`.
+
+### `NativeAgentTransport` must emit `.messageStart` at each agent loop step
+
+`ChatSessionEngine.handleMessageStop()` sets `currentMessage = nil`. In a multi-step agent loop (stream → tool call → execute → stream again), the `.stepEnd` event emits `.messageStop`, which clears `currentMessage`. If the next step does not emit `.messageStart`, all subsequent `contentBlockStart` / `contentBlockDelta` events are silently dropped by the engine's `guard let message = currentMessage` guards. `NativeAgentTransport` emits `.messageStart(inputTokens: 0)` at every `.stepStart` to re-create the message. The engine's handler is idempotent (`if currentMessage == nil`).
 
 ## Terminal Environment Variables
 

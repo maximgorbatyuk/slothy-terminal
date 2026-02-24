@@ -122,6 +122,12 @@ struct AppConfig: Codable, Equatable {
   /// Z.AI API endpoint region. Defaults to Coding Plan.
   var zaiEndpoint: ZAIEndpoint = .codingPlan
 
+  // MARK: - Agent Profile
+
+  /// User profile for the native agent system.
+  /// Controls system prompt context, preferred tools, and custom instructions.
+  var agentProfile: AgentProfile = AgentProfile()
+
   // MARK: - Keyboard Shortcuts
 
   /// Custom keyboard shortcuts.
@@ -221,6 +227,8 @@ struct AppConfig: Codable, Equatable {
     nativeDefaultProvider = try? c.decode(String.self, forKey: .nativeDefaultProvider)
     nativeDefaultModel = try? c.decode(String.self, forKey: .nativeDefaultModel)
     zaiEndpoint = (try? c.decode(ZAIEndpoint.self, forKey: .zaiEndpoint)) ?? d.zaiEndpoint
+
+    agentProfile = (try? c.decode(AgentProfile.self, forKey: .agentProfile)) ?? d.agentProfile
 
     shortcuts = (try? c.decode([String: String].self, forKey: .shortcuts)) ?? d.shortcuts
 
@@ -625,6 +633,51 @@ enum ShortcutCategory: String, CaseIterable {
     case .app:
       return "Application"
     }
+  }
+}
+
+/// User profile for the native agent system.
+///
+/// Provides persistent configuration that shapes the agent's system prompt
+/// and behavior. Includes preferred tools, project locations, and custom
+/// instructions that are injected into every conversation.
+struct AgentProfile: Codable, Equatable {
+  /// Preferred IDE or editor (e.g., "Xcode", "Visual Studio Code", "Cursor").
+  /// Used by the agent when opening projects or files.
+  var preferredIDE: String?
+
+  /// Common project root directories the agent knows about.
+  /// Paths the agent can reference when asked to "open my project".
+  var projectRoots: [String] = []
+
+  /// Free-form custom instructions appended to every system prompt.
+  /// Use this for personal preferences, workflow rules, or domain context.
+  var customInstructions: String?
+
+  /// Preferred apps mapped by purpose (e.g., "browser": "Arc", "notes": "Obsidian").
+  var preferredApps: [String: String] = [:]
+
+  /// Resilient decoding — missing keys fall back to defaults.
+  init(from decoder: Decoder) throws {
+    let c = try decoder.container(keyedBy: CodingKeys.self)
+    let d = AgentProfile()
+
+    preferredIDE = try? c.decode(String.self, forKey: .preferredIDE)
+    projectRoots = (try? c.decode([String].self, forKey: .projectRoots)) ?? d.projectRoots
+    customInstructions = try? c.decode(String.self, forKey: .customInstructions)
+    preferredApps = (try? c.decode([String: String].self, forKey: .preferredApps)) ?? d.preferredApps
+  }
+
+  init(
+    preferredIDE: String? = nil,
+    projectRoots: [String] = [],
+    customInstructions: String? = nil,
+    preferredApps: [String: String] = [:]
+  ) {
+    self.preferredIDE = preferredIDE
+    self.projectRoots = projectRoots
+    self.customInstructions = customInstructions
+    self.preferredApps = preferredApps
   }
 }
 

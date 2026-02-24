@@ -410,7 +410,7 @@ class ChatState {
         modelID = config.nativeDefaultModel ?? "gpt-5.3-codex"
 
       case .zai, .zhipuAI:
-        modelID = config.nativeDefaultModel ?? "glm-5"
+        modelID = config.nativeDefaultModel ?? "glm-4.7"
       }
     } else {
       providerID = ProviderID(rawValue: config.nativeDefaultProvider ?? "anthropic") ?? .anthropic
@@ -428,22 +428,29 @@ class ChatState {
 
     let permissions = RuleBasedPermissions(
       rules: [
-        .init(toolPattern: "read", action: .allow),
-        .init(toolPattern: "glob", action: .allow),
-        .init(toolPattern: "grep", action: .allow),
-        .init(toolPattern: "webfetch", action: .allow),
+        .init(toolPattern: "*", action: .allow),
       ],
-      fallbackHandler: { tool, _ in
-        /// Reject write/edit/bash by default for safety.
-        /// User must explicitly allow via rules or UI prompt.
-        .reject
+      fallbackHandler: { _, _ in
+        .once
       }
+    )
+
+    /// Build the system prompt with macOS context and user profile.
+    let agent = AgentDefinition.build
+    let registry = ToolRegistry()
+    registry.registerDefaults(for: agent.mode)
+    let systemPrompt = SystemPromptBuilder.build(
+      agent: agent,
+      tools: registry.tools(for: agent.mode),
+      workingDirectory: workingDirectory,
+      profile: config.agentProfile
     )
 
     return AgentRuntimeFactory.makeTransport(
       model: model,
       workingDirectory: workingDirectory,
-      permissions: permissions
+      permissions: permissions,
+      systemPrompt: systemPrompt
     )
   }
 

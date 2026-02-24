@@ -52,18 +52,48 @@ final class URLSessionHTTPTransport: @unchecked Sendable {
 
           let parser = SSEParser()
 
-          for try await line in bytes.lines {
-            let events = parser.feed(line + "\n")
-            for event in events {
-              if event.data == "[DONE]" {
-                continuation.finish()
-                return
+          /// IMPORTANT: Do NOT use `bytes.lines` here.
+          /// `AsyncLineSequence` silently skips empty lines, but the
+          /// SSE protocol relies on blank lines (`\n\n`) as event
+          /// delimiters. Without them the parser accumulates all
+          /// `event:` / `data:` fields into a single giant event.
+          ///
+          /// Instead, iterate raw bytes and split on `\n` manually,
+          /// yielding empty strings for blank lines.
+          var lineBuffer = Data()
+
+          for try await byte in bytes {
+            if byte == UInt8(ascii: "\n") {
+              let line = String(data: lineBuffer, encoding: .utf8) ?? ""
+              lineBuffer.removeAll(keepingCapacity: true)
+
+              let events = parser.feed(line + "\n")
+              for event in events {
+                if event.data == "[DONE]" {
+                  continuation.finish()
+                  return
+                }
+                continuation.yield(event)
               }
-              continuation.yield(event)
+            } else if byte == UInt8(ascii: "\r") {
+              /// Skip CR — the following LF handles the line break.
+              continue
+            } else {
+              lineBuffer.append(byte)
             }
           }
 
-          /// Connection closed — flush any remaining buffered event.
+          /// Connection closed — flush any remaining buffered data.
+          if !lineBuffer.isEmpty {
+            let line = String(data: lineBuffer, encoding: .utf8) ?? ""
+            let events = parser.feed(line + "\n")
+            for event in events {
+              if event.data != "[DONE]" {
+                continuation.yield(event)
+              }
+            }
+          }
+
           let remaining = parser.feed("\n")
           for event in remaining {
             if event.data != "[DONE]" {

@@ -254,8 +254,8 @@ struct ChatComposerStatusBar: View {
         ),
         ChatModelSelection(
           providerID: "zai",
-          modelID: "glm-5",
-          displayName: "zai/glm-5"
+          modelID: "glm-4.7",
+          displayName: "zai/glm-4.7"
         ),
       ]
 

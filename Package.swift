@@ -134,6 +134,9 @@ let package = Package(
         "Agent/Tools/GlobTool.swift",
         "Agent/Tools/GrepTool.swift",
         "Agent/Tools/WebFetchTool.swift",
+        "Agent/Tools/OpenTool.swift",
+        "Agent/Tools/AppleScriptTool.swift",
+        "Agent/Tools/SystemInfoTool.swift",
 
         /// Agent — SSE streaming, HTTP transport, request builder, stream parser.
         "Agent/Transport/SSEParser.swift",

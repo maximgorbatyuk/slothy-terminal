@@ -1,3 +1,4 @@
+import CryptoKit
 import Foundation
 
 /// OAuth start payload for the Anthropic authorization flow.
@@ -14,8 +15,8 @@ struct ClaudeOAuthStart: Sendable {
 /// - Token exchange with authorization code + verifier via `console.anthropic.com`
 /// - Token refresh
 ///
-/// Auth codes are returned in `code#state` format — the `#` delimiter
-/// is stripped before exchange.
+/// Auth codes are returned in `code#state` format — the token exchange
+/// must include both parts: `code` (before `#`) and `state` (after `#`).
 final class ClaudeOAuthClient: OAuthClient, @unchecked Sendable {
   typealias StartPayload = ClaudeOAuthStart
 
@@ -45,14 +46,19 @@ final class ClaudeOAuthClient: OAuthClient, @unchecked Sendable {
   }
 
   func startAuthorization() async throws -> ClaudeOAuthStart {
-    let verifier = CodexOAuthClient.randomURLSafe(length: 64)
+    let verifier = Self.randomBase64URLVerifier()
     let challenge = CodexOAuthClient.pkceChallenge(verifier)
-    let state = CodexOAuthClient.randomURLSafe(length: 32)
+
+    /// Anthropic expects `state` to equal the PKCE verifier. The callback
+    /// page returns `code#state` — on exchange the server validates that
+    /// the `state` portion matches the original verifier.
+    let state = verifier
 
     var components = URLComponents(string: "https://claude.ai/oauth/authorize")!
     components.queryItems = [
-      .init(name: "response_type", value: "code"),
+      .init(name: "code", value: "true"),
       .init(name: "client_id", value: clientID),
+      .init(name: "response_type", value: "code"),
       .init(name: "redirect_uri", value: redirectURI),
       .init(name: "scope", value: "org:create_api_key user:profile user:inference"),
       .init(name: "code_challenge", value: challenge),
@@ -69,29 +75,27 @@ final class ClaudeOAuthClient: OAuthClient, @unchecked Sendable {
 
   /// Exchanges an authorization code + PKCE verifier for tokens.
   ///
-  /// Anthropic returns auth codes as `code#state` — this method
-  /// strips the `#state` suffix if present before exchanging.
-  ///
-  /// The token endpoint expects a **JSON** body (not form-urlencoded)
-  /// with `Origin` / `Referer` headers pointing to `claude.ai`.
+  /// Anthropic returns auth codes as `code#state` — both parts must be
+  /// included in the token exchange request body.
   func exchange(code: String, verifier: String) async throws -> OAuthToken {
-    /// Strip `#state` suffix if the callback delivered the raw response.
-    let cleanCode = code.split(separator: "#").first.map(String.init) ?? code
+    let splits = code.split(separator: "#", maxSplits: 1)
+    let cleanCode = String(splits[0])
+    let state = splits.count > 1 ? String(splits[1]) : nil
 
     var request = URLRequest(url: tokenEndpoint)
     request.httpMethod = "POST"
     request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-    request.setValue("application/json", forHTTPHeaderField: "Accept")
-    request.setValue("https://claude.ai/", forHTTPHeaderField: "Referer")
-    request.setValue("https://claude.ai", forHTTPHeaderField: "Origin")
 
-    let body: [String: String] = [
+    var body: [String: String] = [
       "grant_type": "authorization_code",
       "client_id": clientID,
       "code": cleanCode,
       "redirect_uri": redirectURI,
       "code_verifier": verifier,
     ]
+    if let state {
+      body["state"] = state
+    }
     request.httpBody = try JSONSerialization.data(
       withJSONObject: body,
       options: [.sortedKeys]
@@ -124,9 +128,6 @@ final class ClaudeOAuthClient: OAuthClient, @unchecked Sendable {
     var request = URLRequest(url: tokenEndpoint)
     request.httpMethod = "POST"
     request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-    request.setValue("application/json", forHTTPHeaderField: "Accept")
-    request.setValue("https://claude.ai/", forHTTPHeaderField: "Referer")
-    request.setValue("https://claude.ai", forHTTPHeaderField: "Origin")
 
     let body: [String: String] = [
       "grant_type": "refresh_token",
@@ -154,6 +155,30 @@ final class ClaudeOAuthClient: OAuthClient, @unchecked Sendable {
       expiresAt: Date().addingTimeInterval(TimeInterval(payload.expiresIn ?? 28800)),
       accountID: token.accountID
     )
+  }
+
+  // MARK: - PKCE verifier
+
+  /// Generates a PKCE code verifier matching the format used by
+  /// `@openauthjs/openauth`: 64 cryptographically random bytes,
+  /// base64url-encoded (no padding).
+  ///
+  /// This differs from `CodexOAuthClient.randomURLSafe(length:)` which
+  /// picks random characters from the RFC 7636 unreserved set. Anthropic's
+  /// OAuth server expects the base64url-of-random-bytes format.
+  static func randomBase64URLVerifier(byteCount: Int = 64) -> String {
+    var bytes = [UInt8](repeating: 0, count: byteCount)
+    let status = SecRandomCopyBytes(kSecRandomDefault, byteCount, &bytes)
+
+    guard status == errSecSuccess else {
+      preconditionFailure("SecRandomCopyBytes failed with status \(status)")
+    }
+
+    return Data(bytes)
+      .base64EncodedString()
+      .replacingOccurrences(of: "+", with: "-")
+      .replacingOccurrences(of: "/", with: "_")
+      .replacingOccurrences(of: "=", with: "")
   }
 
   // MARK: - Private types

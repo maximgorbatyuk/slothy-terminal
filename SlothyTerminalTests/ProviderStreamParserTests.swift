@@ -365,6 +365,49 @@ struct ProviderStreamParserTests {
     }
   }
 
+  // MARK: - Anthropic: mcp_ prefix stripping
+
+  @Test("Anthropic tool_use with mcp_ prefix strips it from name")
+  func anthropicStripsMcpPrefix() {
+    let event = SSEEvent(
+      event: "content_block_start",
+      data: """
+        {"type":"content_block_start","index":1,"content_block":{"type":"tool_use","id":"toolu_789","name":"mcp_bash"}}
+        """
+    )
+
+    let parser = ProviderStreamParser()
+    let events = parser.parseAnthropic(event: event)
+
+    #expect(events.count == 1)
+    if case .toolCallStart(let id, let name) = events[0] {
+      #expect(id == "toolu_789")
+      #expect(name == "bash")
+    } else {
+      Issue.record("Expected toolCallStart")
+    }
+  }
+
+  @Test("Anthropic tool_use without mcp_ prefix is left unchanged")
+  func anthropicNoPrefix() {
+    let event = SSEEvent(
+      event: "content_block_start",
+      data: """
+        {"type":"content_block_start","index":1,"content_block":{"type":"tool_use","id":"toolu_abc","name":"bash"}}
+        """
+    )
+
+    let parser = ProviderStreamParser()
+    let events = parser.parseAnthropic(event: event)
+
+    #expect(events.count == 1)
+    if case .toolCallStart(_, let name) = events[0] {
+      #expect(name == "bash")
+    } else {
+      Issue.record("Expected toolCallStart")
+    }
+  }
+
   // MARK: - Edge cases
 
   @Test("Invalid JSON data produces no events")
