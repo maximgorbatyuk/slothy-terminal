@@ -319,6 +319,12 @@ struct StartupPageView: View {
     case .terminal:
       appState.createTab(agent: .terminal, directory: directory, initialPrompt: prompt)
 
+    case .claude:
+      appState.createTab(agent: .claude, directory: directory, initialPrompt: prompt)
+
+    case .opencode:
+      appState.createTab(agent: .opencode, directory: directory, initialPrompt: prompt)
+
     case .claudeChat:
       appState.createChatTab(agent: .claude, directory: directory, initialPrompt: prompt?.promptText)
 
@@ -381,10 +387,10 @@ struct StartupPageView: View {
     case .terminal:
       return true
 
-    case .claudeChat:
+    case .claude, .claudeChat:
       return AgentFactory.createAgent(for: .claude).isAvailable()
 
-    case .opencodeChat:
+    case .opencode, .opencodeChat:
       return AgentFactory.createAgent(for: .opencode).isAvailable()
 
     case .claudeDesktop:
@@ -406,7 +412,7 @@ struct StartupPageView: View {
     case .terminal:
       return ""
 
-    case .claudeChat, .opencodeChat:
+    case .claude, .opencode, .claudeChat, .opencodeChat:
       return "CLI not found"
 
     case .claudeDesktop, .codexDesktop:
@@ -422,10 +428,10 @@ struct StartupPageView: View {
     case .terminal:
       return .secondary
 
-    case .claudeChat, .claudeDesktop:
+    case .claude, .claudeChat, .claudeDesktop:
       return Color(red: 0.85, green: 0.47, blue: 0.34)
 
-    case .opencodeChat:
+    case .opencode, .opencodeChat:
       return Color(red: 0.29, green: 0.78, blue: 0.49)
 
     case .codexDesktop:

@@ -3,6 +3,8 @@ import Foundation
 /// Represents the different session types a user can launch from the startup page.
 enum LaunchType: String, CaseIterable, Identifiable, Codable {
   case terminal
+  case claude
+  case opencode
   case claudeChat
   case opencodeChat
   case claudeDesktop
@@ -16,6 +18,12 @@ enum LaunchType: String, CaseIterable, Identifiable, Codable {
     switch self {
     case .terminal:
       return "Terminal"
+
+    case .claude:
+      return "claude"
+
+    case .opencode:
+      return "opencode"
 
     case .claudeChat:
       return "Claude Chat"
@@ -40,6 +48,12 @@ enum LaunchType: String, CaseIterable, Identifiable, Codable {
     case .terminal:
       return "Plain shell terminal"
 
+    case .claude:
+      return "Terminal running claude CLI"
+
+    case .opencode:
+      return "Terminal running opencode CLI"
+
     case .claudeChat:
       return "Chat interface for Claude"
 
@@ -63,6 +77,12 @@ enum LaunchType: String, CaseIterable, Identifiable, Codable {
     case .terminal:
       return "terminal"
 
+    case .claude:
+      return "apple.terminal"
+
+    case .opencode:
+      return "apple.terminal"
+
     case .claudeChat:
       return "bubble.left.and.bubble.right"
 
@@ -84,7 +104,7 @@ enum LaunchType: String, CaseIterable, Identifiable, Codable {
   /// Used to decide if the prompt selector should be shown.
   var requiresPrompt: Bool {
     switch self {
-    case .terminal, .claudeChat, .opencodeChat, .claudeDesktop, .codexDesktop:
+    case .terminal, .claude, .opencode, .claudeChat, .opencodeChat, .claudeDesktop, .codexDesktop:
       return true
 
     case .telegramBot:
@@ -99,7 +119,7 @@ enum LaunchType: String, CaseIterable, Identifiable, Codable {
     case .claudeDesktop, .codexDesktop:
       return true
 
-    case .terminal, .claudeChat, .opencodeChat, .telegramBot:
+    case .terminal, .claude, .opencode, .claudeChat, .opencodeChat, .telegramBot:
       return false
     }
   }
@@ -110,10 +130,10 @@ enum LaunchType: String, CaseIterable, Identifiable, Codable {
     case .terminal:
       return .terminal
 
-    case .claudeChat, .claudeDesktop:
+    case .claude, .claudeChat, .claudeDesktop:
       return .claude
 
-    case .opencodeChat:
+    case .opencode, .opencodeChat:
       return .opencode
 
     case .codexDesktop, .telegramBot:

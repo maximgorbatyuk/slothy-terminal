@@ -7,11 +7,13 @@ final class LaunchTypeTests: XCTestCase {
   // MARK: - Metadata Tests
 
   func testAllCasesCount() {
-    XCTAssertEqual(LaunchType.allCases.count, 6)
+    XCTAssertEqual(LaunchType.allCases.count, 8)
   }
 
   func testDisplayNames() {
     XCTAssertEqual(LaunchType.terminal.displayName, "Terminal")
+    XCTAssertEqual(LaunchType.claude.displayName, "claude")
+    XCTAssertEqual(LaunchType.opencode.displayName, "opencode")
     XCTAssertEqual(LaunchType.claudeChat.displayName, "Claude Chat")
     XCTAssertEqual(LaunchType.opencodeChat.displayName, "OpenCode Chat")
     XCTAssertEqual(LaunchType.claudeDesktop.displayName, "Claude Desktop")
@@ -39,6 +41,8 @@ final class LaunchTypeTests: XCTestCase {
 
   func testRequiresPrompt() {
     XCTAssertTrue(LaunchType.terminal.requiresPrompt)
+    XCTAssertTrue(LaunchType.claude.requiresPrompt)
+    XCTAssertTrue(LaunchType.opencode.requiresPrompt)
     XCTAssertTrue(LaunchType.claudeChat.requiresPrompt)
     XCTAssertTrue(LaunchType.opencodeChat.requiresPrompt)
     XCTAssertTrue(LaunchType.claudeDesktop.requiresPrompt)
@@ -48,6 +52,8 @@ final class LaunchTypeTests: XCTestCase {
 
   func testRequiresPredefinedPrompt() {
     XCTAssertFalse(LaunchType.terminal.requiresPredefinedPrompt)
+    XCTAssertFalse(LaunchType.claude.requiresPredefinedPrompt)
+    XCTAssertFalse(LaunchType.opencode.requiresPredefinedPrompt)
     XCTAssertFalse(LaunchType.claudeChat.requiresPredefinedPrompt)
     XCTAssertFalse(LaunchType.opencodeChat.requiresPredefinedPrompt)
     XCTAssertTrue(LaunchType.claudeDesktop.requiresPredefinedPrompt)
@@ -57,6 +63,8 @@ final class LaunchTypeTests: XCTestCase {
 
   func testAgentTypeMapping() {
     XCTAssertEqual(LaunchType.terminal.agentType, .terminal)
+    XCTAssertEqual(LaunchType.claude.agentType, .claude)
+    XCTAssertEqual(LaunchType.opencode.agentType, .opencode)
     XCTAssertEqual(LaunchType.claudeChat.agentType, .claude)
     XCTAssertEqual(LaunchType.opencodeChat.agentType, .opencode)
     XCTAssertEqual(LaunchType.claudeDesktop.agentType, .claude)
@@ -82,6 +90,8 @@ final class LaunchTypeTests: XCTestCase {
 
   func testRawValues() {
     XCTAssertEqual(LaunchType.terminal.rawValue, "terminal")
+    XCTAssertEqual(LaunchType.claude.rawValue, "claude")
+    XCTAssertEqual(LaunchType.opencode.rawValue, "opencode")
     XCTAssertEqual(LaunchType.claudeChat.rawValue, "claudeChat")
     XCTAssertEqual(LaunchType.opencodeChat.rawValue, "opencodeChat")
     XCTAssertEqual(LaunchType.claudeDesktop.rawValue, "claudeDesktop")
@@ -99,6 +109,18 @@ final class LaunchTypeTests: XCTestCase {
     let decoded = try JSONDecoder().decode(AppConfig.self, from: encoded)
 
     XCTAssertEqual(decoded.lastUsedLaunchType, .opencodeChat)
+  }
+
+  func testAppConfigLastUsedLaunchTypeNewCases() throws {
+    for launchType in [LaunchType.claude, LaunchType.opencode] {
+      var config = AppConfig.default
+      config.lastUsedLaunchType = launchType
+
+      let encoded = try JSONEncoder().encode(config)
+      let decoded = try JSONDecoder().decode(AppConfig.self, from: encoded)
+
+      XCTAssertEqual(decoded.lastUsedLaunchType, launchType)
+    }
   }
 
   func testAppConfigLastUsedLaunchTypeNilByDefault() throws {
