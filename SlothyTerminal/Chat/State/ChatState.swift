@@ -380,92 +380,16 @@ class ChatState {
     didLoadOpenCodeModels = true
 
     Task.detached { [weak self] in
-      guard let self,
-            let models = self.loadOpenCodeModels(),
-            !models.isEmpty
-      else {
+      let models = OpenCodeCLIService.loadModels()
+
+      guard !models.isEmpty else {
         return
       }
 
       await MainActor.run {
-        self.openCodeModelOptions = models
+        self?.openCodeModelOptions = models
       }
     }
-  }
-
-  private func loadOpenCodeModels() -> [ChatModelSelection]? {
-    let process = Process()
-    let stdout = Pipe()
-    let stderr = Pipe()
-
-    process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
-    process.arguments = ["opencode", "models"]
-    process.standardOutput = stdout
-    process.standardError = stderr
-
-    var env = ProcessInfo.processInfo.environment
-    let extraPaths = [
-      "/opt/homebrew/bin",
-      "/usr/local/bin",
-      "\(NSHomeDirectory())/.local/bin",
-    ]
-    let existingPath = env["PATH"] ?? "/usr/bin:/bin"
-    env["PATH"] = (extraPaths + [existingPath]).joined(separator: ":")
-    process.environment = env
-
-    do {
-      try process.run()
-      process.waitUntilExit()
-    } catch {
-      Logger.chat.warning("OpenCode model list failed to start: \(error.localizedDescription)")
-      return nil
-    }
-
-    guard process.terminationStatus == 0 else {
-      let errorText = String(
-        data: stderr.fileHandleForReading.readDataToEndOfFile(),
-        encoding: .utf8
-      ) ?? ""
-      Logger.chat.warning("OpenCode model list failed: \(errorText.prefix(200))")
-      return nil
-    }
-
-    let outputData = stdout.fileHandleForReading.readDataToEndOfFile()
-    guard let output = String(data: outputData, encoding: .utf8) else {
-      return nil
-    }
-
-    var seen = Set<String>()
-    var models: [ChatModelSelection] = []
-
-    for line in output.split(whereSeparator: \.isNewline) {
-      let value = line.trimmingCharacters(in: .whitespacesAndNewlines)
-      guard !value.isEmpty else {
-        continue
-      }
-
-      let parts = value.split(separator: "/", maxSplits: 1).map(String.init)
-      guard parts.count == 2 else {
-        continue
-      }
-
-      let providerID = parts[0]
-      let modelID = parts[1]
-      let key = "\(providerID)/\(modelID)"
-
-      guard !seen.contains(key) else {
-        continue
-      }
-      seen.insert(key)
-
-      models.append(ChatModelSelection(
-        providerID: providerID,
-        modelID: modelID,
-        displayName: key
-      ))
-    }
-
-    return models.sorted { $0.displayName < $1.displayName }
   }
 
   // MARK: - OpenCode metadata resolution

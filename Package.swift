@@ -47,6 +47,7 @@ let package = Package(
         "Services/ConfigManager.swift",
         "Services/BuildConfig.swift",
         "Services/Logger.swift",
+        "Services/OpenCodeCLIService.swift",
         "Models/UsageStats.swift",
         "Models/AgentType.swift",
         "Models/Tab.swift",

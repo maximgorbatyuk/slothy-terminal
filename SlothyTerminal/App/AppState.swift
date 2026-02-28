@@ -69,8 +69,18 @@ class AppState {
   }
 
   /// Creates a new tab with the specified agent and working directory.
-  func createTab(agent: AgentType, directory: URL, initialPrompt: SavedPrompt? = nil) {
-    let tab = Tab(agentType: agent, workingDirectory: directory, initialPrompt: initialPrompt)
+  func createTab(
+    agent: AgentType,
+    directory: URL,
+    initialPrompt: SavedPrompt? = nil,
+    launchArgumentsOverride: [String]? = nil
+  ) {
+    let tab = Tab(
+      agentType: agent,
+      workingDirectory: directory,
+      initialPrompt: initialPrompt,
+      launchArgumentsOverride: launchArgumentsOverride
+    )
     tabs.append(tab)
     switchToTab(id: tab.id)
   }

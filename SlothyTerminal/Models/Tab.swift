@@ -36,6 +36,10 @@ class Tab: Identifiable {
   /// The saved prompt to pass as the first message to the AI agent.
   let initialPrompt: SavedPrompt?
 
+  /// Optional launch arguments override for terminal tabs.
+  /// When set, replaces the agent's default argument construction.
+  let launchArgumentsOverride: [String]?
+
   /// The AI agent for this tab.
   let agent: AIAgent
 
@@ -51,6 +55,7 @@ class Tab: Identifiable {
     workingDirectory: URL,
     title: String? = nil,
     initialPrompt: SavedPrompt? = nil,
+    launchArgumentsOverride: [String]? = nil,
     mode: TabMode = .terminal,
     resumeSessionId: String? = nil
   ) {
@@ -60,6 +65,7 @@ class Tab: Identifiable {
     self.workingDirectory = workingDirectory
     self.title = title ?? workingDirectory.lastPathComponent
     self.initialPrompt = initialPrompt
+    self.launchArgumentsOverride = launchArgumentsOverride
     self.usageStats = UsageStats()
     self.agent = AgentFactory.createAgent(for: agentType)
 
@@ -135,8 +141,12 @@ class Tab: Identifiable {
   }
 
   /// The arguments to pass to the agent command.
-  /// Delegates prompt formatting to the agent to ensure safe flag termination.
+  /// Uses launch override if set, otherwise delegates to the agent.
   var arguments: [String] {
+    if let launchArgumentsOverride {
+      return launchArgumentsOverride
+    }
+
     if let prompt = initialPrompt {
       return agent.argsWithPrompt(prompt.promptText)
     }

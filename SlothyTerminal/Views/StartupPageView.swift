@@ -17,9 +17,17 @@ struct StartupPageView: View {
   @State private var selectedPromptID: UUID?
   @State private var showFolderSelector = false
 
+  /// OpenCode-specific startup options.
+  @State private var openCodeMode: ChatMode
+  @State private var openCodeModel: ChatModelSelection?
+  @State private var openCodeModelOptions: [ChatModelSelection] = []
+  @State private var isModelPickerPresented = false
+
   init() {
     let config = ConfigManager.shared.config
     _selectedLaunchType = State(initialValue: config.lastUsedLaunchType ?? .claudeChat)
+    _openCodeMode = State(initialValue: config.lastUsedOpenCodeMode ?? .build)
+    _openCodeModel = State(initialValue: config.lastUsedOpenCodeModel)
   }
 
   private var savedPrompts: [SavedPrompt] {
@@ -92,6 +100,15 @@ struct StartupPageView: View {
 
           Divider()
 
+          if selectedLaunchType == .opencode {
+            openCodeOptionsSection
+              .padding(.horizontal, 20)
+              .padding(.top, 16)
+              .padding(.bottom, 12)
+
+            Divider()
+          }
+
           promptSection
             .padding(.horizontal, 20)
             .padding(.top, 16)
@@ -107,6 +124,23 @@ struct StartupPageView: View {
     .frame(width: 440)
     .fixedSize(horizontal: false, vertical: true)
     .background(appBackgroundColor)
+    .task(id: selectedLaunchType) {
+      guard selectedLaunchType == .opencode else {
+        return
+      }
+
+      let models = await Task.detached {
+        OpenCodeCLIService.loadModels()
+      }.value
+
+      openCodeModelOptions = models
+    }
+    .onChange(of: openCodeMode) { _, newValue in
+      configManager.config.lastUsedOpenCodeMode = newValue
+    }
+    .onChange(of: openCodeModel) { _, newValue in
+      configManager.config.lastUsedOpenCodeModel = newValue
+    }
     .sheet(isPresented: $showFolderSelector) {
       FolderSelectorSheet(
         currentDirectory: currentDirectory,
@@ -253,6 +287,75 @@ struct StartupPageView: View {
     }
   }
 
+  // MARK: - OpenCode Options
+
+  private var openCodeOptionsSection: some View {
+    VStack(alignment: .leading, spacing: 12) {
+      Text("OPENCODE OPTIONS")
+        .font(.system(size: 10, weight: .semibold))
+        .foregroundColor(.secondary)
+
+      /// Mode picker (Build / Plan).
+      HStack(spacing: 8) {
+        Text("Mode")
+          .font(.system(size: 12))
+          .foregroundColor(.secondary)
+
+        Picker("", selection: $openCodeMode) {
+          ForEach(ChatMode.allCases, id: \.self) { mode in
+            Text(mode.displayName).tag(mode)
+          }
+        }
+        .pickerStyle(.segmented)
+        .frame(width: 160)
+
+        Spacer()
+      }
+
+      /// Model picker.
+      HStack(spacing: 8) {
+        Text("Model")
+          .font(.system(size: 12))
+          .foregroundColor(.secondary)
+
+        if openCodeModelOptions.isEmpty {
+          Text("Loading models...")
+            .font(.system(size: 12))
+            .foregroundColor(.secondary.opacity(0.6))
+        } else {
+          Button {
+            isModelPickerPresented.toggle()
+          } label: {
+            HStack(spacing: 4) {
+              Text(openCodeModel?.displayName ?? "Default")
+                .font(.system(size: 12, weight: .medium))
+                .foregroundColor(.primary)
+
+              Image(systemName: "chevron.up.chevron.down")
+                .font(.system(size: 9, weight: .semibold))
+                .foregroundColor(.secondary)
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(appCardColor)
+            .cornerRadius(6)
+          }
+          .buttonStyle(.plain)
+          .fixedSize()
+          .popover(isPresented: $isModelPickerPresented) {
+            OpenCodeModelPicker(
+              models: openCodeModelOptions,
+              selectedModel: $openCodeModel,
+              isPresented: $isModelPickerPresented
+            )
+          }
+        }
+
+        Spacer()
+      }
+    }
+  }
+
   // MARK: - Prompt Section
 
   private var promptSection: some View {
@@ -323,7 +426,30 @@ struct StartupPageView: View {
       appState.createTab(agent: .claude, directory: directory, initialPrompt: prompt)
 
     case .opencode:
-      appState.createTab(agent: .opencode, directory: directory, initialPrompt: prompt)
+      var args: [String] = []
+
+      if let model = openCodeModel {
+        args += ["--model", model.cliModelString]
+      }
+
+      if openCodeMode == .plan {
+        args += ["--agent", "plan"]
+      }
+
+      if let promptText = prompt?.promptText.trimmingCharacters(in: .whitespacesAndNewlines),
+         !promptText.isEmpty
+      {
+        args += ["--prompt", promptText]
+      }
+
+      configManager.config.lastUsedOpenCodeMode = openCodeMode
+      configManager.config.lastUsedOpenCodeModel = openCodeModel
+
+      if args.isEmpty {
+        appState.createTab(agent: .opencode, directory: directory, initialPrompt: prompt)
+      } else {
+        appState.createTab(agent: .opencode, directory: directory, launchArgumentsOverride: args)
+      }
 
     case .claudeChat:
       appState.createChatTab(agent: .claude, directory: directory, initialPrompt: prompt?.promptText)
