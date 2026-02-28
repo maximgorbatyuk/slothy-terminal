@@ -2,6 +2,78 @@
 
 All notable changes to SlothyTerminal will be documented in this file.
 
+## [2026.2.6] - 2026-02-28
+
+_Analysis range: `b085f3c2cf16d4b325a145da6a02f43347b3fbb9..0cc1493` (24 commits, 66 files changed, 5456 insertions, 4433 deletions)._
+
+### Added
+- **Telegram Bot subsystem** with a dedicated tab mode (`.telegramBot`) and full runtime stack.
+  - New API layer: `TelegramBotAPIClient`, Telegram response/request models, and message chunking for long replies.
+  - New runtime orchestration: polling loop with exponential backoff, allowed-user authorization checks, command routing, execution/passive modes, and activity/event tracking.
+  - New command flow support: `/help`, `/show_mode`, `/report`, `/open_directory`, `/new_task` and multi-step interaction state.
+  - New Telegram UI: status/counters/controls bars, activity log, timeline, and host `TelegramBotView`.
+  - New Telegram settings tab for bot token, allowed user, execution agent, auto-start, reply prefix, and `/open-directory` configuration.
+- **Startup Page flow** replacing the previous agent selection modal.
+  - Unified session creation flow with folder selection, launch type picker, prompt picker, and launch availability hints.
+  - New launch types via `LaunchType`: `terminal`, `claude`, `opencode`, `claudeChat`, `opencodeChat`, `telegramBot`.
+  - Persisted startup defaults (`lastUsedLaunchType`) and shared folder preselection.
+- **OpenCode startup options for terminal launches**.
+  - OpenCode mode selector (Build/Plan) and model picker on startup.
+  - Startup launch now maps options to CLI args (`--model`, `--agent plan`, `--prompt`) and passes them through `launchArgumentsOverride`.
+  - New shared `OpenCodeCLIService` for model discovery (`opencode models`) reused by startup/chat flows.
+- **Prompt management improvements**.
+  - Added reusable `PromptTag` model and prompt-to-tag assignment (`tagIDs`).
+  - Prompts settings converted to a table-style workflow with tag management sheet, tag cleanup, and 50-character preview text.
+  - Prompt picker upgraded to richer menu rows with previews.
+- **Sidebar Project Docs block** in Explorer/Stats sidebars.
+  - New `ProjectDocsView` listing `README.md`, `AGENTS.md`, and `CLAUDE.md` when present.
+  - Resolves repo root through Git when available and provides quick open/edit actions.
+- **Tab execution indicator** in tab bar.
+  - Added animated executing indicator and tab-level execution state across chat, terminal, and Telegram modes.
+
+### Changed
+- **Session creation UX** now centers around “New Session” instead of multiple menu-specific new-tab actions.
+  - App menu and dock menu now open the startup flow.
+  - Empty state CTA now routes to startup page.
+- **App/tab state model expanded**.
+  - `TabMode` now includes `telegramBot`.
+  - `Tab` now supports `launchArgumentsOverride`, terminal busy/executing state, and optional `telegramRuntime`.
+  - `AppState` now supports Telegram bot tab lifecycle, startup modal routing, and Telegram delegate bridge hooks.
+- **Config model and loading hardened**.
+  - `AppConfig` gained startup/OpenCode/Telegram/tag-related fields and resilient decoding coverage.
+  - `ConfigManager` now suppresses save-on-load churn to avoid unnecessary disk writes.
+- **Settings IA updated**.
+  - Added dedicated Telegram section.
+  - Prompt settings reworked for table + tags.
+  - General/agents settings aligned to current CLI-first launch and execution flows.
+- **Build/package wiring updated**.
+  - `Package.swift` explicit source list now includes `LaunchType`, `OpenCodeCLIService`, and Telegram subsystem files.
+- **Version bump** to `2026.2.6` (build `8`).
+
+### Fixed
+- **macOS keypress alert sound** for Enter/Backspace in terminal view by consuming AppKit command selectors in `GhosttySurfaceView.doCommand(by:)`.
+- **Terminal execution state reset** on command completion and surface close via Ghostty `GHOSTTY_ACTION_COMMAND_FINISHED` callback wiring.
+- **Config load side effects** reduced by preventing save triggers while loading persisted config.
+- **Legacy native-agent config compatibility** retained: removed/old native keys are ignored gracefully during decode.
+
+### Removed
+- Deprecated **AgentSelectionView** and associated “new chat/new agent tab” creation flow replaced by Startup Page.
+- `AgentFactoryTests.swift` removed and replaced with broader config/launch/Telegram coverage.
+- Obsolete planning artifacts/scripts removed:
+  - `merged-plan-detailed.md`, `merged-plan.md`, `plan.md`, `opencode-pla.md`, `codex-chat-implementation.md`
+  - `scripts/add-test-target.sh`
+
+### Tests
+- Added/expanded tests for:
+  - `AppConfig` resilient decoding and backward compatibility.
+  - `LaunchType` metadata/codable persistence behavior.
+  - Saved prompt decoding and tag-aware prompt behavior.
+  - Telegram API models, command parsing/handling, message chunking, and runtime behavior.
+
+### Docs
+- Updated `CLAUDE.md` architecture notes for Ghostty, OpenCode-first chat transport layering, TaskQueue, and Telegram subsystem coverage.
+- Added `FEATURES.md` tracker and expanded README docs index.
+
 ## [2026.2.5] - 2026-02-17
 
 ### Added
