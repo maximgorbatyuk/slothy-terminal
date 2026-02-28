@@ -95,7 +95,7 @@ actor TelegramPromptExecutor {
     case .opencode:
       runner = OpenCodeTaskRunner(workingDirectory: workingDirectory, selectedModel: nil, selectedMode: nil)
 
-    case .terminal, .nativeAgent:
+    case .terminal:
       throw TaskRunError.transportNotAvailable("Terminal agent cannot execute prompts")
     }
 

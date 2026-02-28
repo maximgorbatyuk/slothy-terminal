@@ -107,27 +107,6 @@ struct AppConfig: Codable, Equatable {
   /// Used to preselect Ask mode in new OpenCode chat tabs.
   var lastUsedOpenCodeAskModeEnabled: Bool = false
 
-  // MARK: - Native Agent Settings
-
-  /// Whether to use the native agent transport instead of CLI subprocesses.
-  /// When enabled, chat mode talks directly to provider APIs.
-  var nativeAgentEnabled: Bool = false
-
-  /// Default provider for native agent mode (e.g. "anthropic", "openai").
-  var nativeDefaultProvider: String?
-
-  /// Default model ID for native agent mode (e.g. "claude-sonnet-4-6").
-  var nativeDefaultModel: String?
-
-  /// Z.AI API endpoint region. Defaults to Coding Plan.
-  var zaiEndpoint: ZAIEndpoint = .codingPlan
-
-  // MARK: - Agent Profile
-
-  /// User profile for the native agent system.
-  /// Controls system prompt context, preferred tools, and custom instructions.
-  var agentProfile: AgentProfile = AgentProfile()
-
   // MARK: - Keyboard Shortcuts
 
   /// Custom keyboard shortcuts.
@@ -223,13 +202,6 @@ struct AppConfig: Codable, Equatable {
     lastUsedOpenCodeMode = try? c.decode(ChatMode.self, forKey: .lastUsedOpenCodeMode)
     lastUsedOpenCodeAskModeEnabled = (try? c.decode(Bool.self, forKey: .lastUsedOpenCodeAskModeEnabled)) ?? d.lastUsedOpenCodeAskModeEnabled
 
-    nativeAgentEnabled = (try? c.decode(Bool.self, forKey: .nativeAgentEnabled)) ?? d.nativeAgentEnabled
-    nativeDefaultProvider = try? c.decode(String.self, forKey: .nativeDefaultProvider)
-    nativeDefaultModel = try? c.decode(String.self, forKey: .nativeDefaultModel)
-    zaiEndpoint = (try? c.decode(ZAIEndpoint.self, forKey: .zaiEndpoint)) ?? d.zaiEndpoint
-
-    agentProfile = (try? c.decode(AgentProfile.self, forKey: .agentProfile)) ?? d.agentProfile
-
     shortcuts = (try? c.decode([String: String].self, forKey: .shortcuts)) ?? d.shortcuts
 
     telegramBotToken = try? c.decode(String.self, forKey: .telegramBotToken)
@@ -302,47 +274,6 @@ enum TerminalInteractionMode: String, Codable, CaseIterable {
 
     case .appMouse:
       return "Send mouse events to the running TUI for in-app interactions."
-    }
-  }
-}
-
-/// Z.AI API endpoint regions.
-///
-/// Z.AI exposes the same OpenAI-compatible API surface from multiple
-/// base URLs. The choice depends on geography and subscription plan.
-enum ZAIEndpoint: String, Codable, CaseIterable {
-  /// China mainland — `open.bigmodel.cn`.
-  case china = "china"
-
-  /// International — `api.z.ai`.
-  case international = "international"
-
-  /// Z.AI Coding Plan — `api.z.ai/api/coding/...`.
-  case codingPlan = "coding_plan"
-
-  var displayName: String {
-    switch self {
-    case .china:
-      return "China (open.bigmodel.cn)"
-
-    case .international:
-      return "International (api.z.ai)"
-
-    case .codingPlan:
-      return "Coding Plan (api.z.ai/coding)"
-    }
-  }
-
-  var chatCompletionsURL: URL {
-    switch self {
-    case .china:
-      return URL(string: "https://open.bigmodel.cn/api/paas/v4/chat/completions")!
-
-    case .international:
-      return URL(string: "https://api.z.ai/api/paas/v4/chat/completions")!
-
-    case .codingPlan:
-      return URL(string: "https://api.z.ai/api/coding/paas/v4/chat/completions")!
     }
   }
 }
@@ -633,51 +564,6 @@ enum ShortcutCategory: String, CaseIterable {
     case .app:
       return "Application"
     }
-  }
-}
-
-/// User profile for the native agent system.
-///
-/// Provides persistent configuration that shapes the agent's system prompt
-/// and behavior. Includes preferred tools, project locations, and custom
-/// instructions that are injected into every conversation.
-struct AgentProfile: Codable, Equatable {
-  /// Preferred IDE or editor (e.g., "Xcode", "Visual Studio Code", "Cursor").
-  /// Used by the agent when opening projects or files.
-  var preferredIDE: String?
-
-  /// Common project root directories the agent knows about.
-  /// Paths the agent can reference when asked to "open my project".
-  var projectRoots: [String] = []
-
-  /// Free-form custom instructions appended to every system prompt.
-  /// Use this for personal preferences, workflow rules, or domain context.
-  var customInstructions: String?
-
-  /// Preferred apps mapped by purpose (e.g., "browser": "Arc", "notes": "Obsidian").
-  var preferredApps: [String: String] = [:]
-
-  /// Resilient decoding — missing keys fall back to defaults.
-  init(from decoder: Decoder) throws {
-    let c = try decoder.container(keyedBy: CodingKeys.self)
-    let d = AgentProfile()
-
-    preferredIDE = try? c.decode(String.self, forKey: .preferredIDE)
-    projectRoots = (try? c.decode([String].self, forKey: .projectRoots)) ?? d.projectRoots
-    customInstructions = try? c.decode(String.self, forKey: .customInstructions)
-    preferredApps = (try? c.decode([String: String].self, forKey: .preferredApps)) ?? d.preferredApps
-  }
-
-  init(
-    preferredIDE: String? = nil,
-    projectRoots: [String] = [],
-    customInstructions: String? = nil,
-    preferredApps: [String: String] = [:]
-  ) {
-    self.preferredIDE = preferredIDE
-    self.projectRoots = projectRoots
-    self.customInstructions = customInstructions
-    self.preferredApps = preferredApps
   }
 }
 

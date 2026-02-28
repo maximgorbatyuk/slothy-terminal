@@ -262,23 +262,6 @@ class ChatSessionEngine {
   }
 
   private func handleTransportError(_ error: Error) -> [ChatSessionCommand] {
-    /// API errors (HTTP 4xx/5xx) are non-transient — surface immediately
-    /// without recovery retries.
-    if let httpError = error as? URLSessionHTTPTransportError,
-       case .httpError = httpError
-    {
-      let sessionError = ChatSessionError.apiError(error.localizedDescription)
-      transitionTo(.failed(sessionError))
-
-      if let message = currentMessage {
-        message.isStreaming = false
-      }
-
-      currentMessage = nil
-      currentToolName = nil
-
-      return [.surfaceError(sessionError)]
-    }
 
     /// If we have a session ID and haven't exceeded retries, try recovery.
     if let sessionId,

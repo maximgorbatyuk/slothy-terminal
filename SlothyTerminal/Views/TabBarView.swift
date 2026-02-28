@@ -58,10 +58,6 @@ struct TabItemView: View {
   }
 
   private var tabIconName: String {
-    if tab.agentType == .nativeAgent {
-      return "bolt.fill"
-    }
-
     if tab.mode == .chat {
       return "bubble.left.and.bubble.right"
     }

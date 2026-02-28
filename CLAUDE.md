@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-SlothyTerminal is a native macOS terminal application (Swift/SwiftUI) for AI coding assistants. It features a tabbed interface supporting Claude CLI, OpenCode, native API agents (direct LLM calls without CLI), and plain terminal sessions with real-time session statistics.
+SlothyTerminal is a native macOS terminal application (Swift/SwiftUI) for AI coding assistants. It features a tabbed interface supporting Claude CLI, OpenCode CLI, and plain terminal sessions with real-time session statistics. OpenCode is the primary smart backend for multi-provider model access.
 
 - **Platform:** macOS 14.0+ (SPM), macOS 15.0 (Xcode deployment target)
 - **Language:** Swift 5.9+
@@ -59,7 +59,7 @@ User Action → AppState.createChatTab() → Tab(mode: .chat, ChatState)
                                         ↓
                           ChatSessionEngine handles lifecycle state
                                         ↓
-          Transport: ClaudeCLITransport | OpenCodeCLITransport | NativeAgentTransport
+          Transport: ClaudeCLITransport | OpenCodeCLITransport
                                         ↓
                          Stream parser → Engine events/commands
                                         ↓
@@ -71,10 +71,10 @@ User Action → AppState.createChatTab() → Tab(mode: .chat, ChatState)
 ### Key Components
 
 - **AppState** (`App/AppState.swift`) - @Observable global state: tabs, active tab, sidebar, modals
-- **Tab** (`Models/Tab.swift`) - Session model supporting `.terminal`, `.chat`, and `.telegramBot` modes; `nativeProviderID` routes native agent tabs to the correct provider
+- **Tab** (`Models/Tab.swift`) - Session model supporting `.terminal`, `.chat`, and `.telegramBot` modes
 - **GhosttyApp** (`Terminal/GhosttyApp.swift`) - Process-wide singleton managing the libghostty app instance and runtime callbacks
 - **GhosttySurfaceView** (`Terminal/GhosttySurfaceView.swift`) - NSView bridge to libghostty terminal surface; handles PTY, rendering, and input
-- **AIAgent protocol** (`Agents/AIAgent.swift`) - Defines agent interface; implementations: ClaudeAgent, OpenCodeAgent, TerminalAgent, NativeAgentPlaceholder
+- **AIAgent protocol** (`Agents/AIAgent.swift`) - Defines agent interface; implementations: ClaudeAgent, OpenCodeAgent, TerminalAgent
 - **AgentFactory** (in `Agents/AIAgent.swift`) - Creates appropriate agent instance based on AgentType enum
 - **ConfigManager** (`Services/ConfigManager.swift`) - Singleton for persisting config to `~/Library/Application Support/SlothyTerminal/config.json`
 - **ChatState** (`Chat/State/ChatState.swift`) - View-facing coordinator: user intents, transport wiring, persistence triggers, model/mode UI state
@@ -92,28 +92,19 @@ User Action → AppState.createChatTab() → Tab(mode: .chat, ChatState)
 4. Update `AgentFactory.createAgent()`
 5. Audit all exhaustive `switch` on `AgentType` — files include: `ConfigManager.swift`, `ChatComposerStatusBar.swift`, `TaskOrchestrator.swift`, `TelegramPromptExecutor.swift`
 
-### Adding a New Provider (Native Agent System)
-
-1. Create `Agent/Adapters/<Provider>/<Provider>Adapter.swift` conforming to `ProviderAdapter`
-2. Implement `allowedModels`, `prepare(request:context:)` (auth headers, URL, body format)
-3. If OAuth: create `<Provider>OAuthClient.swift` conforming to `OAuthClient`
-4. Register the adapter in `AgentRuntimeFactory.makeAdapters()`
-5. Add provider case to `ProviderID` enum
-6. Update `DefaultVariantMapper` with reasoning variant support
-7. Add the new files to `Package.swift` sources list
-
-## Core Architecture Notes for Agents
+## Core Architecture Notes
 
 - Keep **terminal agents** and **chat transports** conceptually separate:
   - `AIAgent` is for PTY/CLI tab behavior.
-  - `ChatTransport` is for structured native chat mode.
-- For any new chat-capable provider, prefer this layering:
-  1. Provider event model/parser
-  2. Provider transport implementing `ChatTransport`
+  - `ChatTransport` is for structured CLI-backed chat mode.
+- For any new chat-capable CLI backend, prefer this layering:
+  1. CLI event model/parser
+  2. CLI transport implementing `ChatTransport`
   3. Mapper into `ChatSessionEngine` events
   4. Reuse existing message/tool rendering blocks
-- Do not couple UI directly to provider JSON shapes; normalize through engine events first.
+- Do not couple UI directly to CLI JSON shapes; normalize through engine events first.
 - Persist session metadata early (session id, selected model/mode) to ensure recovery after crashes/relaunch.
+- Provider/model capabilities come through OpenCode CLI (`opencode models`, `opencode export`).
 
 ## Swift Style Guidelines
 
@@ -159,16 +150,6 @@ Key rules:
 
 - `BuildConfig` uses `fatalError()` on missing config files — should degrade gracefully
 
-### `AsyncLineSequence` (`bytes.lines`) silently drops empty lines
-
-**Never use `bytes.lines` for SSE streams.** Swift's `AsyncLineSequence` (the `.lines` property on `URLSession.AsyncBytes`) skips empty lines. The SSE protocol uses blank lines (`\n\n`) as event delimiters — without them the `SSEParser` accumulates all `event:` / `data:` fields into a single giant event instead of emitting individual events.
-
-`URLSessionHTTPTransport.stream()` iterates raw bytes (`for try await byte in bytes`) and splits on `\n` manually, preserving empty lines. Do not refactor this back to `bytes.lines`.
-
-### `NativeAgentTransport` must emit `.messageStart` at each agent loop step
-
-`ChatSessionEngine.handleMessageStop()` sets `currentMessage = nil`. In a multi-step agent loop (stream → tool call → execute → stream again), the `.stepEnd` event emits `.messageStop`, which clears `currentMessage`. If the next step does not emit `.messageStart`, all subsequent `contentBlockStart` / `contentBlockDelta` events are silently dropped by the engine's `guard let message = currentMessage` guards. `NativeAgentTransport` emits `.messageStart(inputTokens: 0)` at every `.stepStart` to re-create the message. The engine's handler is idempotent (`if currentMessage == nil`).
-
 ## Terminal Environment Variables
 
 When launching terminal sessions, the following environment variables **must** be set to ensure proper shell behavior (cursor movement, line clearing, color support):
@@ -198,46 +179,6 @@ Background task execution with preflight checks and log collection.
 - **TaskLogCollector** (`TaskQueue/Runner/TaskLogCollector.swift`) - Captures task execution logs
 - **TaskQueueSnapshot** (`TaskQueue/Storage/TaskQueueSnapshot.swift`) - Codable snapshot models for queue state
 - **TaskQueueStore** (`TaskQueue/Storage/TaskQueueStore.swift`) - Snapshot persistence (same pattern as ChatSessionStore)
-
-## Native Agent System
-
-Multi-provider agent that talks directly to LLM APIs, executes tools in-process, and manages the agent loop natively. Two activation paths:
-- **Dedicated tab types**: `.claudeNative` / `.codexNative` launch types create tabs with `agentType: .nativeAgent` and explicit `nativeProviderID` (`.anthropic` / `.openAI`). No config flag needed.
-- **Legacy config flag**: `nativeAgentEnabled` in AppConfig enables native transport for Claude CLI chat tabs (fallback path).
-
-`ChatState.useNativeTransport` returns `true` when `nativeProviderID != nil` OR the legacy flag is set. `makeNativeTransport` picks default model per provider.
-
-```
-ChatState → NativeAgentTransport → AgentLoop → AgentRuntime → HTTP API
-                                       |
-                                 ToolRegistry → Tool execution in-process
-```
-
-### Agent Directory Layout
-
-| Directory | Purpose |
-|-----------|---------|
-| `Agent/Core/Models/` | `ProviderID`, `ModelDescriptor`, `AuthState`, `ReasoningVariant`, `AgentMode`, `JSONValue` |
-| `Agent/Core/Protocols/` | `ProviderAdapter`, `TokenStore`, `OAuthClient`, `VariantMapper`, `AgentToolProtocol`, `PermissionDelegate` |
-| `Agent/Adapters/Claude/` | Anthropic API adapter + OAuth client |
-| `Agent/Adapters/Codex/` | OpenAI/Codex adapter + OAuth client |
-| `Agent/Adapters/ZAI/` | Z.AI/GLM adapter (shared for `.zai` and `.zhipuAI` providers) |
-| `Agent/Adapters/Variants/` | `DefaultVariantMapper` — reasoning variant options per provider |
-| `Agent/Tools/` | `ToolRegistry` + 7 built-in tools (bash, read, write, edit, glob, grep, webfetch) + `TaskTool` (subagent) |
-| `Agent/Runtime/` | `AgentRuntime`, `AgentLoop`, `AgentLoopError`, `RequestBuilder`, `ProviderStreamParser`, `ContextCompactor`, `SystemPromptBuilder`, `TokenEstimator` |
-| `Agent/Transport/` | `SSEParser`, `URLSessionHTTPTransport`, `NativeAgentTransport` |
-| `Agent/Permission/` | `RuleBasedPermissions` — rule-based tool permission checker |
-| `Agent/Definitions/` | `AgentDefinition` — presets: `.build`, `.plan`, `.explore`, `.general`, `.compaction` |
-| `Agent/Storage/` | `KeychainTokenStore` — Keychain-based credential persistence |
-| `Agent/Auth/` | `OAuthCallbackServer` (local HTTP server for OAuth redirects), `OAuthFlowManager` (PKCE flow orchestrator with observable state) |
-| `AgentRuntimeFactory.swift` | Single composition point assembling runtime, loop, and transport |
-
-### Key Runtime Concepts
-
-- **AgentLoop**: Send messages → parse streaming response → execute tool calls (with permission checks) → feed results → repeat until text-only response. Doom-loop detection at 3+ identical tool calls.
-- **ContextCompactor**: Prunes old tool results when conversation exceeds token budget (`model.outputLimit * 4`). Preserves most recent 6 messages.
-- **NativeAgentTransport**: Implements `ChatTransport`, maps `AgentLoopEvent` to `StreamEvent` so `ChatSessionEngine` works unchanged.
-- **TaskTool**: Spawns a subagent (`AgentLoop` with isolated message history) for complex subtasks.
 
 ## Telegram Bot Subsystem
 

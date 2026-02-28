@@ -78,33 +78,16 @@ class ChatState {
   /// Prevent duplicate OpenCode model catalog loads.
   private var didLoadOpenCodeModels = false
 
-  /// The native provider ID for this session, if using native transport.
-  let nativeProviderID: ProviderID?
-
-  /// Whether the native agent transport should be used for this session.
-  ///
-  /// Returns `true` when a native provider ID is explicitly set, or
-  /// when the feature flag is enabled in config and the agent type is Claude.
-  var useNativeTransport: Bool {
-    if nativeProviderID != nil {
-      return true
-    }
-
-    return configManager.config.nativeAgentEnabled && agentType == .claude
-  }
-
   init(
     workingDirectory: URL,
     agentType: AgentType = .claude,
     store: ChatSessionStore = .shared,
-    configManager: ConfigManager = .shared,
-    nativeProviderID: ProviderID? = nil
+    configManager: ConfigManager = .shared
   ) {
     self.engine = ChatSessionEngine(workingDirectory: workingDirectory)
     self.store = store
     self.configManager = configManager
     self.agentType = agentType
-    self.nativeProviderID = nativeProviderID
 
     applyLastOpenCodeSelectionIfNeeded()
 
@@ -124,14 +107,12 @@ class ChatState {
     agentType: AgentType = .claude,
     resumeSessionId: String,
     store: ChatSessionStore = .shared,
-    configManager: ConfigManager = .shared,
-    nativeProviderID: ProviderID? = nil
+    configManager: ConfigManager = .shared
   ) {
     self.engine = ChatSessionEngine(workingDirectory: workingDirectory)
     self.store = store
     self.configManager = configManager
     self.agentType = agentType
-    self.nativeProviderID = nativeProviderID
 
     if let snapshot = store.loadSnapshot(sessionId: resumeSessionId) {
       engine.conversation.restore(from: snapshot)
@@ -173,7 +154,7 @@ class ChatState {
     )
 
     switch agentType {
-    case .claude, .nativeAgent:
+    case .claude:
       /// If model changed since transport started, restart it.
       if selectedModel != transportModel,
          transport != nil
@@ -319,15 +300,11 @@ class ChatState {
       )
 
     default:
-      if useNativeTransport {
-        newTransport = makeNativeTransport(workingDirectory: workingDirectory)
-      } else {
-        newTransport = ClaudeCLITransport(
-          workingDirectory: workingDirectory,
-          resumeSessionId: resumeSessionId,
-          selectedModel: selectedModel
-        )
-      }
+      newTransport = ClaudeCLITransport(
+        workingDirectory: workingDirectory,
+        resumeSessionId: resumeSessionId,
+        selectedModel: selectedModel
+      )
       transportModel = selectedModel
     }
     self.transport = newTransport
@@ -387,71 +364,6 @@ class ChatState {
   /// Exponential backoff for recovery attempts: 1s, 2s, 4s.
   private func recoveryBackoff(attempt: Int) -> Double {
     pow(2.0, Double(attempt - 1))
-  }
-
-  // MARK: - Native agent transport
-
-  /// Creates a `NativeAgentTransport` from current config settings.
-  private func makeNativeTransport(
-    workingDirectory: URL
-  ) -> NativeAgentTransport {
-    let config = configManager.config
-
-    let providerID: ProviderID
-    let modelID: String
-
-    if let override = nativeProviderID {
-      providerID = override
-      switch override {
-      case .anthropic:
-        modelID = config.nativeDefaultModel ?? "claude-sonnet-4-6"
-
-      case .openAI:
-        modelID = config.nativeDefaultModel ?? "gpt-5.3-codex"
-
-      case .zai, .zhipuAI:
-        modelID = config.nativeDefaultModel ?? "glm-4.7"
-      }
-    } else {
-      providerID = ProviderID(rawValue: config.nativeDefaultProvider ?? "anthropic") ?? .anthropic
-      modelID = config.nativeDefaultModel ?? "claude-sonnet-4-6"
-    }
-
-    let model = ModelDescriptor(
-      providerID: providerID,
-      modelID: modelID,
-      packageID: "@ai-sdk/\(providerID.rawValue)",
-      supportsReasoning: true,
-      releaseDate: "",
-      outputLimit: 16_384
-    )
-
-    let permissions = RuleBasedPermissions(
-      rules: [
-        .init(toolPattern: "*", action: .allow),
-      ],
-      fallbackHandler: { _, _ in
-        .once
-      }
-    )
-
-    /// Build the system prompt with macOS context and user profile.
-    let agent = AgentDefinition.build
-    let registry = ToolRegistry()
-    registry.registerDefaults(for: agent.mode)
-    let systemPrompt = SystemPromptBuilder.build(
-      agent: agent,
-      tools: registry.tools(for: agent.mode),
-      workingDirectory: workingDirectory,
-      profile: config.agentProfile
-    )
-
-    return AgentRuntimeFactory.makeTransport(
-      model: model,
-      workingDirectory: workingDirectory,
-      permissions: permissions,
-      systemPrompt: systemPrompt
-    )
   }
 
   // MARK: - Model catalog

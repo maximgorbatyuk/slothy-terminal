@@ -29,8 +29,6 @@ struct AppConfigTests {
         "chatShowTimestamps": false,
         "chatShowTokenMetadata": false,
         "lastUsedOpenCodeAskModeEnabled": true,
-        "nativeAgentEnabled": true,
-        "zaiEndpoint": "international",
         "shortcuts": {},
         "telegramExecutionAgent": "Claude",
         "telegramAutoStartOnOpen": false,
@@ -48,8 +46,6 @@ struct AppConfigTests {
     #expect(config.showSidebarByDefault == false)
     #expect(config.colorScheme == .dark)
     #expect(config.chatSendKey == .shiftEnter)
-    #expect(config.nativeAgentEnabled == true)
-    #expect(config.zaiEndpoint == .international)
     #expect(config.terminalFontName == "Menlo")
   }
 
@@ -62,8 +58,6 @@ struct AppConfigTests {
     #expect(config.sidebarWidth == defaults.sidebarWidth)
     #expect(config.showSidebarByDefault == defaults.showSidebarByDefault)
     #expect(config.defaultTabMode == defaults.defaultTabMode)
-    #expect(config.nativeAgentEnabled == defaults.nativeAgentEnabled)
-    #expect(config.zaiEndpoint == defaults.zaiEndpoint)
     #expect(config.chatSendKey == defaults.chatSendKey)
     #expect(config.terminalFontName == defaults.terminalFontName)
     #expect(config.terminalFontSize == defaults.terminalFontSize)
@@ -87,8 +81,6 @@ struct AppConfigTests {
     #expect(config.chatSendKey == .shiftEnter)
 
     /// Missing values fall back to defaults.
-    #expect(config.nativeAgentEnabled == defaults.nativeAgentEnabled)
-    #expect(config.zaiEndpoint == defaults.zaiEndpoint)
     #expect(config.terminalFontName == defaults.terminalFontName)
     #expect(config.showSidebarByDefault == defaults.showSidebarByDefault)
     #expect(config.colorScheme == defaults.colorScheme)
@@ -109,11 +101,30 @@ struct AppConfigTests {
     #expect(config.sidebarWidth == 260)
   }
 
+  @Test("Old native agent keys in JSON are ignored gracefully")
+  func oldNativeAgentKeysIgnored() throws {
+    let json = """
+      {
+        "nativeAgentEnabled": true,
+        "nativeDefaultProvider": "anthropic",
+        "nativeDefaultModel": "claude-sonnet-4-6",
+        "zaiEndpoint": "international",
+        "agentProfile": {"preferredIDE": "Xcode"},
+        "colorScheme": "dark"
+      }
+      """
+
+    let data = Data(json.utf8)
+    let config = try JSONDecoder().decode(AppConfig.self, from: data)
+
+    /// Removed keys should be silently ignored.
+    #expect(config.colorScheme == .dark)
+  }
+
   @Test("Invalid enum value falls back to default")
   func invalidEnumFallsBack() throws {
     let json = """
       {
-        "zaiEndpoint": "unknown_region",
         "colorScheme": "neon"
       }
       """
@@ -122,7 +133,6 @@ struct AppConfigTests {
     let config = try JSONDecoder().decode(AppConfig.self, from: data)
     let defaults = AppConfig()
 
-    #expect(config.zaiEndpoint == defaults.zaiEndpoint)
     #expect(config.colorScheme == defaults.colorScheme)
   }
 
@@ -132,8 +142,6 @@ struct AppConfigTests {
   func roundTrip() throws {
     var original = AppConfig()
     original.sidebarWidth = 350
-    original.nativeAgentEnabled = true
-    original.zaiEndpoint = .codingPlan
     original.chatSendKey = .shiftEnter
     original.terminalFontName = "Monaco"
 

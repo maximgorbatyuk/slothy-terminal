@@ -76,22 +76,6 @@ extension AIAgent {
   }
 }
 
-// MARK: - Native Agent Placeholder
-
-/// Stub agent for native API tabs that don't spawn a CLI process.
-struct NativeAgentPlaceholder: AIAgent {
-  var type: AgentType { .nativeAgent }
-  var command: String { "" }
-  var accentColor: Color { .blue }
-  var iconName: String { "bolt.fill" }
-  var displayName: String { "Native Agent" }
-  var contextWindowLimit: Int { 200_000 }
-
-  func parseStats(from output: String) -> UsageUpdate? { nil }
-
-  func isAvailable() -> Bool { true }
-}
-
 // MARK: - Agent Factory
 
 /// Factory for creating agent instances.
@@ -105,8 +89,6 @@ enum AgentFactory {
       return ClaudeAgent()
     case .opencode:
       return OpenCodeAgent()
-    case .nativeAgent:
-      return NativeAgentPlaceholder()
     }
   }
 

@@ -259,20 +259,6 @@ struct ChatComposerStatusBar: View {
         ),
       ]
 
-    case .nativeAgent:
-      return [
-        ChatModelSelection(
-          providerID: "anthropic",
-          modelID: "claude-sonnet-4-6",
-          displayName: "claude-sonnet-4-6"
-        ),
-        ChatModelSelection(
-          providerID: "openai",
-          modelID: "gpt-5.3-codex",
-          displayName: "gpt-5.3-codex"
-        ),
-      ]
-
     case .terminal:
       return []
     }

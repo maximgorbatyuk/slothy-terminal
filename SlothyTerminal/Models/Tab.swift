@@ -31,9 +31,6 @@ class Tab: Identifiable {
   var isActive: Bool = false
   var usageStats: UsageStats
 
-  /// The native provider ID for native agent tabs.
-  let nativeProviderID: ProviderID?
-
   /// The saved prompt to pass as the first message to the AI agent.
   let initialPrompt: SavedPrompt?
 
@@ -53,15 +50,13 @@ class Tab: Identifiable {
     title: String? = nil,
     initialPrompt: SavedPrompt? = nil,
     mode: TabMode = .terminal,
-    resumeSessionId: String? = nil,
-    nativeProviderID: ProviderID? = nil
+    resumeSessionId: String? = nil
   ) {
     self.id = id
     self.agentType = agentType
     self.mode = mode
     self.workingDirectory = workingDirectory
     self.title = title ?? workingDirectory.lastPathComponent
-    self.nativeProviderID = nativeProviderID
     self.initialPrompt = initialPrompt
     self.usageStats = UsageStats()
     self.agent = AgentFactory.createAgent(for: agentType)
@@ -74,14 +69,12 @@ class Tab: Identifiable {
         self.chatState = ChatState(
           workingDirectory: workingDirectory,
           agentType: agentType,
-          resumeSessionId: resumeSessionId,
-          nativeProviderID: nativeProviderID
+          resumeSessionId: resumeSessionId
         )
       } else {
         self.chatState = ChatState(
           workingDirectory: workingDirectory,
-          agentType: agentType,
-          nativeProviderID: nativeProviderID
+          agentType: agentType
         )
       }
     }
@@ -117,32 +110,11 @@ class Tab: Identifiable {
 
     case .terminal:
       return "Terminal"
-
-    case .nativeAgent:
-      switch nativeProviderID {
-      case .anthropic:
-        return "Claude"
-
-      case .openAI:
-        return "Codex"
-
-      case .zai, .zhipuAI:
-        return "Z.AI"
-
-      default:
-        return "Native"
-      }
     }
   }
 
   /// Mode label used in tab/window titles.
   private var modeNameForTab: String {
-    if agentType == .nativeAgent,
-       mode == .chat
-    {
-      return "native"
-    }
-
     switch mode {
     case .chat:
       return "chat"

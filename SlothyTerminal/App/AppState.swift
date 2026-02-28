@@ -80,15 +80,13 @@ class AppState {
     agent: AgentType = .claude,
     directory: URL,
     initialPrompt: String? = nil,
-    resumeSessionId: String? = nil,
-    nativeProviderID: ProviderID? = nil
+    resumeSessionId: String? = nil
   ) {
     let tab = Tab(
       agentType: agent,
       workingDirectory: directory,
       mode: .chat,
-      resumeSessionId: resumeSessionId,
-      nativeProviderID: nativeProviderID
+      resumeSessionId: resumeSessionId
     )
     tabs.append(tab)
     switchToTab(id: tab.id)

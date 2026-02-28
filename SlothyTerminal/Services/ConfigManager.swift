@@ -128,15 +128,13 @@ class ConfigManager {
       return config.claudePath
     case .opencode:
       return config.opencodePath
-    case .nativeAgent:
-      return nil
     }
   }
 
   /// Sets a custom path for an agent.
   func setCustomPath(_ path: String?, for agentType: AgentType) {
     switch agentType {
-    case .terminal, .nativeAgent:
+    case .terminal:
       break
     case .claude:
       config.claudePath = path
@@ -148,7 +146,7 @@ class ConfigManager {
   /// Returns the accent color for an agent.
   func accentColor(for agentType: AgentType) -> Color {
     switch agentType {
-    case .terminal, .nativeAgent:
+    case .terminal:
       return agentType.accentColor
     case .claude:
       if let customColor = config.claudeAccentColor {
@@ -167,7 +165,7 @@ class ConfigManager {
   func setAccentColor(_ color: Color?, for agentType: AgentType) {
     let codableColor = color.map { CodableColor($0) }
     switch agentType {
-    case .terminal, .nativeAgent:
+    case .terminal:
       break
     case .claude:
       config.claudeAccentColor = codableColor

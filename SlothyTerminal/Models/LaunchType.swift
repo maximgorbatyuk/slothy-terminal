@@ -5,9 +5,6 @@ enum LaunchType: String, CaseIterable, Identifiable, Codable {
   case terminal
   case claudeChat
   case opencodeChat
-  case claudeNative
-  case codexNative
-  case zaiNative
   case claudeDesktop
   case codexDesktop
   case telegramBot
@@ -25,15 +22,6 @@ enum LaunchType: String, CaseIterable, Identifiable, Codable {
 
     case .opencodeChat:
       return "OpenCode Chat"
-
-    case .claudeNative:
-      return "Claude Native"
-
-    case .codexNative:
-      return "Codex Native"
-
-    case .zaiNative:
-      return "Z.AI Native"
 
     case .claudeDesktop:
       return "Claude Desktop"
@@ -58,15 +46,6 @@ enum LaunchType: String, CaseIterable, Identifiable, Codable {
     case .opencodeChat:
       return "Chat interface for OpenCode"
 
-    case .claudeNative:
-      return "Direct API — no CLI required"
-
-    case .codexNative:
-      return "Direct API — no CLI required"
-
-    case .zaiNative:
-      return "Direct API — no CLI required"
-
     case .claudeDesktop:
       return "Open project in Claude Desktop"
 
@@ -90,15 +69,6 @@ enum LaunchType: String, CaseIterable, Identifiable, Codable {
     case .opencodeChat:
       return "bubble.left.and.bubble.right"
 
-    case .claudeNative:
-      return "bolt.fill"
-
-    case .codexNative:
-      return "bolt.fill"
-
-    case .zaiNative:
-      return "bolt.fill"
-
     case .claudeDesktop:
       return "desktopcomputer"
 
@@ -114,8 +84,7 @@ enum LaunchType: String, CaseIterable, Identifiable, Codable {
   /// Used to decide if the prompt selector should be shown.
   var requiresPrompt: Bool {
     switch self {
-    case .terminal, .claudeChat, .opencodeChat, .claudeNative, .codexNative,
-         .zaiNative, .claudeDesktop, .codexDesktop:
+    case .terminal, .claudeChat, .opencodeChat, .claudeDesktop, .codexDesktop:
       return true
 
     case .telegramBot:
@@ -130,8 +99,7 @@ enum LaunchType: String, CaseIterable, Identifiable, Codable {
     case .claudeDesktop, .codexDesktop:
       return true
 
-    case .terminal, .claudeChat, .opencodeChat, .claudeNative, .codexNative,
-         .zaiNative, .telegramBot:
+    case .terminal, .claudeChat, .opencodeChat, .telegramBot:
       return false
     }
   }
@@ -148,27 +116,7 @@ enum LaunchType: String, CaseIterable, Identifiable, Codable {
     case .opencodeChat:
       return .opencode
 
-    case .claudeNative, .codexNative, .zaiNative:
-      return .nativeAgent
-
     case .codexDesktop, .telegramBot:
-      return nil
-    }
-  }
-
-  /// The native provider ID for native agent launch types.
-  var nativeProviderID: ProviderID? {
-    switch self {
-    case .claudeNative:
-      return .anthropic
-
-    case .codexNative:
-      return .openAI
-
-    case .zaiNative:
-      return .zai
-
-    default:
       return nil
     }
   }

@@ -54,8 +54,8 @@ class TaskOrchestrator {
           selectedMode: task.mode
         )
 
-      case .terminal, .nativeAgent:
-        /// Terminal and native agent don't support headless task execution.
+      case .terminal:
+        /// Terminal doesn't support headless task execution.
         /// Preflight should catch this, but provide a fallback.
         return ClaudeTaskRunner(
           workingDirectory: workingDir,
