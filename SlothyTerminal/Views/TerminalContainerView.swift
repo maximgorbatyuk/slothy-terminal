@@ -53,6 +53,12 @@ struct ActiveTerminalView: View {
           },
           onCommandEntered: {
             tab.usageStats.incrementCommandCount()
+          },
+          onCommandFinished: {
+            tab.markTerminalIdle()
+          },
+          onClosed: {
+            tab.markTerminalIdle()
           }
         )
         .environment(\.colorScheme, .dark)

@@ -21,6 +21,7 @@ enum TabMode: String, Codable, CaseIterable {
 }
 
 /// Represents a single terminal tab with an AI agent session.
+@MainActor
 @Observable
 class Tab: Identifiable {
   let id: UUID
@@ -30,6 +31,7 @@ class Tab: Identifiable {
   var title: String
   var isActive: Bool = false
   var usageStats: UsageStats
+  var isTerminalBusy: Bool = false
 
   /// The saved prompt to pass as the first message to the AI agent.
   let initialPrompt: SavedPrompt?
@@ -150,5 +152,30 @@ class Tab: Identifiable {
   /// Checks if the agent is available (installed).
   var isAgentAvailable: Bool {
     agent.isAvailable()
+  }
+
+  /// Whether this tab is actively executing work.
+  var isExecuting: Bool {
+    switch mode {
+    case .chat:
+      return chatState?.isLoading ?? false
+
+    case .telegramBot:
+      return telegramRuntime?.isExecutingPrompt ?? false
+
+    case .terminal:
+      return isTerminalBusy
+    }
+  }
+
+  /// Marks the terminal tab as busy.
+  /// Driven by Ghostty command lifecycle events.
+  func markTerminalBusy() {
+    isTerminalBusy = true
+  }
+
+  /// Marks the terminal tab as idle.
+  func markTerminalIdle() {
+    isTerminalBusy = false
   }
 }

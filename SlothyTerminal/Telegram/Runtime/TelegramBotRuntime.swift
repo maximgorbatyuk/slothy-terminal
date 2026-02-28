@@ -12,6 +12,7 @@ class TelegramBotRuntime {
   var events: [TelegramBotEvent] = []
   var messages: [TelegramTimelineMessage] = []
   var interactionState: TelegramInteractionState = .idle
+  var isExecutingPrompt: Bool = false
 
   /// Delegate for app-level actions (report, open tab, enqueue task).
   weak var delegate: TelegramBotDelegate?
@@ -419,6 +420,9 @@ class TelegramBotRuntime {
 
     addEvent(.info, "Executing prompt...")
     addSystemMessage("Executing prompt...")
+
+    isExecutingPrompt = true
+    defer { isExecutingPrompt = false }
 
     /// Send typing indicator.
     try? await client.sendChatAction(chatId: message.chat.id)
