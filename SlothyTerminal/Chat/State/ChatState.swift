@@ -172,7 +172,7 @@ class ChatState {
         ocTransport.askModeEnabled = isOpenCodeAskModeEnabled
       }
 
-    default:
+    case .terminal:
       break
     }
 
@@ -299,7 +299,7 @@ class ChatState {
         executablePathOverride: customExecutablePath
       )
 
-    default:
+    case .claude, .terminal:
       newTransport = ClaudeCLITransport(
         workingDirectory: workingDirectory,
         resumeSessionId: resumeSessionId,
