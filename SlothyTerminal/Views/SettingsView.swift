@@ -279,14 +279,7 @@ struct GeneralSettingsTab: View {
   }
 
   private var editorApps: [ExternalApp] {
-    let editorBundleIDs = [
-      "com.google.antigravity",
-      "com.todesktop.230313mzl4w4u92",
-      "com.microsoft.VSCode",
-    ]
-    return ExternalAppManager.shared.knownApps.filter { app in
-      editorBundleIDs.contains(app.id) && app.isInstalled
-    }
+    ExternalAppManager.shared.installedEditorApps
   }
 
   private func shortenedPath(_ path: String) -> String {
