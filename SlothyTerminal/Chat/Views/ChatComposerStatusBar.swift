@@ -6,7 +6,6 @@ struct ChatComposerStatusBar: View {
   let agentType: AgentType
 
   @State private var isModelPickerPresented = false
-  @State private var modelSearchText = ""
 
   var body: some View {
     VStack(alignment: .leading, spacing: 4) {
@@ -97,7 +96,15 @@ struct ChatComposerStatusBar: View {
     .buttonStyle(.plain)
     .fixedSize()
     .popover(isPresented: $isModelPickerPresented, arrowEdge: .top) {
-      modelPickerPopover
+      ModelPicker(
+        models: modelOptions,
+        selectedModel: Binding(
+          get: { chatState.selectedModel },
+          set: { chatState.selectedModel = $0 }
+        ),
+        isPresented: $isModelPickerPresented,
+        grouped: agentType == .opencode
+      )
     }
   }
 
@@ -123,98 +130,6 @@ struct ChatComposerStatusBar: View {
     .buttonStyle(.plain)
     .fixedSize()
     .help("When enabled, OpenCode asks clarifying questions before implementing when requirements are unclear")
-  }
-
-  private var modelPickerPopover: some View {
-    VStack(alignment: .leading, spacing: 8) {
-      Text("Select Model")
-        .font(.system(size: 12, weight: .semibold))
-
-      TextField("Search models", text: $modelSearchText)
-        .textFieldStyle(.roundedBorder)
-
-      Divider()
-
-      ScrollView {
-        LazyVStack(alignment: .leading, spacing: 2) {
-          modelRow(
-            title: "Default",
-            isSelected: chatState.selectedModel == nil
-          ) {
-            chatState.selectedModel = nil
-            isModelPickerPresented = false
-          }
-
-          if agentType == .opencode {
-            ForEach(groupedFilteredModelOptions, id: \.name) { group in
-              Text(group.name)
-                .font(.system(size: 10, weight: .semibold))
-                .foregroundColor(.secondary)
-                .padding(.horizontal, 8)
-                .padding(.top, 6)
-
-              ForEach(group.models, id: \.cliModelString) { model in
-                modelRow(
-                  title: model.displayName,
-                  isSelected: chatState.selectedModel == model
-                ) {
-                  chatState.selectedModel = model
-                  isModelPickerPresented = false
-                }
-              }
-            }
-          } else {
-            ForEach(filteredModelOptions, id: \.cliModelString) { model in
-              modelRow(
-                title: model.displayName,
-                isSelected: chatState.selectedModel == model
-              ) {
-                chatState.selectedModel = model
-                isModelPickerPresented = false
-              }
-            }
-          }
-        }
-      }
-      .frame(maxHeight: 260)
-    }
-    .padding(12)
-    .frame(width: 360)
-    .onAppear {
-      modelSearchText = ""
-    }
-  }
-
-  @ViewBuilder
-  private func modelRow(
-    title: String,
-    isSelected: Bool,
-    action: @escaping () -> Void
-  ) -> some View {
-    Button {
-      action()
-    } label: {
-      HStack(spacing: 6) {
-        Text(title)
-          .font(.system(size: 12))
-
-        Spacer(minLength: 0)
-
-        if isSelected {
-          Image(systemName: "checkmark")
-            .font(.system(size: 10, weight: .semibold))
-            .foregroundColor(.accentColor)
-        }
-      }
-      .padding(.horizontal, 8)
-      .padding(.vertical, 6)
-      .contentShape(Rectangle())
-    }
-    .buttonStyle(.plain)
-    .background(
-      RoundedRectangle(cornerRadius: 6)
-        .fill(isSelected ? Color.accentColor.opacity(0.12) : Color.clear)
-    )
   }
 
   // MARK: - Model options per agent
@@ -262,44 +177,6 @@ struct ChatComposerStatusBar: View {
     case .terminal:
       return []
     }
-  }
-
-  private var filteredModelOptions: [ChatModelSelection] {
-    let query = modelSearchText.trimmingCharacters(in: .whitespacesAndNewlines)
-
-    guard !query.isEmpty else {
-      return modelOptions
-    }
-
-    let lowercaseQuery = query.lowercased()
-    return modelOptions.filter { model in
-      model.displayName.lowercased().contains(lowercaseQuery)
-        || model.cliModelString.lowercased().contains(lowercaseQuery)
-    }
-  }
-
-  private var groupedFilteredModelOptions: [ModelGroup] {
-    let grouped = Dictionary(grouping: filteredModelOptions) { model in
-      if model.providerID.isEmpty {
-        return "other"
-      }
-
-      return model.providerID
-    }
-
-    return grouped
-      .map { key, models in
-        ModelGroup(
-          name: key,
-          models: models.sorted { $0.displayName < $1.displayName }
-        )
-      }
-      .sorted { $0.name < $1.name }
-  }
-
-  private struct ModelGroup {
-    let name: String
-    let models: [ChatModelSelection]
   }
 
   private var selectedSummary: String {

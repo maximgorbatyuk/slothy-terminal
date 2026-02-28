@@ -28,9 +28,23 @@ enum OpenCodeCLIService {
 
     do {
       try process.run()
-      process.waitUntilExit()
     } catch {
       Logger.app.warning("OpenCode model list failed to start: \(error.localizedDescription)")
+      return []
+    }
+
+    let timeoutSeconds: Double = 15
+    let deadline = DispatchTime.now() + timeoutSeconds
+    let done = DispatchSemaphore(value: 0)
+
+    DispatchQueue.global().async {
+      process.waitUntilExit()
+      done.signal()
+    }
+
+    if done.wait(timeout: deadline) == .timedOut {
+      process.terminate()
+      Logger.app.warning("OpenCode model list timed out after \(timeoutSeconds)s")
       return []
     }
 

@@ -10,7 +10,6 @@ struct StartupPageView: View {
 
   private let recentFoldersManager = RecentFoldersManager.shared
   private let configManager = ConfigManager.shared
-  private let externalAppManager = ExternalAppManager.shared
 
   @State private var selectedDirectory: URL?
   @State private var selectedLaunchType: LaunchType
@@ -343,7 +342,7 @@ struct StartupPageView: View {
           .buttonStyle(.plain)
           .fixedSize()
           .popover(isPresented: $isModelPickerPresented) {
-            OpenCodeModelPicker(
+            ModelPicker(
               models: openCodeModelOptions,
               selectedModel: $openCodeModel,
               isPresented: $isModelPickerPresented
@@ -448,7 +447,12 @@ struct StartupPageView: View {
       if args.isEmpty {
         appState.createTab(agent: .opencode, directory: directory, initialPrompt: prompt)
       } else {
-        appState.createTab(agent: .opencode, directory: directory, launchArgumentsOverride: args)
+        appState.createTab(
+          agent: .opencode,
+          directory: directory,
+          initialPrompt: prompt,
+          launchArgumentsOverride: args
+        )
       }
 
     case .claudeChat:
@@ -457,53 +461,11 @@ struct StartupPageView: View {
     case .opencodeChat:
       appState.createChatTab(agent: .opencode, directory: directory, initialPrompt: prompt?.promptText)
 
-    case .claudeDesktop:
-      guard let prompt,
-            !prompt.promptText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-      else {
-        return
-      }
-
-      launchDesktopApp(
-        bundleID: "com.anthropic.claudefordesktop",
-        directory: directory,
-        promptText: prompt.promptText
-      )
-
-    case .codexDesktop:
-      guard let prompt,
-            !prompt.promptText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-      else {
-        return
-      }
-
-      launchDesktopApp(
-        bundleID: "com.openai.codex",
-        directory: directory,
-        promptText: prompt.promptText
-      )
-
     case .telegramBot:
       appState.createTelegramBotTab(directory: directory)
     }
 
     dismiss()
-  }
-
-  private func launchDesktopApp(
-    bundleID: String,
-    directory: URL,
-    promptText: String
-  ) {
-    guard let app = externalAppManager.knownApps.first(where: { $0.id == bundleID }) else {
-      return
-    }
-
-    let pasteboard = NSPasteboard.general
-    pasteboard.clearContents()
-    pasteboard.setString(promptText, forType: .string)
-
-    externalAppManager.openDirectory(directory, in: app)
   }
 
   // MARK: - Availability
@@ -519,14 +481,6 @@ struct StartupPageView: View {
     case .opencode, .opencodeChat:
       return AgentFactory.createAgent(for: .opencode).isAvailable()
 
-    case .claudeDesktop:
-      return externalAppManager.knownApps
-        .first(where: { $0.id == "com.anthropic.claudefordesktop" })?.isInstalled ?? false
-
-    case .codexDesktop:
-      return externalAppManager.knownApps
-        .first(where: { $0.id == "com.openai.codex" })?.isInstalled ?? false
-
     case .telegramBot:
       let config = configManager.config
       return config.telegramBotToken != nil && config.telegramAllowedUserID != nil
@@ -541,9 +495,6 @@ struct StartupPageView: View {
     case .claude, .opencode, .claudeChat, .opencodeChat:
       return "CLI not found"
 
-    case .claudeDesktop, .codexDesktop:
-      return "Not installed"
-
     case .telegramBot:
       return "Not configured"
     }
@@ -554,14 +505,11 @@ struct StartupPageView: View {
     case .terminal:
       return .secondary
 
-    case .claude, .claudeChat, .claudeDesktop:
+    case .claude, .claudeChat:
       return Color(red: 0.85, green: 0.47, blue: 0.34)
 
     case .opencode, .opencodeChat:
       return Color(red: 0.29, green: 0.78, blue: 0.49)
-
-    case .codexDesktop:
-      return .purple
 
     case .telegramBot:
       return Color(red: 0.33, green: 0.67, blue: 0.91)

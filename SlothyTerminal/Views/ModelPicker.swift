@@ -1,10 +1,11 @@
 import SwiftUI
 
-/// Searchable popover for selecting an OpenCode model, grouped by provider.
-struct OpenCodeModelPicker: View {
+/// Searchable popover for selecting a model, with optional provider grouping.
+struct ModelPicker: View {
   let models: [ChatModelSelection]
   @Binding var selectedModel: ChatModelSelection?
   @Binding var isPresented: Bool
+  var grouped: Bool = true
 
   @State private var searchText = ""
 
@@ -34,24 +35,10 @@ struct OpenCodeModelPicker: View {
               .foregroundColor(.secondary)
               .padding(.horizontal, 8)
               .padding(.vertical, 6)
+          } else if grouped {
+            groupedModelList
           } else {
-            ForEach(groupedFilteredModels, id: \.name) { group in
-              Text(group.name)
-                .font(.system(size: 10, weight: .semibold))
-                .foregroundColor(.secondary)
-                .padding(.horizontal, 8)
-                .padding(.top, 6)
-
-              ForEach(group.models, id: \.cliModelString) { model in
-                modelRow(
-                  title: model.modelID,
-                  isSelected: selectedModel == model
-                ) {
-                  selectedModel = model
-                  isPresented = false
-                }
-              }
-            }
+            flatModelList
           }
         }
       }
@@ -61,6 +48,42 @@ struct OpenCodeModelPicker: View {
     .frame(width: 360)
     .onAppear {
       searchText = ""
+    }
+  }
+
+  // MARK: - Grouped List
+
+  private var groupedModelList: some View {
+    ForEach(groupedFilteredModels, id: \.name) { group in
+      Text(group.name)
+        .font(.system(size: 10, weight: .semibold))
+        .foregroundColor(.secondary)
+        .padding(.horizontal, 8)
+        .padding(.top, 6)
+
+      ForEach(group.models, id: \.cliModelString) { model in
+        modelRow(
+          title: model.modelID,
+          isSelected: selectedModel == model
+        ) {
+          selectedModel = model
+          isPresented = false
+        }
+      }
+    }
+  }
+
+  // MARK: - Flat List
+
+  private var flatModelList: some View {
+    ForEach(filteredModels, id: \.cliModelString) { model in
+      modelRow(
+        title: model.displayName,
+        isSelected: selectedModel == model
+      ) {
+        selectedModel = model
+        isPresented = false
+      }
     }
   }
 
