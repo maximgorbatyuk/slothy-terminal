@@ -17,6 +17,10 @@ enum ChatSessionError: LocalizedError, Equatable {
   /// Recovery failed after maximum retry attempts.
   case maxRetriesExceeded(Int)
 
+  /// Non-transient API error (rate limit, auth failure, etc.).
+  /// Should not trigger recovery retries.
+  case apiError(String)
+
   /// Invalid state transition (programming error).
   case invalidState(String)
 
@@ -36,6 +40,9 @@ enum ChatSessionError: LocalizedError, Equatable {
 
     case .maxRetriesExceeded(let attempts):
       return "Recovery failed after \(attempts) attempts"
+
+    case .apiError(let detail):
+      return detail
 
     case .invalidState(let detail):
       return "Internal error: \(detail)"

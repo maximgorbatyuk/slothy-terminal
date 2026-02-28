@@ -55,7 +55,7 @@ class TaskOrchestrator {
         )
 
       case .terminal:
-        /// Terminal doesn't support headless execution.
+        /// Terminal doesn't support headless task execution.
         /// Preflight should catch this, but provide a fallback.
         return ClaudeTaskRunner(
           workingDirectory: workingDir,

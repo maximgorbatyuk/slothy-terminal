@@ -4,6 +4,7 @@ import Foundation
 enum TabMode: String, Codable, CaseIterable {
   case terminal
   case chat
+  case telegramBot
 
   var displayName: String {
     switch self {
@@ -12,11 +13,15 @@ enum TabMode: String, Codable, CaseIterable {
 
     case .chat:
       return "Chat"
+
+    case .telegramBot:
+      return "Telegram Bot"
     }
   }
 }
 
 /// Represents a single terminal tab with an AI agent session.
+@MainActor
 @Observable
 class Tab: Identifiable {
   let id: UUID
@@ -26,9 +31,14 @@ class Tab: Identifiable {
   var title: String
   var isActive: Bool = false
   var usageStats: UsageStats
+  var isTerminalBusy: Bool = false
 
   /// The saved prompt to pass as the first message to the AI agent.
   let initialPrompt: SavedPrompt?
+
+  /// Optional launch arguments override for terminal tabs.
+  /// When set, replaces the agent's default argument construction.
+  let launchArgumentsOverride: [String]?
 
   /// The AI agent for this tab.
   let agent: AIAgent
@@ -36,12 +46,16 @@ class Tab: Identifiable {
   /// The chat state for chat-mode tabs.
   var chatState: ChatState?
 
+  /// The Telegram bot runtime for telegram-bot-mode tabs.
+  var telegramRuntime: TelegramBotRuntime?
+
   init(
     id: UUID = UUID(),
     agentType: AgentType,
     workingDirectory: URL,
     title: String? = nil,
     initialPrompt: SavedPrompt? = nil,
+    launchArgumentsOverride: [String]? = nil,
     mode: TabMode = .terminal,
     resumeSessionId: String? = nil
   ) {
@@ -51,6 +65,7 @@ class Tab: Identifiable {
     self.workingDirectory = workingDirectory
     self.title = title ?? workingDirectory.lastPathComponent
     self.initialPrompt = initialPrompt
+    self.launchArgumentsOverride = launchArgumentsOverride
     self.usageStats = UsageStats()
     self.agent = AgentFactory.createAgent(for: agentType)
 
@@ -79,13 +94,21 @@ class Tab: Identifiable {
   }
 
   /// Stable tab label shown in the tab bar.
-  /// Examples: "Claude | chat", "Opencode | cli".
+  /// Examples: "Claude | chat", "Opencode | cli", "Telegram | bot".
   var tabName: String {
-    "\(agentNameForTab) | \(modeNameForTab)"
+    if mode == .telegramBot {
+      return "Telegram | bot"
+    }
+
+    return "\(agentNameForTab) | \(modeNameForTab)"
   }
 
   /// Agent label used in tab/window titles.
   private var agentNameForTab: String {
+    if mode == .telegramBot {
+      return "Telegram"
+    }
+
     switch agentType {
     case .claude:
       return "Claude"
@@ -106,6 +129,9 @@ class Tab: Identifiable {
 
     case .terminal:
       return "cli"
+
+    case .telegramBot:
+      return "bot"
     }
   }
 
@@ -115,8 +141,12 @@ class Tab: Identifiable {
   }
 
   /// The arguments to pass to the agent command.
-  /// Delegates prompt formatting to the agent to ensure safe flag termination.
+  /// Uses launch override if set, otherwise delegates to the agent.
   var arguments: [String] {
+    if let launchArgumentsOverride {
+      return launchArgumentsOverride
+    }
+
     if let prompt = initialPrompt {
       return agent.argsWithPrompt(prompt.promptText)
     }
@@ -132,5 +162,30 @@ class Tab: Identifiable {
   /// Checks if the agent is available (installed).
   var isAgentAvailable: Bool {
     agent.isAvailable()
+  }
+
+  /// Whether this tab is actively executing work.
+  var isExecuting: Bool {
+    switch mode {
+    case .chat:
+      return chatState?.isLoading ?? false
+
+    case .telegramBot:
+      return telegramRuntime?.isExecutingPrompt ?? false
+
+    case .terminal:
+      return isTerminalBusy
+    }
+  }
+
+  /// Marks the terminal tab as busy.
+  /// Driven by Ghostty command lifecycle events.
+  func markTerminalBusy() {
+    isTerminalBusy = true
+  }
+
+  /// Marks the terminal tab as idle.
+  func markTerminalIdle() {
+    isTerminalBusy = false
   }
 }

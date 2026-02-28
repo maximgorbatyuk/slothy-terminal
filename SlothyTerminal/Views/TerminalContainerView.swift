@@ -33,7 +33,9 @@ struct ActiveTerminalView: View {
     ZStack {
       appCardColor
 
-      if tab.mode == .chat, let chatState = tab.chatState {
+      if tab.mode == .telegramBot, let runtime = tab.telegramRuntime {
+        TelegramBotView(runtime: runtime)
+      } else if tab.mode == .chat, let chatState = tab.chatState {
         ChatView(chatState: chatState)
       } else if let error = agentUnavailableError {
         AgentUnavailableView(agentName: tab.agent.displayName, error: error)
@@ -51,6 +53,12 @@ struct ActiveTerminalView: View {
           },
           onCommandEntered: {
             tab.usageStats.incrementCommandCount()
+          },
+          onCommandFinished: {
+            tab.markTerminalIdle()
+          },
+          onClosed: {
+            tab.markTerminalIdle()
           }
         )
         .environment(\.colorScheme, .dark)
@@ -60,6 +68,14 @@ struct ActiveTerminalView: View {
       }
     }
     .task {
+      /// Telegram bot mode auto-start.
+      if tab.mode == .telegramBot {
+        if ConfigManager.shared.config.telegramAutoStartOnOpen {
+          tab.telegramRuntime?.start()
+        }
+        return
+      }
+
       /// Chat mode doesn't need PTY availability checks.
       if tab.mode == .chat {
         tab.usageStats.startSession()
@@ -157,29 +173,24 @@ struct EmptyTerminalView: View {
           .font(.title)
           .fontWeight(.semibold)
 
-        Text("Choose a tab type to get started")
+        Text("Open a new session to get started")
           .font(.subheadline)
           .foregroundColor(.secondary)
       }
 
-      VStack(spacing: 12) {
-        /// Chat mode buttons — primary entries.
-        ForEach(AgentType.allCases.filter(\.supportsChatMode)) { agentType in
-          TabTypeButton(chatAgent: agentType) {
-            appState.showChatFolderSelector(for: agentType)
-          }
+      Button {
+        appState.showStartupPage()
+      } label: {
+        HStack(spacing: 8) {
+          Image(systemName: "plus.circle.fill")
+            .font(.system(size: 16))
+          Text("New Session")
+            .font(.system(size: 14, weight: .medium))
         }
-
-        Divider()
-          .padding(.horizontal, 16)
-
-        ForEach(AgentType.allCases) { agentType in
-          TabTypeButton(agentType: agentType) {
-            appState.showFolderSelector(for: agentType)
-          }
-        }
+        .frame(maxWidth: 200)
       }
-      .frame(maxWidth: 320)
+      .buttonStyle(.borderedProminent)
+      .controlSize(.large)
     }
     .frame(maxWidth: .infinity, maxHeight: .infinity)
     .background(appBackgroundColor)

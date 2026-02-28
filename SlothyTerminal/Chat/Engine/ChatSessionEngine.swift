@@ -262,6 +262,7 @@ class ChatSessionEngine {
   }
 
   private func handleTransportError(_ error: Error) -> [ChatSessionCommand] {
+
     /// If we have a session ID and haven't exceeded retries, try recovery.
     if let sessionId,
        recoveryAttempts < maxRecoveryAttempts

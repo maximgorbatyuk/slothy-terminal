@@ -312,6 +312,13 @@ SlothyTerminal/
     └── Config.release.json        # Release build configuration
 ```
 
+## Documentation
+
+- [Authentication](docs/authentication.md) - API key and OAuth authentication for the Native Agent System
+- [Release Process](docs/RELEASE.md) - Full step-by-step release instructions
+- [UI Guidelines](docs/ui-guideline.md) - Design guidelines
+- [Roadmap](docs/roadmap.md) - Project roadmap
+
 ## Release Process
 
 Ensure `GhosttyKit.xcframework` is present in the project root, then:

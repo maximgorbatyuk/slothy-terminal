@@ -27,6 +27,9 @@ struct AppConfig: Codable, Equatable {
   /// Maximum number of recent folders to remember.
   var maxRecentFolders: Int = 10
 
+  /// Last used launch type on the startup page, restored across sessions.
+  var lastUsedLaunchType: LaunchType?
+
   // MARK: - Agent Paths
 
   /// Custom path to Claude CLI (nil uses auto-detection).
@@ -59,6 +62,21 @@ struct AppConfig: Codable, Equatable {
 
   /// Saved reusable prompts for AI agent sessions.
   var savedPrompts: [SavedPrompt] = []
+
+  /// Saved reusable tags for prompts.
+  /// Optional for backward-compatible decoding with older config files.
+  var savedPromptTags: [PromptTag]?
+
+  /// Returns persisted prompt tags, defaulting to an empty collection.
+  var promptTags: [PromptTag] {
+    get {
+      savedPromptTags ?? []
+    }
+
+    set {
+      savedPromptTags = newValue
+    }
+  }
 
   // MARK: - Chat Settings
 
@@ -94,6 +112,39 @@ struct AppConfig: Codable, Equatable {
   /// Custom keyboard shortcuts.
   var shortcuts: [String: String] = [:]
 
+  // MARK: - Telegram Settings
+
+  /// Bot token for the Telegram Bot API.
+  var telegramBotToken: String?
+
+  /// User ID allowed to interact with the bot.
+  var telegramAllowedUserID: Int64?
+
+  /// Which agent to use for prompt execution.
+  var telegramExecutionAgent: AgentType = .claude
+
+  /// Whether the bot auto-starts when the tab is opened.
+  var telegramAutoStartOnOpen: Bool = true
+
+  /// Deprecated — bot always starts in passive mode now.
+  /// Kept for backward-compatible JSON decoding of existing configs.
+  var telegramDefaultListenMode: TelegramBotMode = .passive
+
+  /// Optional prefix prepended to bot replies.
+  var telegramReplyPrefix: String?
+
+  /// Root directory path for /open-directory command.
+  var telegramRootDirectoryPath: String?
+
+  /// Predefined subfolder appended to root directory for /open-directory.
+  var telegramPredefinedOpenSubpath: String?
+
+  /// Tab mode for tabs opened via /open-directory.
+  var telegramOpenDirectoryTabMode: TabMode = .chat
+
+  /// Agent type for tabs opened via /open-directory.
+  var telegramOpenDirectoryAgent: AgentType = .claude
+
   // MARK: - Window State
 
   /// Saved window state for restoration.
@@ -101,9 +152,70 @@ struct AppConfig: Codable, Equatable {
 
   // MARK: - Default Config
 
+  /// Creates a configuration with all default values.
+  init() {}
+
   /// Returns the default configuration.
   static var `default`: AppConfig {
     AppConfig()
+  }
+
+  // MARK: - Resilient Decoding
+
+  /// Decodes each field individually so that missing or unknown keys
+  /// fall back to their default values instead of failing the entire decode.
+  /// This prevents settings from being silently reset when new fields
+  /// are added to `AppConfig`.
+  init(from decoder: Decoder) throws {
+    let c = try decoder.container(keyedBy: CodingKeys.self)
+    let d = AppConfig()
+
+    sidebarWidth = (try? c.decode(CGFloat.self, forKey: .sidebarWidth)) ?? d.sidebarWidth
+    showSidebarByDefault = (try? c.decode(Bool.self, forKey: .showSidebarByDefault)) ?? d.showSidebarByDefault
+    sidebarPosition = (try? c.decode(SidebarPosition.self, forKey: .sidebarPosition)) ?? d.sidebarPosition
+    sidebarTab = (try? c.decode(SidebarTab.self, forKey: .sidebarTab)) ?? d.sidebarTab
+
+    defaultTabMode = (try? c.decode(TabMode.self, forKey: .defaultTabMode)) ?? d.defaultTabMode
+    defaultAgent = (try? c.decode(AgentType.self, forKey: .defaultAgent)) ?? d.defaultAgent
+    maxRecentFolders = (try? c.decode(Int.self, forKey: .maxRecentFolders)) ?? d.maxRecentFolders
+    lastUsedLaunchType = try? c.decode(LaunchType.self, forKey: .lastUsedLaunchType)
+
+    claudePath = try? c.decode(String.self, forKey: .claudePath)
+    opencodePath = try? c.decode(String.self, forKey: .opencodePath)
+
+    colorScheme = (try? c.decode(AppColorScheme.self, forKey: .colorScheme)) ?? d.colorScheme
+    terminalFontName = (try? c.decode(String.self, forKey: .terminalFontName)) ?? d.terminalFontName
+    terminalFontSize = (try? c.decode(CGFloat.self, forKey: .terminalFontSize)) ?? d.terminalFontSize
+    terminalInteractionMode = (try? c.decode(TerminalInteractionMode.self, forKey: .terminalInteractionMode)) ?? d.terminalInteractionMode
+    claudeAccentColor = try? c.decode(CodableColor.self, forKey: .claudeAccentColor)
+    opencodeAccentColor = try? c.decode(CodableColor.self, forKey: .opencodeAccentColor)
+
+    savedPrompts = (try? c.decode([SavedPrompt].self, forKey: .savedPrompts)) ?? d.savedPrompts
+    savedPromptTags = try? c.decode([PromptTag].self, forKey: .savedPromptTags)
+
+    chatSendKey = (try? c.decode(ChatSendKey.self, forKey: .chatSendKey)) ?? d.chatSendKey
+    chatRenderMode = (try? c.decode(ChatRenderMode.self, forKey: .chatRenderMode)) ?? d.chatRenderMode
+    chatMessageTextSize = (try? c.decode(ChatMessageTextSize.self, forKey: .chatMessageTextSize)) ?? d.chatMessageTextSize
+    chatShowTimestamps = (try? c.decode(Bool.self, forKey: .chatShowTimestamps)) ?? d.chatShowTimestamps
+    chatShowTokenMetadata = (try? c.decode(Bool.self, forKey: .chatShowTokenMetadata)) ?? d.chatShowTokenMetadata
+    lastUsedOpenCodeModel = try? c.decode(ChatModelSelection.self, forKey: .lastUsedOpenCodeModel)
+    lastUsedOpenCodeMode = try? c.decode(ChatMode.self, forKey: .lastUsedOpenCodeMode)
+    lastUsedOpenCodeAskModeEnabled = (try? c.decode(Bool.self, forKey: .lastUsedOpenCodeAskModeEnabled)) ?? d.lastUsedOpenCodeAskModeEnabled
+
+    shortcuts = (try? c.decode([String: String].self, forKey: .shortcuts)) ?? d.shortcuts
+
+    telegramBotToken = try? c.decode(String.self, forKey: .telegramBotToken)
+    telegramAllowedUserID = try? c.decode(Int64.self, forKey: .telegramAllowedUserID)
+    telegramExecutionAgent = (try? c.decode(AgentType.self, forKey: .telegramExecutionAgent)) ?? d.telegramExecutionAgent
+    telegramAutoStartOnOpen = (try? c.decode(Bool.self, forKey: .telegramAutoStartOnOpen)) ?? d.telegramAutoStartOnOpen
+    telegramDefaultListenMode = (try? c.decode(TelegramBotMode.self, forKey: .telegramDefaultListenMode)) ?? d.telegramDefaultListenMode
+    telegramReplyPrefix = try? c.decode(String.self, forKey: .telegramReplyPrefix)
+    telegramRootDirectoryPath = try? c.decode(String.self, forKey: .telegramRootDirectoryPath)
+    telegramPredefinedOpenSubpath = try? c.decode(String.self, forKey: .telegramPredefinedOpenSubpath)
+    telegramOpenDirectoryTabMode = (try? c.decode(TabMode.self, forKey: .telegramOpenDirectoryTabMode)) ?? d.telegramOpenDirectoryTabMode
+    telegramOpenDirectoryAgent = (try? c.decode(AgentType.self, forKey: .telegramOpenDirectoryAgent)) ?? d.telegramOpenDirectoryAgent
+
+    windowState = try? c.decode(WindowState.self, forKey: .windowState)
   }
 }
 

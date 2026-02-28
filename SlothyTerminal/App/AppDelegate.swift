@@ -91,30 +91,13 @@ class AppDelegate: NSObject, NSApplicationDelegate {
   func applicationDockMenu(_ sender: NSApplication) -> NSMenu? {
     let menu = NSMenu()
 
-    /// New tab items — chat first as primary experience.
-    let chatItem = NSMenuItem(
-      title: "New Chat Tab",
-      action: #selector(newChatTab),
+    let sessionItem = NSMenuItem(
+      title: "New Session",
+      action: #selector(newSession),
       keyEquivalent: ""
     )
-    chatItem.target = self
-    menu.addItem(chatItem)
-
-    let claudeItem = NSMenuItem(
-      title: "New Claude TUI Tab",
-      action: #selector(newClaudeTab),
-      keyEquivalent: ""
-    )
-    claudeItem.target = self
-    menu.addItem(claudeItem)
-
-    let opencodeItem = NSMenuItem(
-      title: "New OpenCode Tab",
-      action: #selector(newOpencodeTab),
-      keyEquivalent: ""
-    )
-    opencodeItem.target = self
-    menu.addItem(opencodeItem)
+    sessionItem.target = self
+    menu.addItem(sessionItem)
 
     let terminalItem = NSMenuItem(
       title: "New Terminal Tab",
@@ -153,9 +136,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     return menu
   }
 
-  @objc private func newChatTab() {
+  @objc private func newSession() {
     NotificationCenter.default.post(
-      name: .newChatTabRequested,
+      name: .newSessionRequested,
       object: nil
     )
   }
@@ -165,22 +148,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
       name: .newTabRequested,
       object: nil,
       userInfo: ["agentType": AgentType.terminal]
-    )
-  }
-
-  @objc private func newClaudeTab() {
-    NotificationCenter.default.post(
-      name: .newTabRequested,
-      object: nil,
-      userInfo: ["agentType": AgentType.claude]
-    )
-  }
-
-  @objc private func newOpencodeTab() {
-    NotificationCenter.default.post(
-      name: .newTabRequested,
-      object: nil,
-      userInfo: ["agentType": AgentType.opencode]
     )
   }
 
@@ -210,6 +177,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
 extension Notification.Name {
   static let newTabRequested = Notification.Name("newTabRequested")
-  static let newChatTabRequested = Notification.Name("newChatTabRequested")
+  static let newSessionRequested = Notification.Name("newSessionRequested")
   static let openFolderRequested = Notification.Name("openFolderRequested")
 }

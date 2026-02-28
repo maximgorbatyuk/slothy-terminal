@@ -37,6 +37,7 @@ class GhosttySurfaceView: NSView, NSTextInputClient {
   var onTitleChanged: ((String) -> Void)?
   var onDirectoryChanged: ((URL) -> Void)?
   var onCommandEntered: (() -> Void)?
+  var onCommandFinished: (() -> Void)?
   var onClosed: (() -> Void)?
 
   // MARK: - Initialization
@@ -419,6 +420,13 @@ class GhosttySurfaceView: NSView, NSTextInputClient {
     if shouldCountCommandEntry(for: event) {
       onCommandEntered?()
     }
+  }
+
+  /// Consumes AppKit text-system command selectors so macOS does not emit
+  /// the default alert sound (beep). The terminal already handles key input
+  /// through Ghostty in `keyDown`.
+  override func doCommand(by selector: Selector) {
+    _ = selector
   }
 
   override func keyUp(with event: NSEvent) {

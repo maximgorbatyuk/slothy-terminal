@@ -290,6 +290,17 @@ private func ghosttyAction(
   case GHOSTTY_ACTION_COMMAND_FINISHED:
     let finished = action.action.command_finished
     ghosttyCallbackLogger.info("Ghostty command finished: exit=\(finished.exit_code), durationNs=\(finished.duration)")
+
+    if let surface {
+      DispatchQueue.main.async {
+        guard let view = GhosttyApp.surfaceView(from: surface) else {
+          return
+        }
+
+        view.onCommandFinished?()
+      }
+    }
+
     return true
 
   case GHOSTTY_ACTION_SHOW_CHILD_EXITED:

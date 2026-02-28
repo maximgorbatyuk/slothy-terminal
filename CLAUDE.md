@@ -4,17 +4,32 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-SlothyTerminal is a native macOS terminal application (Swift/SwiftUI) for AI coding assistants. It features a tabbed interface supporting Claude CLI, OpenCode, and plain terminal sessions with real-time session statistics.
+SlothyTerminal is a native macOS terminal application (Swift/SwiftUI) for AI coding assistants. It features a tabbed interface supporting Claude CLI, OpenCode CLI, and plain terminal sessions with real-time session statistics. OpenCode is the primary smart backend for multi-provider model access.
 
-- **Platform:** macOS 13.0+
+- **Platform:** macOS 14.0+ (SPM), macOS 15.0 (Xcode deployment target)
 - **Language:** Swift 5.9+
 - **Build System:** Xcode 15.0+ with SPM
+
+## Project reference
+
+The app SlothyTerminal combines terminal and AI agent system like opencode and openclaw do. Source code of the apps:
+
+- opencode: `~/projects/opencode`
+- openclaw: `~/projects/openclaw`
+
 
 ## Build Commands
 
 ```bash
 # Open in Xcode (then Cmd+R to build/run)
 open SlothyTerminal.xcodeproj
+
+# SPM build & test (chat core, parsers, engine — no UI)
+swift build
+swift test
+# NOTE: Package.swift uses an explicit `sources:` list for the main library target (SlothyTerminalLib).
+# New non-UI source files must be added to that list manually or swift build/test will fail.
+# The test target auto-discovers files — no manual list needed for new tests.
 
 # Release build with notarization (requires .env with Apple credentials)
 ./scripts/build-release.sh [VERSION]
@@ -27,13 +42,15 @@ open SlothyTerminal.xcodeproj
 
 ```
 Terminal/CLI Tabs
-User Action → AppState.createTab() → Tab (with AIAgent + PTYController)
+User Action → AppState.createTab() → Tab (with AIAgent)
                                         ↓
-                                   PTYController.spawn() via forkpty()
+                              GhosttyApp.shared (libghostty runtime)
+                                        ↓
+                         GhosttySurfaceView spawns PTY via libghostty
                                         ↓
                               Terminal output → StatsParser → UsageStats
                                         ↓
-                              TerminalView renders via SwiftTerm
+                              TerminalView renders via libghostty surface
 
 Chat Tabs (Claude/OpenCode)
 User Action → AppState.createChatTab() → Tab(mode: .chat, ChatState)
@@ -42,7 +59,7 @@ User Action → AppState.createChatTab() → Tab(mode: .chat, ChatState)
                                         ↓
                           ChatSessionEngine handles lifecycle state
                                         ↓
-                  Transport (ClaudeCLITransport/OpenCodeCLITransport)
+          Transport: ClaudeCLITransport | OpenCodeCLITransport
                                         ↓
                          Stream parser → Engine events/commands
                                         ↓
@@ -54,10 +71,11 @@ User Action → AppState.createChatTab() → Tab(mode: .chat, ChatState)
 ### Key Components
 
 - **AppState** (`App/AppState.swift`) - @Observable global state: tabs, active tab, sidebar, modals
-- **Tab** (`Models/Tab.swift`) - Session model supporting `.terminal` and `.chat` modes; owns PTY or ChatState depending on mode
-- **PTYController** (`Terminal/PTYController.swift`) - PTY management via POSIX forkpty(), reads output in background Task
+- **Tab** (`Models/Tab.swift`) - Session model supporting `.terminal`, `.chat`, and `.telegramBot` modes
+- **GhosttyApp** (`Terminal/GhosttyApp.swift`) - Process-wide singleton managing the libghostty app instance and runtime callbacks
+- **GhosttySurfaceView** (`Terminal/GhosttySurfaceView.swift`) - NSView bridge to libghostty terminal surface; handles PTY, rendering, and input
 - **AIAgent protocol** (`Agents/AIAgent.swift`) - Defines agent interface; implementations: ClaudeAgent, OpenCodeAgent, TerminalAgent
-- **AgentFactory** - Creates appropriate agent instance based on AgentType enum
+- **AgentFactory** (in `Agents/AIAgent.swift`) - Creates appropriate agent instance based on AgentType enum
 - **ConfigManager** (`Services/ConfigManager.swift`) - Singleton for persisting config to `~/Library/Application Support/SlothyTerminal/config.json`
 - **ChatState** (`Chat/State/ChatState.swift`) - View-facing coordinator: user intents, transport wiring, persistence triggers, model/mode UI state
 - **ChatSessionEngine** (`Chat/Engine/ChatSessionEngine.swift`) - Provider-agnostic chat state machine and event reducer
@@ -66,25 +84,27 @@ User Action → AppState.createChatTab() → Tab(mode: .chat, ChatState)
 - **OpenCodeCLITransport** (`Chat/OpenCode/OpenCodeCLITransport.swift`) - OpenCode JSON event process transport
 - **ChatSessionStore** (`Chat/Storage/ChatSessionStore.swift`) - Snapshot persistence and restore for chat sessions
 
-### Adding a New Agent
+### Adding a New Agent (Terminal/CLI Tabs)
 
 1. Create struct conforming to `AIAgent` protocol in `Agents/`
 2. Implement: `command`, `defaultArgs`, `environmentVariables`, `contextWindowLimit`, `parseStats()`, `isAvailable()`
 3. Add case to `AgentType` enum
 4. Update `AgentFactory.createAgent()`
+5. Audit all exhaustive `switch` on `AgentType` — files include: `ConfigManager.swift`, `ChatComposerStatusBar.swift`, `TaskOrchestrator.swift`, `TelegramPromptExecutor.swift`
 
-## Core Architecture Notes for Agents
+## Core Architecture Notes
 
 - Keep **terminal agents** and **chat transports** conceptually separate:
   - `AIAgent` is for PTY/CLI tab behavior.
-  - `ChatTransport` is for structured native chat mode.
-- For any new chat-capable provider, prefer this layering:
-  1. Provider event model/parser
-  2. Provider transport implementing `ChatTransport`
+  - `ChatTransport` is for structured CLI-backed chat mode.
+- For any new chat-capable CLI backend, prefer this layering:
+  1. CLI event model/parser
+  2. CLI transport implementing `ChatTransport`
   3. Mapper into `ChatSessionEngine` events
   4. Reuse existing message/tool rendering blocks
-- Do not couple UI directly to provider JSON shapes; normalize through engine events first.
+- Do not couple UI directly to CLI JSON shapes; normalize through engine events first.
 - Persist session metadata early (session id, selected model/mode) to ensure recovery after crashes/relaunch.
+- Provider/model capabilities come through OpenCode CLI (`opencode models`, `opencode export`).
 
 ## Swift Style Guidelines
 
@@ -105,7 +125,7 @@ Key rules:
 
 ## Dependencies
 
-- **SwiftTerm** (1.5.1) - Terminal emulation and PTY handling
+- **GhosttyKit** (xcframework) - Terminal emulation, PTY, and rendering via libghostty (built from source, gitignored)
 - **Sparkle** (2.8.1) - Automatic updates framework
 
 ## Chat Engine Notes
@@ -126,13 +146,9 @@ Key rules:
 - OpenCode model catalog for UI should come from `opencode models` (dynamic), not hardcoded model lists.
 - OpenCode metadata reconciliation (resolved provider/model/mode) can be refreshed from `opencode export <sessionId>`.
 
-## Known Issues (from findings.md)
+## Known Issues & Pitfalls
 
-Critical items to be aware of:
-- `BuildConfig` uses `fatalError()` on missing config files - should degrade gracefully
-- Force unwraps in `ConfigManager` can crash in edge cases
-- `PTYController` uses `nonisolated(unsafe)` for outputContinuation, bypassing concurrency safety
-- PTY layer still has less direct test coverage than parser/engine/store chat layers
+- `BuildConfig` uses `fatalError()` on missing config files — should degrade gracefully
 
 ## Terminal Environment Variables
 
@@ -146,6 +162,31 @@ When launching terminal sessions, the following environment variables **must** b
 **Why this matters:** When launched from Finder (not a terminal parent process), `ProcessInfo.processInfo.environment` won't contain these variables. Without them, shells like zsh with fancy prompts (e.g., mathiasbynens/dotfiles) won't properly handle escape sequences like carriage return (`\r`) and clear-line (`\x1b[K`), causing prompt segments to appear on new lines instead of redrawing in place.
 
 These are set in:
-- `TerminalView.makeLaunchEnvironment()` - Primary terminal view
+- `TerminalView.makeLaunchEnvironment()` - Primary terminal view (also sets `TERM_PROGRAM` / `TERM_PROGRAM_VERSION`)
 - `TerminalAgent.environmentVariables` - Plain terminal agent
 - `ClaudeAgent.environmentVariables` / `OpenCodeAgent.environmentVariables` - AI agent tabs
+
+## TaskQueue Subsystem
+
+Background task execution with preflight checks and log collection.
+
+- **QueuedTask** (`TaskQueue/Models/QueuedTask.swift`) - Task model with status, prompt, agent binding
+- **TaskQueueState** (`TaskQueue/State/TaskQueueState.swift`) - @Observable queue state
+- **TaskOrchestrator** (`TaskQueue/Orchestrator/TaskOrchestrator.swift`) - Schedules and dispatches queued tasks
+- **TaskPreflight** (`TaskQueue/Orchestrator/TaskPreflight.swift`) - Pre-execution validation
+- **TaskRunner** (`TaskQueue/Runner/TaskRunner.swift`) - Protocol; implementations: `ClaudeTaskRunner`, `OpenCodeTaskRunner`
+- **RiskyToolDetector** (`TaskQueue/Runner/RiskyToolDetector.swift`) - Flags potentially destructive tool calls
+- **TaskLogCollector** (`TaskQueue/Runner/TaskLogCollector.swift`) - Captures task execution logs
+- **TaskQueueSnapshot** (`TaskQueue/Storage/TaskQueueSnapshot.swift`) - Codable snapshot models for queue state
+- **TaskQueueStore** (`TaskQueue/Storage/TaskQueueStore.swift`) - Snapshot persistence (same pattern as ChatSessionStore)
+
+## Telegram Bot Subsystem
+
+Tab mode `.telegramBot` enables a Telegram bot that relays messages to a Claude chat session.
+
+- **TelegramBotRuntime** (`Telegram/Runtime/TelegramBotRuntime.swift`) - Long-poll loop, message dispatch
+- **TelegramCommandHandler** (`Telegram/Runtime/TelegramCommandHandler.swift`) - Slash command parsing and execution
+- **TelegramPromptExecutor** (`Telegram/Runtime/TelegramPromptExecutor.swift`) - Bridges Telegram messages into chat engine turns
+- **TelegramBotAPIClient** (`Telegram/API/TelegramBotAPIClient.swift`) - Telegram Bot API HTTP client
+- **TelegramMessageChunker** (`Telegram/API/TelegramMessageChunker.swift`) - Splits long messages for Telegram's size limits
+- Settings UI in `Views/Settings/TelegramSettingsTab.swift`

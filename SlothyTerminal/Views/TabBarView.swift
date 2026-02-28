@@ -57,12 +57,24 @@ struct TabItemView: View {
     appState.activeTabID == tab.id
   }
 
+  private var tabIconName: String {
+    if tab.mode == .chat {
+      return "bubble.left.and.bubble.right"
+    }
+
+    return tab.agentType.iconName
+  }
+
   var body: some View {
     HStack(spacing: 6) {
-      /// Agent icon — chat mode uses a chat bubble icon.
-      Image(systemName: tab.mode == .chat ? "bubble.left.and.bubble.right" : tab.agentType.iconName)
-        .foregroundColor(isActive ? tab.agentType.accentColor : .gray)
-        .font(.system(size: 12))
+      /// Agent icon or executing indicator.
+      if tab.isExecuting {
+        ExecutingIndicator(color: isActive ? tab.agentType.accentColor : .gray)
+      } else {
+        Image(systemName: tabIconName)
+          .foregroundColor(isActive ? tab.agentType.accentColor : .gray)
+          .font(.system(size: 12))
+      }
 
       /// Tab title.
       Text(tab.tabName)
@@ -98,7 +110,7 @@ struct NewTabButton: View {
 
   var body: some View {
     Button {
-      appState.showNewTabModal()
+      appState.showStartupPage()
     } label: {
       Image(systemName: "plus")
         .font(.system(size: 12, weight: .medium))
@@ -107,6 +119,28 @@ struct NewTabButton: View {
     .buttonStyle(.plain)
     .padding(.horizontal, 12)
     .padding(.vertical, 8)
+  }
+}
+
+/// Pulsing circle indicator shown on tabs during active execution.
+struct ExecutingIndicator: View {
+  let color: Color
+  @State private var isPulsing = false
+
+  var body: some View {
+    Circle()
+      .fill(color)
+      .frame(width: 8, height: 8)
+      .scaleEffect(isPulsing ? 0.6 : 1.0)
+      .opacity(isPulsing ? 0.4 : 1.0)
+      .frame(width: 12, height: 12)
+      .animation(
+        .easeInOut(duration: 0.8).repeatForever(autoreverses: true),
+        value: isPulsing
+      )
+      .onAppear {
+        isPulsing = true
+      }
   }
 }
 

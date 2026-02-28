@@ -70,6 +70,9 @@ struct TerminalSidebarView: View {
       /// Open in external app button.
       OpenInAppButton(directory: tab.workingDirectory)
 
+      /// Project docs.
+      ProjectDocsView(workingDirectory: tab.workingDirectory)
+
       /// Directory tree.
       DirectoryTreeView(rootDirectory: tab.workingDirectory)
 
@@ -114,6 +117,9 @@ struct AgentStatsView: View {
 
       /// Open in external app button.
       OpenInAppButton(directory: tab.workingDirectory)
+
+      /// Project docs.
+      ProjectDocsView(workingDirectory: tab.workingDirectory)
 
       /// Directory tree.
       DirectoryTreeView(rootDirectory: tab.workingDirectory)
@@ -428,6 +434,143 @@ struct FileItemRow: View {
   }
 }
 
+/// Collapsible section showing project documentation files (README.md, AGENTS.md, CLAUDE.md).
+///
+/// Resolves the docs root from the git repository top-level when available,
+/// falling back to the provided working directory. Only shows files that exist.
+struct ProjectDocsView: View {
+  let workingDirectory: URL
+
+  @State private var isExpanded: Bool = true
+  @State private var existingDocs: [(name: String, url: URL)] = []
+
+  /// Fixed ordered list of project doc filenames to look for.
+  private static let docFileNames = ["README.md", "AGENTS.md", "CLAUDE.md"]
+
+  var body: some View {
+    Group {
+      if !existingDocs.isEmpty {
+        VStack(alignment: .leading, spacing: 8) {
+          /// Header with expand/collapse toggle.
+          Button {
+            isExpanded.toggle()
+          } label: {
+            HStack {
+              Image(systemName: "doc.text.fill")
+                .font(.system(size: 10))
+
+              Text("Project docs")
+                .font(.system(size: 10, weight: .semibold))
+
+              Spacer()
+
+              Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
+                .font(.system(size: 10))
+            }
+            .foregroundColor(.secondary)
+          }
+          .buttonStyle(.plain)
+
+          if isExpanded {
+            VStack(alignment: .leading, spacing: 0) {
+              ForEach(existingDocs, id: \.name) { doc in
+                ProjectDocRow(name: doc.name, url: doc.url)
+              }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(10)
+            .background(appCardColor)
+            .cornerRadius(8)
+          }
+        }
+      }
+    }
+    .task(id: workingDirectory) {
+      let root = await GitService.shared.getRepositoryRoot(for: workingDirectory) ?? workingDirectory
+
+      var found: [(name: String, url: URL)] = []
+      for name in Self.docFileNames {
+        let fileURL = root.appendingPathComponent(name)
+        if FileManager.default.fileExists(atPath: fileURL.path) {
+          found.append((name: name, url: fileURL))
+        }
+      }
+
+      existingDocs = found
+    }
+  }
+}
+
+/// A single row representing a project documentation file.
+struct ProjectDocRow: View {
+  let name: String
+  let url: URL
+
+  private var editorApps: [ExternalApp] {
+    ExternalAppManager.shared.installedEditorApps
+  }
+
+  var body: some View {
+    HStack(spacing: 4) {
+      Image(nsImage: NSWorkspace.shared.icon(forFile: url.path))
+        .resizable()
+        .frame(width: 14, height: 14)
+
+      Text(name)
+        .font(.system(size: 11))
+        .lineLimit(1)
+
+      Spacer()
+
+      Button {
+        openInDefaultEditor()
+      } label: {
+        Image(systemName: "square.and.pencil")
+          .font(.system(size: 10))
+          .foregroundColor(.secondary)
+      }
+      .buttonStyle(.plain)
+      .help("Open in editor")
+    }
+    .padding(.vertical, 3)
+    .contentShape(Rectangle())
+    .contextMenu {
+      Button("Open in Default Editor") {
+        openInDefaultEditor()
+      }
+
+      if !editorApps.isEmpty {
+        Divider()
+
+        ForEach(editorApps) { app in
+          Button("Open in \(app.name)") {
+            ExternalAppManager.shared.openFile(url, in: app)
+          }
+        }
+      }
+
+      Divider()
+
+      Button("Reveal in Finder") {
+        NSWorkspace.shared.selectFile(url.path, inFileViewerRootedAtPath: url.deletingLastPathComponent().path)
+      }
+
+      Button("Copy Path") {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(url.path, forType: .string)
+      }
+    }
+  }
+
+  private func openInDefaultEditor() {
+    if let firstEditor = editorApps.first {
+      ExternalAppManager.shared.openFile(url, in: firstEditor)
+    } else {
+      NSWorkspace.shared.open(url)
+    }
+  }
+}
+
 /// A section of statistics with a title.
 struct StatsSection<Content: View>: View {
   let title: String
@@ -606,6 +749,9 @@ struct ChatSidebarView: View {
 
       /// Open in external app button.
       OpenInAppButton(directory: tab.workingDirectory)
+
+      /// Project docs.
+      ProjectDocsView(workingDirectory: tab.workingDirectory)
 
       /// Directory tree.
       DirectoryTreeView(rootDirectory: tab.workingDirectory)

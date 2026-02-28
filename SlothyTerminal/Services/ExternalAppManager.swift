@@ -57,9 +57,29 @@ final class ExternalAppManager {
 
   private init() {}
 
+  /// Bundle IDs of text editor applications suitable for file editing.
+  private let editorBundleIDs: Set<String> = [
+    "com.microsoft.VSCode",
+    "com.todesktop.230313mzl4w4u92",
+    "com.google.antigravity",
+    "com.sublimetext.4",
+    "com.panic.Nova",
+    "com.barebones.bbedit",
+    "com.macromates.TextMate",
+    "com.jetbrains.fleet",
+    "com.jetbrains.rider",
+    "com.jetbrains.idea",
+    "com.apple.dt.Xcode",
+  ]
+
   /// Returns only the apps that are currently installed.
   var installedApps: [ExternalApp] {
     knownApps.filter { $0.isInstalled }
+  }
+
+  /// Returns installed text editor apps suitable for opening files.
+  var installedEditorApps: [ExternalApp] {
+    knownApps.filter { editorBundleIDs.contains($0.id) && $0.isInstalled }
   }
 
   /// Opens a directory in the specified application.

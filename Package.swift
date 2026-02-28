@@ -47,6 +47,7 @@ let package = Package(
         "Services/ConfigManager.swift",
         "Services/BuildConfig.swift",
         "Services/Logger.swift",
+        "Services/OpenCodeCLIService.swift",
         "Models/UsageStats.swift",
         "Models/AgentType.swift",
         "Models/Tab.swift",
@@ -56,6 +57,7 @@ let package = Package(
         "Agents/OpenCodeAgent.swift",
         "Agents/TerminalAgent.swift",
         "Models/SavedPrompt.swift",
+        "Models/LaunchType.swift",
 
         /// Chat core (non-UI) — Engine, Models, Parser, Transport, State adapter.
         "Chat/Engine/ChatSessionState.swift",
@@ -78,6 +80,17 @@ let package = Package(
         "Chat/OpenCode/OpenCodeEventMapper.swift",
         "Chat/OpenCode/OpenCodeCLITransport.swift",
         "Chat/State/ChatState.swift",
+
+        /// Telegram Bot — Models, API, Runtime.
+        "Telegram/Models/TelegramModels.swift",
+        "Telegram/Models/TelegramAPIModels.swift",
+        "Telegram/Models/TelegramTimelineMessage.swift",
+        "Telegram/Models/TelegramCommand.swift",
+        "Telegram/API/TelegramBotAPIClient.swift",
+        "Telegram/API/TelegramMessageChunker.swift",
+        "Telegram/Runtime/TelegramBotRuntime.swift",
+        "Telegram/Runtime/TelegramCommandHandler.swift",
+        "Telegram/Runtime/TelegramPromptExecutor.swift",
 
         /// Task Queue — Models, Storage, State, Runner, Orchestrator.
         "TaskQueue/Models/QueuedTask.swift",
