@@ -874,6 +874,85 @@ class GhosttySurfaceView: NSView, NSTextInputClient {
   }
 }
 
+// MARK: - InjectableSurface
+
+extension GhosttySurfaceView: InjectableSurface {
+  func injectText(_ text: String) -> Bool {
+    guard let surface else {
+      return false
+    }
+
+    return text.withCString { ptr in
+      ghostty_surface_text(surface, ptr, UInt(text.utf8.count))
+      return true
+    }
+  }
+
+  func injectCommand(_ command: String, submit: CommandSubmitMode) -> Bool {
+    guard surface != nil else {
+      return false
+    }
+
+    guard injectText(command) else {
+      return false
+    }
+
+    if submit == .execute {
+      return injectText("\n")
+    }
+
+    return true
+  }
+
+  func injectPaste(_ text: String, mode: PasteMode) -> Bool {
+    guard surface != nil else {
+      return false
+    }
+
+    switch mode {
+    case .bracketed:
+      // Send bracketed paste escape sequences directly to the PTY,
+      // avoiding any system clipboard manipulation.
+      let bracketedText = "\u{1b}[200~" + text + "\u{1b}[201~"
+      return injectText(bracketedText)
+
+    case .plain:
+      return injectText(text)
+    }
+  }
+
+  func injectControl(_ signal: ControlSignal) -> Bool {
+    guard let surface else {
+      return false
+    }
+
+    var cchar = CChar(bitPattern: signal.asciiValue)
+    return withUnsafePointer(to: &cchar) { ptr in
+      ghostty_surface_text(surface, ptr, 1)
+      return true
+    }
+  }
+
+  func injectKey(keyCode: UInt32, modifiers: UInt32) -> Bool {
+    guard let surface else {
+      return false
+    }
+
+    var keyEvent = ghostty_input_key_s()
+    keyEvent.action = GHOSTTY_ACTION_PRESS
+    keyEvent.keycode = keyCode
+    keyEvent.mods = ghostty_input_mods_e(modifiers)
+    keyEvent.text = nil
+    keyEvent.composing = false
+    _ = ghostty_surface_key(surface, keyEvent)
+
+    keyEvent.action = GHOSTTY_ACTION_RELEASE
+    _ = ghostty_surface_key(surface, keyEvent)
+
+    return true
+  }
+}
+
 // MARK: - NSEvent Extension
 
 extension NSEvent {

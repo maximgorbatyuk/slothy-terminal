@@ -39,6 +39,7 @@ class AppState {
   var activeModal: ModalType?
   var taskQueueState = TaskQueueState()
   var taskOrchestrator: TaskOrchestrator?
+  private(set) var injectionOrchestrator: InjectionOrchestrator?
 
   /// Shared working directory preselected across tabs within this session.
   var globalWorkingDirectory: URL?
@@ -57,6 +58,11 @@ class AppState {
       orchestrator?.notifyQueueChanged()
     }
     orchestrator.start()
+
+    self.injectionOrchestrator = InjectionOrchestrator(
+      registry: TerminalSurfaceRegistry.shared,
+      tabProvider: self
+    )
   }
 
   /// Returns the currently active tab, if any.
@@ -227,6 +233,50 @@ class AppState {
     }
     taskOrchestrator?.stop()
     taskQueueState.saveImmediately()
+  }
+}
+
+// MARK: - Injection
+
+extension AppState {
+  /// Submits an injection request and returns it with updated status.
+  @discardableResult
+  func inject(_ request: InjectionRequest) -> InjectionRequest? {
+    injectionOrchestrator?.submit(request)
+  }
+
+  /// Cancels a pending injection request.
+  func cancelInjection(id: UUID) {
+    injectionOrchestrator?.cancel(requestId: id)
+  }
+
+  /// Returns all tab IDs with a live registered terminal surface.
+  func listInjectableTabs() -> [UUID] {
+    TerminalSurfaceRegistry.shared.registeredTabIds()
+  }
+}
+
+// MARK: - InjectionTabProvider
+
+extension AppState: InjectionTabProvider {
+  var activeTabId: UUID? { activeTabID }
+
+  func terminalTabs(agentType: AgentType?, mode: TabMode?) -> [UUID] {
+    tabs.filter { tab in
+      guard tab.mode == .terminal else {
+        return false
+      }
+
+      if let mode, tab.mode != mode {
+        return false
+      }
+
+      if let agentType, tab.agentType != agentType {
+        return false
+      }
+
+      return true
+    }.map(\.id)
   }
 }
 

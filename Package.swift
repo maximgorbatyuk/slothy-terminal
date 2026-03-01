@@ -104,6 +104,15 @@ let package = Package(
         "TaskQueue/Orchestrator/TaskOrchestrator.swift",
         "TaskQueue/Runner/RiskyToolDetector.swift",
         "TaskQueue/Orchestrator/TaskPreflight.swift",
+
+        /// Injection — Models, Registry, Orchestrator.
+        "Injection/Models/InjectionPayload.swift",
+        "Injection/Models/InjectionTarget.swift",
+        "Injection/Models/InjectionRequest.swift",
+        "Injection/Models/InjectionResult.swift",
+        "Injection/Models/InjectionEvent.swift",
+        "Injection/Registry/TerminalSurfaceRegistry.swift",
+        "Injection/Orchestrator/InjectionOrchestrator.swift",
       ]
     ),
     .testTarget(

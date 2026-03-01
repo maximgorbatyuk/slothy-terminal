@@ -46,6 +46,7 @@ struct ActiveTerminalView: View {
           command: tab.command,
           arguments: tab.arguments,
           environment: tab.environment,
+          tabId: tab.id,
           shouldAutoRunCommand: tab.agentType.showsUsageStats,
           isActive: isActive,
           onDirectoryChanged: { newDirectory in

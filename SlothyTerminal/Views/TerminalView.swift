@@ -8,6 +8,9 @@ struct GhosttyTerminalViewRepresentable: NSViewRepresentable {
   let arguments: [String]
   let environment: [String: String]
 
+  /// Tab ID for surface registry registration.
+  let tabId: UUID
+
   /// Whether to auto-run the command after the shell starts.
   let shouldAutoRunCommand: Bool
 
@@ -29,6 +32,10 @@ struct GhosttyTerminalViewRepresentable: NSViewRepresentable {
   func makeNSView(context: Context) -> GhosttySurfaceView {
     let surfaceView = GhosttySurfaceView()
     context.coordinator.surfaceView = surfaceView
+    context.coordinator.tabId = tabId
+
+    /// Register surface for injection.
+    TerminalSurfaceRegistry.shared.register(tabId: tabId, surface: surfaceView)
 
     /// Wire callbacks.
     surfaceView.onDirectoryChanged = onDirectoryChanged
@@ -78,6 +85,7 @@ struct GhosttyTerminalViewRepresentable: NSViewRepresentable {
 
   class Coordinator {
     weak var surfaceView: GhosttySurfaceView?
+    var tabId: UUID?
   }
 
   private func makeLaunchEnvironment(
@@ -128,6 +136,9 @@ struct GhosttyTerminalViewRepresentable: NSViewRepresentable {
   }
 
   static func dismantleNSView(_ nsView: GhosttySurfaceView, coordinator: Coordinator) {
+    if let tabId = coordinator.tabId {
+      TerminalSurfaceRegistry.shared.unregister(tabId: tabId)
+    }
     nsView.destroySurface()
   }
 }
@@ -138,6 +149,9 @@ struct StandaloneTerminalView: View {
   let command: String
   let arguments: [String]
   var environment: [String: String] = [:]
+
+  /// Tab ID for surface registry registration.
+  let tabId: UUID
 
   /// Whether to auto-run the command (true for AI agents, false for plain terminal).
   var shouldAutoRunCommand: Bool = true
@@ -163,6 +177,7 @@ struct StandaloneTerminalView: View {
       command: command,
       arguments: arguments,
       environment: environment,
+      tabId: tabId,
       shouldAutoRunCommand: shouldAutoRunCommand,
       isActive: isActive,
       onDirectoryChanged: onDirectoryChanged,
@@ -178,6 +193,7 @@ struct StandaloneTerminalView: View {
     workingDirectory: FileManager.default.homeDirectoryForCurrentUser,
     command: "/bin/zsh",
     arguments: [],
+    tabId: UUID(),
     shouldAutoRunCommand: false
   )
   .frame(width: 800, height: 600)
