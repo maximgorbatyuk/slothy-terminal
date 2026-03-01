@@ -90,7 +90,7 @@ User Action → AppState.createChatTab() → Tab(mode: .chat, ChatState)
 2. Implement: `command`, `defaultArgs`, `environmentVariables`, `contextWindowLimit`, `parseStats()`, `isAvailable()`
 3. Add case to `AgentType` enum
 4. Update `AgentFactory.createAgent()`
-5. Audit all exhaustive `switch` on `AgentType` — files include: `ConfigManager.swift`, `ChatComposerStatusBar.swift`, `TaskOrchestrator.swift`, `TelegramPromptExecutor.swift`
+5. Audit all exhaustive `switch` on `AgentType` — files include: `ConfigManager.swift`, `ChatComposerStatusBar.swift`, `TaskOrchestrator.swift`, `TelegramPromptExecutor.swift`, `TaskInjectionRouter.swift`
 
 ## Core Architecture Notes
 
@@ -175,10 +175,37 @@ Background task execution with preflight checks and log collection.
 - **TaskOrchestrator** (`TaskQueue/Orchestrator/TaskOrchestrator.swift`) - Schedules and dispatches queued tasks
 - **TaskPreflight** (`TaskQueue/Orchestrator/TaskPreflight.swift`) - Pre-execution validation
 - **TaskRunner** (`TaskQueue/Runner/TaskRunner.swift`) - Protocol; implementations: `ClaudeTaskRunner`, `OpenCodeTaskRunner`
+- **TaskInjectionRouter** (`TaskQueue/Runner/TaskInjectionRouter.swift`) - Injection-first execution: routes task prompts to matching open terminal tabs before falling back to headless runners
+- **TaskInjectionProvider** (protocol in `TaskInjectionRouter.swift`) - Testable abstraction for tab lookup and injection submission; `AppState` conforms
 - **RiskyToolDetector** (`TaskQueue/Runner/RiskyToolDetector.swift`) - Flags potentially destructive tool calls
 - **TaskLogCollector** (`TaskQueue/Runner/TaskLogCollector.swift`) - Captures task execution logs
 - **TaskQueueSnapshot** (`TaskQueue/Storage/TaskQueueSnapshot.swift`) - Codable snapshot models for queue state
 - **TaskQueueStore** (`TaskQueue/Storage/TaskQueueStore.swift`) - Snapshot persistence (same pattern as ChatSessionStore)
+
+### Task Execution: Injection-First Routing
+
+When `TaskOrchestrator` executes a task, it attempts injection before headless execution:
+
+1. Preflight validation (rejects `.terminal`, verifies CLI, checks repoPath)
+2. **Injection attempt** via `TaskInjectionRouter`: finds a matching open terminal tab (`mode == .terminal`, same `agentType`, same working directory, registered surface). Prefers active tab.
+3. If injected: task completes immediately with a summary directing user to the tab.
+4. If no match or injection fails: falls back to headless `ClaudeTaskRunner`/`OpenCodeTaskRunner`.
+
+The `TaskInjectionProvider` protocol keeps injection logic testable in SwiftPM without `AppState`.
+
+## Injection Subsystem
+
+Programmatic input injection into live terminal surfaces. Used by TaskQueue for injection-first routing and available for UI/Telegram/external API use.
+
+- **InjectionPayload** (`Injection/Models/InjectionPayload.swift`) - Content types: `.command`, `.text`, `.paste`, `.control`, `.key`
+- **InjectionRequest** (`Injection/Models/InjectionRequest.swift`) - Request envelope with target, origin, status, timeout
+- **InjectionTarget** (`Injection/Models/InjectionTarget.swift`) - `.activeTab`, `.tabId(UUID)`, `.filtered(agentType:mode:)`
+- **InjectionOrchestrator** (`Injection/Orchestrator/InjectionOrchestrator.swift`) - Per-tab FIFO queues, timeout handling, "worst wins" status escalation
+- **TerminalSurfaceRegistry** (`Injection/Registry/TerminalSurfaceRegistry.swift`) - Weak-ref map of tab IDs to live `InjectableSurface` instances (GhosttySurfaceView)
+- **InjectionTabProvider** (protocol in `InjectionOrchestrator.swift`) - Tab lookup abstraction; `AppState` conforms
+- **InjectionEvent** / **InjectionResult** - Observable lifecycle events and per-tab outcome models
+
+`AppState` exposes `inject(_:)`, `cancelInjection(id:)`, and `listInjectableTabs()` for callers. `GhosttySurfaceView` registers/unregisters itself with `TerminalSurfaceRegistry` on create/destroy.
 
 ## Telegram Bot Subsystem
 

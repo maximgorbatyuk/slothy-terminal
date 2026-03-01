@@ -21,9 +21,13 @@ class TaskOrchestrator {
   private let queueState: TaskQueueState
   private let runnerFactory: (QueuedTask) -> TaskRunner
 
+  /// Optional injection router for prompt delivery to existing terminal tabs.
+  var injectionRouter: TaskInjectionRouter?
+
   private var isRunning = false
   private var currentRunner: TaskRunner?
   private var currentTaskId: UUID?
+  private var currentInjectionRequestId: UUID?
   private var executionTask: Task<Void, Never>?
   private var timeoutTask: Task<Void, Never>?
 
@@ -90,6 +94,7 @@ class TaskOrchestrator {
     executionTask?.cancel()
     executionTask = nil
     currentTaskId = nil
+    currentInjectionRequestId = nil
     Logger.taskQueue.info("TaskOrchestrator stopped")
   }
 
@@ -100,6 +105,13 @@ class TaskOrchestrator {
     }
 
     Logger.taskQueue.info("Cancelling running task \(taskId)")
+
+    /// Cancel in-flight injection if applicable.
+    if let injRequestId = currentInjectionRequestId {
+      injectionRouter?.cancelInjection(requestId: injRequestId)
+      currentInjectionRequestId = nil
+    }
+
     timeoutTask?.cancel()
     timeoutTask = nil
     currentRunner?.cancel()
@@ -195,15 +207,39 @@ class TaskOrchestrator {
     queueState.markRunning(id: task.id, attemptId: attemptId)
     currentTaskId = task.id
 
-    let runner = runnerFactory(task)
-    currentRunner = runner
-
     let logCollector = TaskLogCollector(taskId: task.id, attemptId: attemptId)
     logCollector.onLogLine = { [weak self] line in
       Task { @MainActor [weak self] in
         self?.queueState.appendLiveLog(line)
       }
     }
+
+    /// Try injection into an existing terminal tab first.
+    if let router = injectionRouter {
+      let result = router.attemptInjection(task: task, logCollector: logCollector)
+
+      switch result {
+      case .injected(let requestId, _, let summary):
+        currentInjectionRequestId = requestId
+        let logPath = logCollector.flush()
+        queueState.markCompleted(
+          id: task.id,
+          resultSummary: summary,
+          logArtifactPath: logPath,
+          sessionId: nil
+        )
+        currentInjectionRequestId = nil
+        finishExecution()
+        return
+
+      case .noMatchingTab, .failed:
+        /// Fall through to headless runner.
+        logCollector.append("[injection] Falling back to headless runner")
+      }
+    }
+
+    let runner = runnerFactory(task)
+    currentRunner = runner
 
     /// Start timeout timer.
     timeoutTask = Task { [weak self] in

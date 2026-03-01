@@ -52,17 +52,21 @@ class AppState {
     self.sidebarWidth = config.sidebarWidth
     taskQueueState.restoreFromDisk()
 
-    let orchestrator = TaskOrchestrator(queueState: taskQueueState)
-    self.taskOrchestrator = orchestrator
-    taskQueueState.onQueueChanged = { [weak orchestrator] in
-      orchestrator?.notifyQueueChanged()
-    }
-    orchestrator.start()
-
     self.injectionOrchestrator = InjectionOrchestrator(
       registry: TerminalSurfaceRegistry.shared,
       tabProvider: self
     )
+
+    let orchestrator = TaskOrchestrator(queueState: taskQueueState)
+    self.taskOrchestrator = orchestrator
+
+    let injectionRouter = TaskInjectionRouter(provider: self)
+    orchestrator.injectionRouter = injectionRouter
+
+    taskQueueState.onQueueChanged = { [weak orchestrator] in
+      orchestrator?.notifyQueueChanged()
+    }
+    orchestrator.start()
   }
 
   /// Returns the currently active tab, if any.
@@ -277,6 +281,38 @@ extension AppState: InjectionTabProvider {
 
       return true
     }.map(\.id)
+  }
+}
+
+// MARK: - TaskInjectionProvider
+
+extension AppState: TaskInjectionProvider {
+  func injectableTabCandidates(agentType: AgentType) -> [InjectableTabCandidate] {
+    let registeredIds = Set(TerminalSurfaceRegistry.shared.registeredTabIds())
+
+    return tabs.compactMap { tab in
+      guard tab.mode == .terminal,
+            tab.agentType == agentType
+      else {
+        return nil
+      }
+
+      return InjectableTabCandidate(
+        tabId: tab.id,
+        agentType: tab.agentType,
+        workingDirectory: tab.workingDirectory,
+        isActive: tab.id == activeTabID,
+        isRegistered: registeredIds.contains(tab.id)
+      )
+    }
+  }
+
+  func submitInjection(_ request: InjectionRequest) -> InjectionRequest? {
+    injectionOrchestrator?.submit(request)
+  }
+
+  func cancelInjection(requestId: UUID) {
+    injectionOrchestrator?.cancel(requestId: requestId)
   }
 }
 

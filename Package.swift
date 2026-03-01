@@ -103,6 +103,7 @@ let package = Package(
         "TaskQueue/Runner/TaskLogCollector.swift",
         "TaskQueue/Orchestrator/TaskOrchestrator.swift",
         "TaskQueue/Runner/RiskyToolDetector.swift",
+        "TaskQueue/Runner/TaskInjectionRouter.swift",
         "TaskQueue/Orchestrator/TaskPreflight.swift",
 
         /// Injection — Models, Registry, Orchestrator.
