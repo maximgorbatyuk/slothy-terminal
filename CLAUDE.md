@@ -71,7 +71,7 @@ User Action → AppState.createChatTab() → Tab(mode: .chat, ChatState)
 ### Key Components
 
 - **AppState** (`App/AppState.swift`) - @Observable global state: tabs, active tab, sidebar, modals
-- **Tab** (`Models/Tab.swift`) - Session model supporting `.terminal`, `.chat`, and `.telegramBot` modes
+- **Tab** (`Models/Tab.swift`) - Session model supporting `.terminal` and `.chat` modes
 - **GhosttyApp** (`Terminal/GhosttyApp.swift`) - Process-wide singleton managing the libghostty app instance and runtime callbacks
 - **GhosttySurfaceView** (`Terminal/GhosttySurfaceView.swift`) - NSView bridge to libghostty terminal surface; handles PTY, rendering, and input
 - **AIAgent protocol** (`Agents/AIAgent.swift`) - Defines agent interface; implementations: ClaudeAgent, OpenCodeAgent, TerminalAgent
@@ -209,11 +209,25 @@ Programmatic input injection into live terminal surfaces. Used by TaskQueue for 
 
 ## Telegram Bot Subsystem
 
-Tab mode `.telegramBot` enables a Telegram bot that relays messages to a Claude chat session.
+The Telegram bot runs as a sidebar panel (`.telegram` in `SidebarTab`). Runtime is owned by `AppState.telegramRuntime`, decoupled via the `TelegramBotDelegate` protocol.
 
-- **TelegramBotRuntime** (`Telegram/Runtime/TelegramBotRuntime.swift`) - Long-poll loop, message dispatch
+- **TelegramBotRuntime** (`Telegram/Runtime/TelegramBotRuntime.swift`) - Long-poll loop, message dispatch, relay orchestration
 - **TelegramCommandHandler** (`Telegram/Runtime/TelegramCommandHandler.swift`) - Slash command parsing and execution
-- **TelegramPromptExecutor** (`Telegram/Runtime/TelegramPromptExecutor.swift`) - Bridges Telegram messages into chat engine turns
+- **TelegramPromptExecutor** (`Telegram/Runtime/TelegramPromptExecutor.swift`) - Bridges Telegram messages into headless chat engine turns
 - **TelegramBotAPIClient** (`Telegram/API/TelegramBotAPIClient.swift`) - Telegram Bot API HTTP client
 - **TelegramMessageChunker** (`Telegram/API/TelegramMessageChunker.swift`) - Splits long messages for Telegram's size limits
+- **TelegramRelaySession** (`Telegram/Relay/TelegramRelaySession.swift`) - Relay session state and `TelegramRelayTabInfo` model
+- **TerminalOutputPoller** (`Telegram/Relay/TerminalOutputPoller.swift`) - Polls terminal surface for output during relay
+- **ANSIStripper** (`Telegram/Relay/ANSIStripper.swift`) - Strips ANSI escape codes from terminal output
+- **TelegramBotDelegate** (protocol in `Telegram/Models/TelegramModels.swift`) - Decouples runtime from AppState
 - Settings UI in `Views/Settings/TelegramSettingsTab.swift`
+- Sidebar UI in `Views/Telegram/TelegramSidebarView.swift`
+
+### Telegram Plain Text Routing
+
+When the bot receives plain text (non-slash-command):
+1. **Active AI tab** — inject into the active terminal tab if it runs Claude/OpenCode and has a registered surface
+2. **Relay fallback** — inject into the active relay session tab (if started via `/relay_start`)
+3. **Error reply** — no eligible target; no headless execution for plain text
+
+Slash commands and `/new_task` "immediately" flow still use headless `TelegramPromptExecutor`.

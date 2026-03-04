@@ -8,6 +8,7 @@ private class MockRelayDelegate: TelegramBotDelegate {
   var injectResult: InjectionRequest?
   var injectCalls: [InjectionRequest] = []
   var relayableTabs: [TelegramRelayTabInfo] = []
+  var activeAITab: TelegramRelayTabInfo?
 
   func telegramBotRequestReport() -> String { "" }
 
@@ -22,6 +23,10 @@ private class MockRelayDelegate: TelegramBotDelegate {
 
   func telegramBotListRelayableTabs() -> [TelegramRelayTabInfo] {
     relayableTabs
+  }
+
+  func telegramBotActiveInjectableAITab() -> TelegramRelayTabInfo? {
+    activeAITab
   }
 
   func telegramBotInject(_ request: InjectionRequest) -> InjectionRequest? {
@@ -266,5 +271,174 @@ final class TelegramRelayRuntimeTests: XCTestCase {
     // No headless execution.
     let hasExecutingEvent = runtime.events.contains { $0.message.contains("Executing prompt") }
     XCTAssertFalse(hasExecutingEvent, "Successful relay must not trigger headless execution")
+  }
+
+  // MARK: - Active AI Tab Routing
+
+  func testPlainTextInjectsIntoActiveAITab() async throws {
+    let tabId = UUID()
+    mockDelegate.activeAITab = TelegramRelayTabInfo(
+      id: tabId,
+      name: "Claude Tab",
+      agentType: .claude,
+      directory: URL(fileURLWithPath: "/tmp"),
+      isActive: true
+    )
+    mockDelegate.injectResult = InjectionRequest(
+      payload: .command("", submit: .execute),
+      target: .tabId(tabId),
+      origin: .telegram,
+      status: .completed
+    )
+
+    let update = try makeUpdate(text: "run tests")
+    await runtime.handleUpdate(update, client: client)
+
+    XCTAssertEqual(mockDelegate.injectCalls.count, 1)
+
+    let injected = mockDelegate.injectCalls[0]
+    XCTAssertEqual(injected.target, .tabId(tabId))
+    XCTAssertEqual(injected.origin, .telegram)
+
+    if case .command(let text, let submit) = injected.payload {
+      XCTAssertEqual(text, "run tests")
+      XCTAssertEqual(submit, .execute)
+    } else {
+      XCTFail("Expected .command payload")
+    }
+
+    let hasAITabEvent = runtime.events.contains { $0.message.contains("Injected into AI tab") }
+    XCTAssertTrue(hasAITabEvent, "Should log AI tab injection")
+  }
+
+  func testActiveAITabWinsOverRelay() async throws {
+    let aiTabId = UUID()
+    let relayTabId = UUID()
+
+    // Set up both an active AI tab and an active relay.
+    mockDelegate.activeAITab = TelegramRelayTabInfo(
+      id: aiTabId,
+      name: "OpenCode Tab",
+      agentType: .opencode,
+      directory: URL(fileURLWithPath: "/tmp"),
+      isActive: true
+    )
+    runtime.relaySession = TelegramRelaySession(
+      tabId: relayTabId,
+      tabName: "Relay Tab",
+      startedAt: Date(),
+      status: .active
+    )
+    runtime.relayChatId = 999
+    runtime.relayClient = client
+
+    mockDelegate.injectResult = InjectionRequest(
+      payload: .command("", submit: .execute),
+      target: .tabId(aiTabId),
+      origin: .telegram,
+      status: .completed
+    )
+
+    let update = try makeUpdate(text: "build project")
+    await runtime.handleUpdate(update, client: client)
+
+    // Should inject into AI tab, not relay.
+    XCTAssertEqual(mockDelegate.injectCalls.count, 1)
+    XCTAssertEqual(mockDelegate.injectCalls[0].target, .tabId(aiTabId))
+
+    // Relay should remain active (not consumed).
+    XCTAssertNotNil(runtime.relaySession)
+  }
+
+  func testNoAITabFallsBackToRelay() async throws {
+    let relayTabId = UUID()
+
+    // No active AI tab.
+    mockDelegate.activeAITab = nil
+
+    runtime.relaySession = TelegramRelaySession(
+      tabId: relayTabId,
+      tabName: "Relay Tab",
+      startedAt: Date(),
+      status: .active
+    )
+    runtime.relayChatId = 999
+    runtime.relayClient = client
+
+    mockDelegate.injectResult = InjectionRequest(
+      payload: .command("", submit: .execute),
+      target: .tabId(relayTabId),
+      origin: .telegram,
+      status: .completed
+    )
+
+    let update = try makeUpdate(text: "ls -la")
+    await runtime.handleUpdate(update, client: client)
+
+    // Should inject into relay tab.
+    XCTAssertEqual(mockDelegate.injectCalls.count, 1)
+    XCTAssertEqual(mockDelegate.injectCalls[0].target, .tabId(relayTabId))
+  }
+
+  func testNoAITabNoRelayReturnsError() async throws {
+    // No active AI tab, no relay.
+    mockDelegate.activeAITab = nil
+    XCTAssertNil(runtime.relaySession)
+
+    let update = try makeUpdate(text: "some command")
+    await runtime.handleUpdate(update, client: client)
+
+    // No injection should happen.
+    XCTAssertTrue(mockDelegate.injectCalls.isEmpty, "Should not inject anywhere")
+
+    // Should log the error.
+    let hasNoTabEvent = runtime.events.contains { $0.message.contains("No eligible AI tab") }
+    XCTAssertTrue(hasNoTabEvent, "Should log no eligible AI tab")
+
+    // Should NOT trigger headless execution.
+    let hasExecutingEvent = runtime.events.contains { $0.message.contains("Executing prompt") }
+    XCTAssertFalse(hasExecutingEvent, "Must not trigger headless execution")
+  }
+
+  func testAITabInjectionFailureDoesNotFallThrough() async throws {
+    let tabId = UUID()
+    mockDelegate.activeAITab = TelegramRelayTabInfo(
+      id: tabId,
+      name: "Claude Tab",
+      agentType: .claude,
+      directory: URL(fileURLWithPath: "/tmp"),
+      isActive: true
+    )
+
+    // Injection fails.
+    mockDelegate.injectResult = nil
+
+    let update = try makeUpdate(text: "deploy")
+    await runtime.handleUpdate(update, client: client)
+
+    // Should log failure.
+    let hasFailureEvent = runtime.events.contains { $0.message.contains("Injection into AI tab") }
+    XCTAssertTrue(hasFailureEvent, "Should log AI tab injection failure")
+
+    // Must NOT fall through to headless execution.
+    let hasExecutingEvent = runtime.events.contains { $0.message.contains("Executing prompt") }
+    XCTAssertFalse(hasExecutingEvent, "Injection failure must not trigger headless execution")
+  }
+
+  func testSlashCommandsStillWorkWithActiveAITab() async throws {
+    let tabId = UUID()
+    mockDelegate.activeAITab = TelegramRelayTabInfo(
+      id: tabId,
+      name: "Claude Tab",
+      agentType: .claude,
+      directory: URL(fileURLWithPath: "/tmp"),
+      isActive: true
+    )
+
+    let update = try makeUpdate(text: "/report")
+    await runtime.handleUpdate(update, client: client)
+
+    // Slash command should NOT inject into AI tab.
+    XCTAssertTrue(mockDelegate.injectCalls.isEmpty, "Slash commands must not inject into AI tab")
   }
 }

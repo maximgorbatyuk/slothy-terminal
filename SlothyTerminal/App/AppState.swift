@@ -362,6 +362,29 @@ extension AppState: TelegramBotDelegate {
       }
   }
 
+  func telegramBotActiveInjectableAITab() -> TelegramRelayTabInfo? {
+    guard let tab = activeTab,
+          tab.mode == .terminal,
+          (tab.agentType == .claude || tab.agentType == .opencode)
+    else {
+      return nil
+    }
+
+    let registeredIds = Set(TerminalSurfaceRegistry.shared.registeredTabIds())
+
+    guard registeredIds.contains(tab.id) else {
+      return nil
+    }
+
+    return TelegramRelayTabInfo(
+      id: tab.id,
+      name: tab.tabName,
+      agentType: tab.agentType,
+      directory: tab.workingDirectory,
+      isActive: true
+    )
+  }
+
   func telegramBotInject(_ request: InjectionRequest) -> InjectionRequest? {
     inject(request)
   }

@@ -250,7 +250,33 @@ class TelegramBotRuntime {
       return
     }
 
-    /// When relay is active, inject text into the relay terminal tab.
+    /// Active AI terminal tab (Claude/OpenCode) wins for plain text.
+    /// On failure, we return immediately (no relay fallback) to avoid
+    /// silently redirecting to a different tab.
+    if let aiTab = delegate?.telegramBotActiveInjectableAITab() {
+      let request = InjectionRequest(
+        payload: .command(text, submit: .execute),
+        target: .tabId(aiTab.id),
+        origin: .telegram
+      )
+
+      if let result = delegate?.telegramBotInject(request),
+         result.status == .completed || result.status == .written
+      {
+        addEvent(.info, "Injected into AI tab \(aiTab.name): \(String(text.prefix(80)))")
+        return
+      } else {
+        await sendReply(
+          "Injection into \(aiTab.name) failed.",
+          chatId: message.chat.id,
+          client: client
+        )
+        addEvent(.warning, "Injection into AI tab \(aiTab.name) failed")
+        return
+      }
+    }
+
+    /// Fallback: relay session if active and no AI tab available.
     if let relay = relaySession, relay.status == .active {
       let request = InjectionRequest(
         payload: .command(text, submit: .execute),
@@ -274,18 +300,13 @@ class TelegramBotRuntime {
       }
     }
 
-    /// In execute mode, confirm receipt then run the text as a prompt.
-    if mode == .execute {
-      await sendReply("Message received. Processing...", chatId: message.chat.id, client: client)
-      await executePrompt(text, message: message, client: client)
-    } else {
-      await sendReply(
-        "Message received. Current mode (Listen Only) does not allow execution. Switch to Execute mode to run prompts.",
-        chatId: message.chat.id,
-        client: client
-      )
-      addEvent(.info, "Passive mode — not executing prompt")
-    }
+    /// No eligible target — inform the user.
+    await sendReply(
+      "No active AI terminal tab (Claude or OpenCode). Open one and try again.",
+      chatId: message.chat.id,
+      client: client
+    )
+    addEvent(.info, "No eligible AI tab for plain text injection")
   }
 
   // MARK: - Command Handling

@@ -98,6 +98,9 @@ protocol TelegramBotDelegate: AnyObject {
   /// Injects a request into a terminal tab. Returns the request with updated status, or nil on failure.
   func telegramBotInject(_ request: InjectionRequest) -> InjectionRequest?
 
+  /// Returns the currently active AI terminal tab (Claude/OpenCode) with a registered surface, or nil.
+  func telegramBotActiveInjectableAITab() -> TelegramRelayTabInfo?
+
   /// Returns a startup status statement for the given working directory.
   func telegramBotStartupStatement(workingDirectory: URL) async -> String
 }

@@ -23,8 +23,8 @@ enum TelegramCommandHandler {
     /relay_status - Show relay session info
     /relay_interrupt - Send Ctrl+C to the relay tab
 
-    Send any other text to execute it as a prompt (in Execute mode).
-    When relay is active, text is injected into the relay tab instead.
+    Send any other text to inject it into the active AI terminal tab (Claude/OpenCode).
+    If no AI tab is active, relay session is used as fallback.
     /new_task scheduling accepts: immediately | queue
     """
   }
