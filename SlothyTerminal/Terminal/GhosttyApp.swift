@@ -328,9 +328,15 @@ private func ghosttyAction(
     /// Embedded runtime requests a draw on the app thread.
     if Thread.isMainThread {
       ghostty_surface_draw(surface)
+      if let view = GhosttyApp.surfaceView(from: surface) {
+        view.markRenderDirty()
+      }
     } else {
       DispatchQueue.main.async {
         ghostty_surface_draw(surface)
+        if let view = GhosttyApp.surfaceView(from: surface) {
+          view.markRenderDirty()
+        }
       }
     }
 

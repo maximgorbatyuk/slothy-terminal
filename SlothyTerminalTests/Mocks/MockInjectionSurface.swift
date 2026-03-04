@@ -40,4 +40,17 @@ class MockInjectionSurface: InjectableSurface {
     keyCalls.append((keyCode, modifiers))
     return shouldSucceed
   }
+
+  // MARK: - Viewport Reading (relay support)
+
+  var viewportText: String?
+  var hasNewRenderSinceLastRead: Bool = false
+
+  func readViewportText() -> String? {
+    viewportText
+  }
+
+  func clearRenderDirty() {
+    hasNewRenderSinceLastRead = false
+  }
 }

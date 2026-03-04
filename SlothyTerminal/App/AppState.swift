@@ -5,7 +5,7 @@ import SwiftUI
 enum ModalType: Identifiable {
   case startupPage
   case folderSelector(AgentType)
-  case telegramBotFolderSelector
+
   case settings
   case addTask
   case taskDetail(UUID)
@@ -16,8 +16,6 @@ enum ModalType: Identifiable {
       return "startupPage"
     case .folderSelector(let agent):
       return "folderSelector-\(agent.rawValue)"
-    case .telegramBotFolderSelector:
-      return "telegramBotFolderSelector"
     case .settings:
       return "settings"
     case .addTask:
@@ -40,6 +38,7 @@ class AppState {
   var taskQueueState = TaskQueueState()
   var taskOrchestrator: TaskOrchestrator?
   private(set) var injectionOrchestrator: InjectionOrchestrator?
+  var telegramRuntime: TelegramBotRuntime?
 
   /// Shared working directory preselected across tabs within this session.
   var globalWorkingDirectory: URL?
@@ -119,39 +118,25 @@ class AppState {
     }
   }
 
-  /// Creates a new Telegram bot tab with the specified working directory.
-  func createTelegramBotTab(directory: URL) {
-    if let existingBotTab = existingTelegramBotTab() {
-      switchToTab(id: existingBotTab.id)
+  /// Starts the Telegram bot as a sidebar service.
+  func startTelegramBot(directory: URL) {
+    guard telegramRuntime == nil else {
       return
     }
-
-    let tab = Tab(
-      agentType: configManager.config.telegramExecutionAgent,
-      workingDirectory: directory,
-      mode: .telegramBot
-    )
 
     let runtime = TelegramBotRuntime(workingDirectory: directory)
     runtime.delegate = self
-    tab.telegramRuntime = runtime
+    telegramRuntime = runtime
 
-    tabs.append(tab)
-    switchToTab(id: tab.id)
-  }
-
-  /// Shows the Telegram bot folder selector modal.
-  func showTelegramFolderSelector() {
-    if let existingBotTab = existingTelegramBotTab() {
-      switchToTab(id: existingBotTab.id)
-      return
+    if configManager.config.telegramAutoStartOnOpen {
+      runtime.start()
     }
-
-    activeModal = .telegramBotFolderSelector
   }
 
-  private func existingTelegramBotTab() -> Tab? {
-    tabs.first { $0.mode == .telegramBot }
+  /// Stops and removes the Telegram bot runtime.
+  func stopTelegramBot() {
+    telegramRuntime?.stop()
+    telegramRuntime = nil
   }
 
   /// Closes the tab with the specified ID.
@@ -162,9 +147,6 @@ class AppState {
 
     /// Terminate chat process if active.
     tabs[index].chatState?.terminateProcess()
-
-    /// Stop Telegram bot if active.
-    tabs[index].telegramRuntime?.stop()
 
     tabs.remove(at: index)
 
@@ -233,8 +215,8 @@ class AppState {
     for tab in tabs {
       /// terminateProcess() calls store.saveImmediately() internally.
       tab.chatState?.terminateProcess()
-      tab.telegramRuntime?.stop()
     }
+    telegramRuntime?.stop()
     taskOrchestrator?.stop()
     taskQueueState.saveImmediately()
   }
@@ -365,6 +347,41 @@ extension AppState: TelegramBotDelegate {
     )
   }
 
+  func telegramBotListRelayableTabs() -> [TelegramRelayTabInfo] {
+    let registeredIds = Set(TerminalSurfaceRegistry.shared.registeredTabIds())
+    return tabs
+      .filter { $0.mode == .terminal && registeredIds.contains($0.id) }
+      .map {
+        TelegramRelayTabInfo(
+          id: $0.id,
+          name: $0.tabName,
+          agentType: $0.agentType,
+          directory: $0.workingDirectory,
+          isActive: $0.id == activeTabID
+        )
+      }
+  }
+
+  func telegramBotInject(_ request: InjectionRequest) -> InjectionRequest? {
+    inject(request)
+  }
+
+  func telegramBotStartupStatement(workingDirectory: URL) async -> String {
+    let repoRoot = await GitService.shared.getRepositoryRoot(for: workingDirectory)
+
+    let openTabCount = tabs.count
+    let activeTaskCount = taskQueueState.tasks.filter {
+      $0.status == .pending || $0.status == .running || $0.approvalState == .waiting
+    }.count
+
+    return TelegramStartupStatement.compose(
+      repositoryPath: repoRoot?.path,
+      workingDirectoryPath: workingDirectory.path,
+      openTabCount: openTabCount,
+      activeTaskCount: activeTaskCount
+    )
+  }
+
   private func compactTelegramPath(_ directory: URL) -> String {
     let fullPath = directory.path
     let homeDirectory = FileManager.default.homeDirectoryForCurrentUser.path
@@ -387,22 +404,6 @@ extension AppState: TelegramBotDelegate {
 
     case .terminal:
       return "interactive"
-
-    case .telegramBot:
-      if let runtime = tab.telegramRuntime {
-        switch runtime.status {
-        case .idle:
-          return "idle"
-
-        case .running:
-          return "running (\(runtime.mode.displayName.lowercased()))"
-
-        case .error:
-          return "error"
-        }
-      }
-
-      return "idle"
     }
   }
 }

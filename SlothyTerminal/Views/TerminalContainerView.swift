@@ -33,9 +33,7 @@ struct ActiveTerminalView: View {
     ZStack {
       appCardColor
 
-      if tab.mode == .telegramBot, let runtime = tab.telegramRuntime {
-        TelegramBotView(runtime: runtime)
-      } else if tab.mode == .chat, let chatState = tab.chatState {
+      if tab.mode == .chat, let chatState = tab.chatState {
         ChatView(chatState: chatState)
       } else if let error = agentUnavailableError {
         AgentUnavailableView(agentName: tab.agent.displayName, error: error)
@@ -69,14 +67,6 @@ struct ActiveTerminalView: View {
       }
     }
     .task {
-      /// Telegram bot mode auto-start.
-      if tab.mode == .telegramBot {
-        if ConfigManager.shared.config.telegramAutoStartOnOpen {
-          tab.telegramRuntime?.start()
-        }
-        return
-      }
-
       /// Chat mode doesn't need PTY availability checks.
       if tab.mode == .chat {
         tab.usageStats.startSession()

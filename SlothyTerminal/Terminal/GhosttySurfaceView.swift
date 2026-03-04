@@ -40,6 +40,9 @@ class GhosttySurfaceView: NSView, NSTextInputClient {
   var onCommandFinished: (() -> Void)?
   var onClosed: (() -> Void)?
 
+  /// Set on each GHOSTTY_ACTION_RENDER, cleared by poller after reading.
+  private(set) var hasNewRenderSinceLastRead = false
+
   // MARK: - Initialization
 
   init() {
@@ -950,6 +953,65 @@ extension GhosttySurfaceView: InjectableSurface {
     _ = ghostty_surface_key(surface, keyEvent)
 
     return true
+  }
+}
+
+// MARK: - Viewport Reading & Render Dirty Flag
+
+extension GhosttySurfaceView {
+  /// Reads the full visible viewport text from the terminal surface.
+  func readViewportText() -> String? {
+    guard let surface else {
+      return nil
+    }
+
+    let size = ghostty_surface_size(surface)
+
+    guard size.columns > 0, size.rows > 0 else {
+      return nil
+    }
+
+    var sel = ghostty_selection_s()
+    sel.top_left = ghostty_point_s(
+      tag: GHOSTTY_POINT_VIEWPORT,
+      coord: GHOSTTY_POINT_COORD_TOP_LEFT,
+      x: 0,
+      y: 0
+    )
+    sel.bottom_right = ghostty_point_s(
+      tag: GHOSTTY_POINT_VIEWPORT,
+      coord: GHOSTTY_POINT_COORD_BOTTOM_RIGHT,
+      x: UInt32(size.columns - 1),
+      y: UInt32(size.rows - 1)
+    )
+    sel.rectangle = false
+
+    var text = ghostty_text_s()
+
+    guard ghostty_surface_read_text(surface, sel, &text) else {
+      return nil
+    }
+
+    defer { ghostty_surface_free_text(surface, &text) }
+
+    guard let ptr = text.text, text.text_len > 0 else {
+      return nil
+    }
+
+    return String(
+      bytes: UnsafeBufferPointer(start: ptr, count: Int(text.text_len)),
+      encoding: .utf8
+    )
+  }
+
+  /// Called from GhosttyApp action callback on GHOSTTY_ACTION_RENDER.
+  func markRenderDirty() {
+    hasNewRenderSinceLastRead = true
+  }
+
+  /// Clears the dirty flag after a viewport read.
+  func clearRenderDirty() {
+    hasNewRenderSinceLastRead = false
   }
 }
 

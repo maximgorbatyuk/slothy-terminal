@@ -7,7 +7,6 @@ enum LaunchType: String, CaseIterable, Identifiable, Codable {
   case opencode
   case claudeChat
   case opencodeChat
-  case telegramBot
 
   var id: String { rawValue }
 
@@ -28,9 +27,6 @@ enum LaunchType: String, CaseIterable, Identifiable, Codable {
 
     case .opencodeChat:
       return "OpenCode Chat"
-
-    case .telegramBot:
-      return "Telegram Bot"
     }
   }
 
@@ -51,9 +47,6 @@ enum LaunchType: String, CaseIterable, Identifiable, Codable {
 
     case .opencodeChat:
       return "Chat interface for OpenCode"
-
-    case .telegramBot:
-      return "Bot listener with prompt execution"
     }
   }
 
@@ -74,9 +67,6 @@ enum LaunchType: String, CaseIterable, Identifiable, Codable {
 
     case .opencodeChat:
       return "bubble.left.and.bubble.right"
-
-    case .telegramBot:
-      return "paperplane"
     }
   }
 
@@ -86,9 +76,6 @@ enum LaunchType: String, CaseIterable, Identifiable, Codable {
     switch self {
     case .terminal, .claude, .opencode, .claudeChat, .opencodeChat:
       return true
-
-    case .telegramBot:
-      return false
     }
   }
 
@@ -96,7 +83,7 @@ enum LaunchType: String, CaseIterable, Identifiable, Codable {
   /// Desktop launches require an explicit prompt selection.
   var requiresPredefinedPrompt: Bool {
     switch self {
-    case .terminal, .claude, .opencode, .claudeChat, .opencodeChat, .telegramBot:
+    case .terminal, .claude, .opencode, .claudeChat, .opencodeChat:
       return false
     }
   }
@@ -112,9 +99,6 @@ enum LaunchType: String, CaseIterable, Identifiable, Codable {
 
     case .opencode, .opencodeChat:
       return .opencode
-
-    case .telegramBot:
-      return nil
     }
   }
 }

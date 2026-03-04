@@ -91,4 +91,33 @@ protocol TelegramBotDelegate: AnyObject {
     repoPath: String,
     agentType: AgentType
   )
+
+  /// Lists terminal tabs that have a registered surface and can be relayed to.
+  func telegramBotListRelayableTabs() -> [TelegramRelayTabInfo]
+
+  /// Injects a request into a terminal tab. Returns the request with updated status, or nil on failure.
+  func telegramBotInject(_ request: InjectionRequest) -> InjectionRequest?
+
+  /// Returns a startup status statement for the given working directory.
+  func telegramBotStartupStatement(workingDirectory: URL) async -> String
+}
+
+// MARK: - Startup Statement
+
+/// Pure helper for composing the Telegram startup status statement.
+enum TelegramStartupStatement {
+  static func compose(
+    repositoryPath: String?,
+    workingDirectoryPath: String,
+    openTabCount: Int,
+    activeTaskCount: Int
+  ) -> String {
+    let repo = repositoryPath ?? workingDirectoryPath
+    return [
+      "Status",
+      "Repository: \(repo)",
+      "Open app tabs: \(openTabCount)",
+      "Tasks to implement: \(activeTaskCount)"
+    ].joined(separator: "\n")
+  }
 }

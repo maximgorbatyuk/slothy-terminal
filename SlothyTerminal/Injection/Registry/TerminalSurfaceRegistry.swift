@@ -18,6 +18,15 @@ protocol InjectableSurface: AnyObject {
 
   /// Send a synthetic key event.
   func injectKey(keyCode: UInt32, modifiers: UInt32) -> Bool
+
+  /// Reads the full visible viewport text from the terminal surface.
+  func readViewportText() -> String?
+
+  /// Whether the terminal has rendered new content since the last read.
+  var hasNewRenderSinceLastRead: Bool { get }
+
+  /// Clears the render-dirty flag after a viewport read.
+  func clearRenderDirty()
 }
 
 /// Tracks tab-to-surface mappings so the injection system can find live terminal surfaces.

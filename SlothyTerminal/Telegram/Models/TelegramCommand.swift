@@ -7,6 +7,11 @@ enum TelegramCommand: Equatable {
   case showMode
   case openDirectory
   case newTask
+  case relayStart
+  case relayStop
+  case relayStatus
+  case relayTabs
+  case relayInterrupt
   case unknown(String)
 }
 
@@ -15,6 +20,13 @@ enum TelegramInteractionState: Equatable {
   case idle
   case awaitingNewTaskText
   case awaitingNewTaskSchedule(taskText: String)
+  case awaitingRelayTabChoice(tabs: [TelegramRelayTabInfo])
+}
+
+extension TelegramRelayTabInfo: Equatable {
+  static func == (lhs: TelegramRelayTabInfo, rhs: TelegramRelayTabInfo) -> Bool {
+    lhs.id == rhs.id
+  }
 }
 
 /// Parses incoming message text into a command.
@@ -51,6 +63,21 @@ enum TelegramCommandParser {
 
     case "/new-task", "/new_task":
       return .newTask
+
+    case "/relay-start", "/relay_start":
+      return .relayStart
+
+    case "/relay-stop", "/relay_stop":
+      return .relayStop
+
+    case "/relay-status", "/relay_status":
+      return .relayStatus
+
+    case "/relay-tabs", "/relay_tabs":
+      return .relayTabs
+
+    case "/relay-interrupt", "/relay_interrupt":
+      return .relayInterrupt
 
     default:
       return .unknown(normalized)

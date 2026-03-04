@@ -62,8 +62,9 @@ struct SlothyTerminalApp: App {
         }
         .keyboardShortcut("t", modifiers: [.command, .shift, .option])
 
-        Button("New Telegram Bot Tab") {
-          appState.showTelegramFolderSelector()
+        Button("Show Telegram Bot") {
+          configManager.config.sidebarTab = .telegram
+          appState.isSidebarVisible = true
         }
 
         Divider()

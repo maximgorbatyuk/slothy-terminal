@@ -30,6 +30,12 @@ struct SidebarContainerView: View {
       case .tasks:
         TaskQueuePanelView()
 
+      case .prompts:
+        PromptsSidebarView()
+
+      case .telegram:
+        TelegramSidebarView()
+
       case .automation:
         AutomationPlaceholderView()
       }

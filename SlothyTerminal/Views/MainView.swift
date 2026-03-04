@@ -177,11 +177,6 @@ struct ModalRouter: View {
         appState.createTab(agent: agent, directory: selectedDirectory, initialPrompt: selectedPrompt)
       }
 
-    case .telegramBotFolderSelector:
-      FolderSelectorModal(agent: .claude) { selectedDirectory, _ in
-        appState.createTelegramBotTab(directory: selectedDirectory)
-      }
-
     case .settings:
       Text("Settings")
         .frame(width: 500, height: 400)

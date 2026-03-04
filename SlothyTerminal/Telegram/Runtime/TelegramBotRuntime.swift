@@ -14,11 +14,17 @@ class TelegramBotRuntime {
   var interactionState: TelegramInteractionState = .idle
   var isExecutingPrompt: Bool = false
 
+  /// Active relay session bridging Telegram to a terminal tab.
+  var relaySession: TelegramRelaySession?
+
   /// Delegate for app-level actions (report, open tab, enqueue task).
   weak var delegate: TelegramBotDelegate?
 
   private var pollingTask: Task<Void, Never>?
   private var executor: TelegramPromptExecutor?
+  private var outputPoller: TerminalOutputPoller?
+  var relayChatId: Int64?
+  var relayClient: TelegramBotAPIClient?
   private let workingDirectory: URL
   private let configManager = ConfigManager.shared
 
@@ -72,6 +78,12 @@ class TelegramBotRuntime {
     pollingTask = Task { [weak self] in
       await self?.pollingLoop(client: client)
     }
+
+    if let chatId = config.telegramAllowedUserID {
+      Task { [weak self] in
+        await self?.sendStartupAnnouncement(client: client, chatId: chatId)
+      }
+    }
   }
 
   /// Stops the bot and cancels any in-flight work.
@@ -84,6 +96,8 @@ class TelegramBotRuntime {
       Task { await executor.cancel() }
     }
     executor = nil
+
+    stopRelay()
 
     mode = .stopped
     status = .idle
@@ -109,6 +123,31 @@ class TelegramBotRuntime {
     interactionState = .idle
     addEvent(.info, "Switched to \(newMode.displayName) mode")
     addSystemMessage("Switched to \(newMode.displayName) mode")
+  }
+
+  // MARK: - Startup Announcement
+
+  private func sendStartupAnnouncement(client: TelegramBotAPIClient, chatId: Int64) async {
+    do {
+      try await client.sendMessage(chatId: chatId, text: "Ready for commands")
+      addEvent(.info, "Startup announcement sent")
+    } catch {
+      addEvent(.warning, "Failed to send startup announcement: \(error.localizedDescription)")
+      return
+    }
+
+    guard let delegate else {
+      return
+    }
+
+    let statement = await delegate.telegramBotStartupStatement(workingDirectory: workingDirectory)
+
+    do {
+      try await client.sendMessage(chatId: chatId, text: statement)
+      addEvent(.info, "Startup status sent")
+    } catch {
+      addEvent(.warning, "Failed to send startup status: \(error.localizedDescription)")
+    }
   }
 
   // MARK: - Polling Loop
@@ -176,7 +215,7 @@ class TelegramBotRuntime {
 
   // MARK: - Update Handling
 
-  private func handleUpdate(_ update: TelegramUpdate, client: TelegramBotAPIClient) async {
+  func handleUpdate(_ update: TelegramUpdate, client: TelegramBotAPIClient) async {
     guard let message = update.message,
           let text = message.text,
           !text.isEmpty
@@ -209,6 +248,30 @@ class TelegramBotRuntime {
     /// Handle multi-step interaction states first.
     if await handleInteractionState(text: text, message: message, client: client) {
       return
+    }
+
+    /// When relay is active, inject text into the relay terminal tab.
+    if let relay = relaySession, relay.status == .active {
+      let request = InjectionRequest(
+        payload: .command(text, submit: .execute),
+        target: .tabId(relay.tabId),
+        origin: .telegram
+      )
+
+      if let result = delegate?.telegramBotInject(request),
+         result.status == .completed || result.status == .written
+      {
+        addEvent(.info, "Relayed command to tab: \(String(text.prefix(80)))")
+        return
+      } else {
+        stopRelay()
+        await sendReply(
+          "Injection failed. Tab may have closed. Relay stopped.",
+          chatId: message.chat.id,
+          client: client
+        )
+        return
+      }
     }
 
     /// In execute mode, confirm receipt then run the text as a prompt.
@@ -249,6 +312,26 @@ class TelegramBotRuntime {
     case .newTask:
       interactionState = .awaitingNewTaskText
       await sendReply("Send task text.", chatId: message.chat.id, client: client)
+
+    case .relayTabs:
+      await handleRelayTabs(message: message, client: client)
+
+    case .relayStart:
+      await handleRelayStart(message: message, client: client)
+
+    case .relayStop:
+      if relaySession != nil {
+        stopRelay()
+        await sendReply("Relay stopped.", chatId: message.chat.id, client: client)
+      } else {
+        await sendReply("No relay active.", chatId: message.chat.id, client: client)
+      }
+
+    case .relayStatus:
+      await handleRelayStatus(message: message, client: client)
+
+    case .relayInterrupt:
+      await handleRelayInterrupt(message: message, client: client)
 
     case .unknown(let cmd):
       await sendReply(
@@ -306,6 +389,37 @@ class TelegramBotRuntime {
       interactionState = .awaitingNewTaskSchedule(taskText: text)
       await sendReply(
         "When should I start it? Reply: immediately or queue",
+        chatId: message.chat.id,
+        client: client
+      )
+      return true
+
+    case .awaitingRelayTabChoice(let tabs):
+      let normalized = text.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+
+      if normalized == "cancel" {
+        interactionState = .idle
+        await sendReply("Relay cancelled.", chatId: message.chat.id, client: client)
+        return true
+      }
+
+      guard let index = Int(normalized),
+            index >= 1,
+            index <= tabs.count
+      else {
+        await sendReply(
+          "Reply with a number (1–\(tabs.count)) or cancel.",
+          chatId: message.chat.id,
+          client: client
+        )
+        return true
+      }
+
+      let chosen = tabs[index - 1]
+      interactionState = .idle
+      startRelay(tab: chosen, chatId: message.chat.id, client: client)
+      await sendReply(
+        "Relay started to: \(chosen.name)",
         chatId: message.chat.id,
         client: client
       )
@@ -399,6 +513,198 @@ class TelegramBotRuntime {
     )
 
     return true
+  }
+
+  // MARK: - Relay
+
+  private func handleRelayTabs(
+    message: TelegramAPIMessage,
+    client: TelegramBotAPIClient
+  ) async {
+    guard let delegate else {
+      await sendReply("App state not available.", chatId: message.chat.id, client: client)
+      return
+    }
+
+    let tabs = delegate.telegramBotListRelayableTabs()
+
+    if tabs.isEmpty {
+      await sendReply("No injectable terminal tabs open.", chatId: message.chat.id, client: client)
+      return
+    }
+
+    let list = formatRelayTabList(tabs)
+    await sendReply("Terminal tabs:\n\(list)", chatId: message.chat.id, client: client)
+  }
+
+  private func handleRelayStart(
+    message: TelegramAPIMessage,
+    client: TelegramBotAPIClient
+  ) async {
+    if let relay = relaySession, relay.status == .active {
+      await sendReply(
+        "Relay already active to: \(relay.tabName). Use /relay_stop first.",
+        chatId: message.chat.id,
+        client: client
+      )
+      return
+    }
+
+    guard let delegate else {
+      await sendReply("App state not available.", chatId: message.chat.id, client: client)
+      return
+    }
+
+    let tabs = delegate.telegramBotListRelayableTabs()
+
+    if tabs.isEmpty {
+      await sendReply("No injectable terminal tabs open.", chatId: message.chat.id, client: client)
+      return
+    }
+
+    if tabs.count == 1 {
+      startRelay(tab: tabs[0], chatId: message.chat.id, client: client)
+      await sendReply(
+        "Relay started to: \(tabs[0].name)",
+        chatId: message.chat.id,
+        client: client
+      )
+      return
+    }
+
+    interactionState = .awaitingRelayTabChoice(tabs: tabs)
+
+    let list = formatRelayTabList(tabs)
+    await sendReply(
+      "Which tab?\n\(list)\n\nReply with a number or cancel.",
+      chatId: message.chat.id,
+      client: client
+    )
+  }
+
+  private func handleRelayStatus(
+    message: TelegramAPIMessage,
+    client: TelegramBotAPIClient
+  ) async {
+    guard let relay = relaySession else {
+      await sendReply("No relay active.", chatId: message.chat.id, client: client)
+      return
+    }
+
+    let duration = Int(Date().timeIntervalSince(relay.startedAt))
+    let lastOutput = relay.lastOutputTimestamp
+      .map { "\(Int(Date().timeIntervalSince($0)))s ago" } ?? "none"
+    await sendReply(
+      "Relay: \(relay.tabName)\nDuration: \(duration)s\nLast output: \(lastOutput)",
+      chatId: message.chat.id,
+      client: client
+    )
+  }
+
+  private func handleRelayInterrupt(
+    message: TelegramAPIMessage,
+    client: TelegramBotAPIClient
+  ) async {
+    guard let relay = relaySession, relay.status == .active else {
+      await sendReply("No relay active.", chatId: message.chat.id, client: client)
+      return
+    }
+
+    let request = InjectionRequest(
+      payload: .control(.ctrlC),
+      target: .tabId(relay.tabId),
+      origin: .telegram
+    )
+
+    if let result = delegate?.telegramBotInject(request),
+       result.status == .completed || result.status == .written
+    {
+      await sendReply("Sent Ctrl+C.", chatId: message.chat.id, client: client)
+    } else {
+      await sendReply("Failed to send interrupt.", chatId: message.chat.id, client: client)
+    }
+  }
+
+  private func formatRelayTabList(_ tabs: [TelegramRelayTabInfo]) -> String {
+    tabs.enumerated().map { index, tab in
+      let active = tab.isActive ? " [active]" : ""
+      return "\(index + 1)) \(tab.name) (\(tab.agentType.rawValue))\(active)"
+    }.joined(separator: "\n")
+  }
+
+  private func startRelay(tab: TelegramRelayTabInfo, chatId: Int64, client: TelegramBotAPIClient) {
+    relaySession = TelegramRelaySession(
+      tabId: tab.id,
+      tabName: tab.name,
+      startedAt: Date(),
+      status: .active
+    )
+    relayChatId = chatId
+    relayClient = client
+
+    let poller = TerminalOutputPoller(tabId: tab.id)
+    outputPoller = poller
+
+    poller.start(
+      handler: { [weak self] text in
+        guard let self else { return }
+        self.relaySession?.lastOutputTimestamp = Date()
+        Task { [weak self] in
+          await self?.sendRelayOutput(text)
+        }
+      },
+      surfaceLost: { [weak self] in
+        guard let self else { return }
+        // Capture before stopRelay() clears them.
+        let chatId = self.relayChatId
+        let client = self.relayClient
+        self.stopRelay()
+        if let chatId, let client {
+          Task { [weak self] in
+            await self?.sendReply(
+              "Tab closed. Relay stopped.",
+              chatId: chatId,
+              client: client
+            )
+          }
+        }
+      }
+    )
+
+    addEvent(.info, "Relay started to tab: \(tab.name)")
+    addSystemMessage("Relay started to: \(tab.name)")
+  }
+
+  private func stopRelay() {
+    outputPoller?.stop()
+    outputPoller = nil
+
+    guard let relay = relaySession else {
+      return
+    }
+
+    relaySession = nil
+    relayChatId = nil
+    relayClient = nil
+
+    addEvent(.info, "Relay stopped (tab: \(relay.tabName))")
+    addSystemMessage("Relay stopped")
+  }
+
+  private func sendRelayOutput(_ text: String) async {
+    guard let chatId = relayChatId, let client = relayClient else {
+      return
+    }
+
+    let chunks = TelegramMessageChunker.chunk(text)
+    for chunk in chunks {
+      do {
+        try await client.sendMessage(chatId: chatId, text: chunk)
+        addOutboundMessage(chunk)
+      } catch {
+        addEvent(.error, "Failed to send relay output: \(error.localizedDescription)")
+      }
+    }
   }
 
   // MARK: - Prompt Execution

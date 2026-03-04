@@ -362,6 +362,8 @@ enum SidebarTab: String, Codable, CaseIterable, Identifiable {
   case explorer
   case gitChanges
   case tasks
+  case prompts
+  case telegram
   case automation
 
   var id: String { rawValue }
@@ -376,6 +378,12 @@ enum SidebarTab: String, Codable, CaseIterable, Identifiable {
 
     case .tasks:
       return "checklist"
+
+    case .prompts:
+      return "text.bubble"
+
+    case .telegram:
+      return "paperplane"
 
     case .automation:
       return "gearshape.2"
@@ -392,6 +400,12 @@ enum SidebarTab: String, Codable, CaseIterable, Identifiable {
 
     case .tasks:
       return "Tasks"
+
+    case .prompts:
+      return "Prompts"
+
+    case .telegram:
+      return "Telegram Bot"
 
     case .automation:
       return "Automation"

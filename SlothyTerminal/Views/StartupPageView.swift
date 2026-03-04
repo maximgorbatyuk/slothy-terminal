@@ -359,14 +359,10 @@ struct StartupPageView: View {
 
   private var promptSection: some View {
     VStack(alignment: .leading, spacing: 8) {
-      if selectedLaunchType.requiresPrompt {
-        if !savedPrompts.isEmpty {
-          PromptPicker(selectedPromptID: $selectedPromptID, savedPrompts: savedPrompts)
-        } else {
-          disabledPromptHint(text: "No saved prompts. Create prompts in Settings.")
-        }
+      if !savedPrompts.isEmpty {
+        PromptPicker(selectedPromptID: $selectedPromptID, savedPrompts: savedPrompts)
       } else {
-        disabledPromptHint(text: "Telegram Bot does not use predefined prompts")
+        disabledPromptHint(text: "No saved prompts. Create prompts in Settings.")
       }
     }
   }
@@ -461,8 +457,6 @@ struct StartupPageView: View {
     case .opencodeChat:
       appState.createChatTab(agent: .opencode, directory: directory, initialPrompt: prompt?.promptText)
 
-    case .telegramBot:
-      appState.createTelegramBotTab(directory: directory)
     }
 
     dismiss()
@@ -480,10 +474,6 @@ struct StartupPageView: View {
 
     case .opencode, .opencodeChat:
       return AgentFactory.createAgent(for: .opencode).isAvailable()
-
-    case .telegramBot:
-      let config = configManager.config
-      return config.telegramBotToken != nil && config.telegramAllowedUserID != nil
     }
   }
 
@@ -494,9 +484,6 @@ struct StartupPageView: View {
 
     case .claude, .opencode, .claudeChat, .opencodeChat:
       return "CLI not found"
-
-    case .telegramBot:
-      return "Not configured"
     }
   }
 
@@ -510,9 +497,6 @@ struct StartupPageView: View {
 
     case .opencode, .opencodeChat:
       return Color(red: 0.29, green: 0.78, blue: 0.49)
-
-    case .telegramBot:
-      return Color(red: 0.33, green: 0.67, blue: 0.91)
     }
   }
 }

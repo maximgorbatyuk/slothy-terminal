@@ -92,6 +92,11 @@ let package = Package(
         "Telegram/Runtime/TelegramCommandHandler.swift",
         "Telegram/Runtime/TelegramPromptExecutor.swift",
 
+        /// Telegram Relay — Session model, output poller, ANSI stripping.
+        "Telegram/Relay/TelegramRelaySession.swift",
+        "Telegram/Relay/TerminalOutputPoller.swift",
+        "Telegram/Relay/ANSIStripper.swift",
+
         /// Task Queue — Models, Storage, State, Runner, Orchestrator.
         "TaskQueue/Models/QueuedTask.swift",
         "TaskQueue/Storage/TaskQueueSnapshot.swift",
