@@ -34,7 +34,15 @@ class AppState {
   var tabs: [Tab] = []
   var activeTabID: UUID?
   var isSidebarVisible: Bool
-  var sidebarWidth: CGFloat
+  var sidebarWidth: CGFloat {
+    didSet {
+      guard sidebarWidth != configManager.config.sidebarWidth else {
+        return
+      }
+
+      configManager.config.sidebarWidth = sidebarWidth
+    }
+  }
   var activeModal: ModalType?
   var taskQueueState = TaskQueueState()
   var taskOrchestrator: TaskOrchestrator?

@@ -73,7 +73,14 @@ struct GhosttyTerminalViewRepresentable: NSViewRepresentable {
     /// Update focus state when tab visibility changes.
     if isActive {
       nsView.setFocused(true)
-      nsView.window?.makeFirstResponder(nsView)
+
+      if nsView.window?.firstResponder !== nsView {
+        DispatchQueue.main.async {
+          if nsView.window?.firstResponder !== nsView {
+            nsView.window?.makeFirstResponder(nsView)
+          }
+        }
+      }
     } else {
       nsView.setFocused(false)
     }

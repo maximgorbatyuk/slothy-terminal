@@ -29,6 +29,7 @@ struct SlothyTerminalApp: App {
         }
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.willTerminateNotification)) { _ in
           appState.terminateAllSessions()
+          configManager.save()
         }
     }
     .windowStyle(.titleBar)

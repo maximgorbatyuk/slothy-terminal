@@ -476,6 +476,10 @@ class GhosttySurfaceView: NSView, NSTextInputClient {
       return super.performKeyEquivalent(with: event)
     }
 
+    guard window?.firstResponder === self else {
+      return super.performKeyEquivalent(with: event)
+    }
+
     /// Check if Ghostty considers this a binding.
     var keyEvent = Self.makeKeyEvent(GHOSTTY_ACTION_PRESS, event: event)
     var flags: ghostty_binding_flags_e = .init(0)
@@ -633,6 +637,10 @@ class GhosttySurfaceView: NSView, NSTextInputClient {
       return
     }
 
+    if window?.firstResponder !== self {
+      window?.makeFirstResponder(self)
+    }
+
     let mods = Self.ghosttyMods(event.modifierFlags)
     _ = ghostty_surface_mouse_button(surface, GHOSTTY_MOUSE_PRESS, GHOSTTY_MOUSE_LEFT, mods)
   }
@@ -651,6 +659,10 @@ class GhosttySurfaceView: NSView, NSTextInputClient {
     guard let surface else {
       super.rightMouseDown(with: event)
       return
+    }
+
+    if window?.firstResponder !== self {
+      window?.makeFirstResponder(self)
     }
 
     let mods = Self.ghosttyMods(event.modifierFlags)
@@ -675,6 +687,10 @@ class GhosttySurfaceView: NSView, NSTextInputClient {
     guard let surface else {
       super.otherMouseDown(with: event)
       return
+    }
+
+    if window?.firstResponder !== self {
+      window?.makeFirstResponder(self)
     }
 
     let mods = Self.ghosttyMods(event.modifierFlags)

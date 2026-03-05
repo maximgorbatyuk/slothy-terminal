@@ -167,11 +167,18 @@ struct GeneralSettingsTab: View {
         HStack {
           Text("Sidebar width")
           Slider(
-            value: Bindable(configManager).config.sidebarWidth,
-            in: 200...400,
+            value: Binding(
+              get: {
+                appState.sidebarWidth
+              },
+              set: { newValue in
+                appState.sidebarWidth = newValue
+              }
+            ),
+            in: 200...500,
             step: 10
           )
-          Text("\(Int(configManager.config.sidebarWidth))px")
+          Text("\(Int(appState.sidebarWidth))px")
             .monospacedDigit()
             .frame(width: 50, alignment: .trailing)
         }
