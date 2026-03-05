@@ -917,7 +917,7 @@ extension GhosttySurfaceView: InjectableSurface {
     }
 
     if submit == .execute {
-      return injectText("\n")
+      return injectText("\r")
     }
 
     return true

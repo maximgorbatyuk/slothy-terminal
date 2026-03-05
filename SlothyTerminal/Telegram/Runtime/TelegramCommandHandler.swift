@@ -13,7 +13,6 @@ enum TelegramCommandHandler {
     """
     Available commands:
     /help - Show this message
-    /show_mode - Show current bot mode
     /report - Show current tab/session status
     /open_directory - Open a tab for the configured directory
     /new_task - Create a task via guided flow
@@ -23,7 +22,7 @@ enum TelegramCommandHandler {
     /relay_status - Show relay session info
     /relay_interrupt - Send Ctrl+C to the relay tab
 
-    Send any other text to inject it into the active AI terminal tab (Claude/OpenCode).
+    Send any other text to execute it in the active AI terminal tab (Claude/OpenCode).
     If no AI tab is active, relay session is used as fallback.
     /new_task scheduling accepts: immediately | queue
     """

@@ -4,7 +4,6 @@ import Foundation
 enum TelegramBotMode: String, Codable, CaseIterable {
   case stopped
   case execute
-  case passive
 
   var displayName: String {
     switch self {
@@ -13,9 +12,6 @@ enum TelegramBotMode: String, Codable, CaseIterable {
 
     case .execute:
       return "Execute"
-
-    case .passive:
-      return "Listen Only"
     }
   }
 }

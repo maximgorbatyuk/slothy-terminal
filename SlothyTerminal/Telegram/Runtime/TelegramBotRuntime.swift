@@ -38,10 +38,7 @@ class TelegramBotRuntime {
 
   // MARK: - Lifecycle
 
-  /// Starts the bot in Listen Only (passive) mode.
-  ///
-  /// The bot always starts in passive mode. Execute mode must be
-  /// activated explicitly via `switchMode(.execute)` after the bot is running.
+  /// Starts the bot in execute mode.
   func start() {
     guard pollingTask == nil else {
       return
@@ -63,11 +60,11 @@ class TelegramBotRuntime {
       return
     }
 
-    mode = .passive
+    mode = .execute
     status = .running
 
-    addEvent(.info, "Starting bot in \(TelegramBotMode.passive.displayName) mode")
-    addSystemMessage("Bot started in \(TelegramBotMode.passive.displayName) mode")
+    addEvent(.info, "Starting bot in \(TelegramBotMode.execute.displayName) mode")
+    addSystemMessage("Bot started in \(TelegramBotMode.execute.displayName) mode")
 
     executor = TelegramPromptExecutor(
       workingDirectory: workingDirectory,
@@ -105,24 +102,6 @@ class TelegramBotRuntime {
 
     addEvent(.info, "Bot stopped")
     addSystemMessage("Bot stopped")
-  }
-
-  /// Switches between execute and passive modes while running.
-  func switchMode(_ newMode: TelegramBotMode) {
-    guard newMode != .stopped else {
-      stop()
-      return
-    }
-
-    guard mode != .stopped else {
-      start()
-      return
-    }
-
-    mode = newMode
-    interactionState = .idle
-    addEvent(.info, "Switched to \(newMode.displayName) mode")
-    addSystemMessage("Switched to \(newMode.displayName) mode")
   }
 
   // MARK: - Startup Announcement
@@ -255,7 +234,7 @@ class TelegramBotRuntime {
     /// silently redirecting to a different tab.
     if let aiTab = delegate?.telegramBotActiveInjectableAITab() {
       let request = InjectionRequest(
-        payload: .command(text, submit: .execute),
+        payload: telegramCommandPayload(text: text, agentType: aiTab.agentType),
         target: .tabId(aiTab.id),
         origin: .telegram
       )
@@ -264,6 +243,7 @@ class TelegramBotRuntime {
          result.status == .completed || result.status == .written
       {
         addEvent(.info, "Injected into AI tab \(aiTab.name): \(String(text.prefix(80)))")
+        ensureRelayToTab(aiTab, chatId: message.chat.id, client: client)
         return
       } else {
         await sendReply(
@@ -278,8 +258,13 @@ class TelegramBotRuntime {
 
     /// Fallback: relay session if active and no AI tab available.
     if let relay = relaySession, relay.status == .active {
+      let relayAgent = delegate?
+        .telegramBotListRelayableTabs()
+        .first(where: { $0.id == relay.tabId })?
+        .agentType
+
       let request = InjectionRequest(
-        payload: .command(text, submit: .execute),
+        payload: telegramCommandPayload(text: text, agentType: relayAgent),
         target: .tabId(relay.tabId),
         origin: .telegram
       )
@@ -309,6 +294,14 @@ class TelegramBotRuntime {
     addEvent(.info, "No eligible AI tab for plain text injection")
   }
 
+  private func telegramCommandPayload(text: String, agentType: AgentType?) -> InjectionPayload {
+    if agentType == .opencode {
+      return .text(text + "\n")
+    }
+
+    return .command(text, submit: .execute)
+  }
+
   // MARK: - Command Handling
 
   private func handleCommand(
@@ -323,9 +316,6 @@ class TelegramBotRuntime {
     case .report:
       let report = delegate?.telegramBotRequestReport() ?? "No app state available."
       await sendReply(report, chatId: message.chat.id, client: client)
-
-    case .showMode:
-      await sendReply("Current mode: \(mode.displayName)", chatId: message.chat.id, client: client)
 
     case .openDirectory:
       await handleOpenDirectory(message: message, client: client)
@@ -696,6 +686,26 @@ class TelegramBotRuntime {
     addSystemMessage("Relay started to: \(tab.name)")
   }
 
+  private func ensureRelayToTab(
+    _ tab: TelegramRelayTabInfo,
+    chatId: Int64,
+    client: TelegramBotAPIClient
+  ) {
+    if let relay = relaySession,
+       relay.status == .active,
+       relay.tabId == tab.id,
+       relayChatId == chatId
+    {
+      return
+    }
+
+    if relaySession != nil {
+      stopRelay()
+    }
+
+    startRelay(tab: tab, chatId: chatId, client: client)
+  }
+
   private func stopRelay() {
     outputPoller?.stop()
     outputPoller = nil
@@ -735,11 +745,6 @@ class TelegramBotRuntime {
     message: TelegramAPIMessage,
     client: TelegramBotAPIClient
   ) async {
-    guard mode == .execute else {
-      addEvent(.info, "Skipped execution — not in Execute mode")
-      return
-    }
-
     guard let executor else {
       await sendReply("Executor not available.", chatId: message.chat.id, client: client)
       return

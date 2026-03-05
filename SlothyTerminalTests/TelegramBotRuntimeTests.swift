@@ -8,7 +8,6 @@ final class TelegramBotModelsTests: XCTestCase {
   func testBotModeDisplayNames() {
     XCTAssertEqual(TelegramBotMode.stopped.displayName, "Stopped")
     XCTAssertEqual(TelegramBotMode.execute.displayName, "Execute")
-    XCTAssertEqual(TelegramBotMode.passive.displayName, "Listen Only")
   }
 
   func testBotModeCodable() throws {
@@ -115,14 +114,12 @@ final class TelegramBotModelsTests: XCTestCase {
   func testBotModeRawValues() {
     XCTAssertEqual(TelegramBotMode.stopped.rawValue, "stopped")
     XCTAssertEqual(TelegramBotMode.execute.rawValue, "execute")
-    XCTAssertEqual(TelegramBotMode.passive.rawValue, "passive")
   }
 
   func testBotModeAllCases() {
-    XCTAssertEqual(TelegramBotMode.allCases.count, 3)
+    XCTAssertEqual(TelegramBotMode.allCases.count, 2)
     XCTAssertTrue(TelegramBotMode.allCases.contains(.stopped))
     XCTAssertTrue(TelegramBotMode.allCases.contains(.execute))
-    XCTAssertTrue(TelegramBotMode.allCases.contains(.passive))
   }
 
   // MARK: - TelegramEventLevel

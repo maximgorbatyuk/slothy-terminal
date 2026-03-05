@@ -214,6 +214,5 @@ final class TelegramRelayTests: XCTestCase {
     XCTAssertEqual(TelegramCommandParser.parse("/report"), .report)
     XCTAssertEqual(TelegramCommandParser.parse("/new_task"), .newTask)
     XCTAssertEqual(TelegramCommandParser.parse("/open_directory"), .openDirectory)
-    XCTAssertEqual(TelegramCommandParser.parse("/show_mode"), .showMode)
   }
 }

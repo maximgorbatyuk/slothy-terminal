@@ -4,7 +4,6 @@ import Foundation
 enum TelegramCommand: Equatable {
   case help
   case report
-  case showMode
   case openDirectory
   case newTask
   case relayStart
@@ -54,9 +53,6 @@ enum TelegramCommandParser {
 
     case "/report":
       return .report
-
-    case "/show-mode", "/show_mode":
-      return .showMode
 
     case "/open-directory", "/open_directory":
       return .openDirectory

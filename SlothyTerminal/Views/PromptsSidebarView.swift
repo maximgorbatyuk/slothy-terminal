@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Sidebar panel displaying saved prompts with Execute and Edit actions.
+/// Sidebar panel displaying saved prompts with Paste and Edit actions.
 struct PromptsSidebarView: View {
   @Environment(AppState.self) private var appState
   private var configManager = ConfigManager.shared
@@ -164,8 +164,8 @@ struct PromptsSidebarView: View {
     .background(appCardColor)
     .cornerRadius(6)
     .contextMenu {
-      Button("Execute") {
-        executePrompt(prompt)
+      Button("Paste to terminal") {
+        pastePromptToTerminal(prompt)
       }
 
       Button("Edit") {
@@ -173,7 +173,7 @@ struct PromptsSidebarView: View {
       }
     }
     .onTapGesture(count: 2) {
-      executePrompt(prompt)
+      pastePromptToTerminal(prompt)
     }
   }
 
@@ -185,35 +185,17 @@ struct PromptsSidebarView: View {
     }
   }
 
-  // MARK: - Execute
-
-  private func executePrompt(_ prompt: SavedPrompt) {
-    let text = prompt.promptText.trimmingCharacters(in: .whitespacesAndNewlines)
-
-    guard !text.isEmpty else {
-      showStatus("Prompt text is empty", isError: true)
+  private func pastePromptToTerminal(_ prompt: SavedPrompt) {
+    guard let text = validatedPromptText(prompt) else {
       return
     }
 
-    guard let activeTab = appState.activeTab else {
-      showStatus("No active tab", isError: true)
-      return
-    }
-
-    guard activeTab.mode == .terminal else {
-      showStatus("Active tab is not a terminal", isError: true)
-      return
-    }
-
-    let injectableIds = Set(appState.listInjectableTabs())
-
-    guard injectableIds.contains(activeTab.id) else {
-      showStatus("Terminal surface not ready", isError: true)
+    guard activeTerminalIsInjectable() else {
       return
     }
 
     let request = InjectionRequest(
-      payload: .command(text, submit: .execute),
+      payload: .paste(text, mode: .bracketed),
       target: .activeTab,
       origin: .ui
     )
@@ -221,17 +203,49 @@ struct PromptsSidebarView: View {
     let result = appState.inject(request)
 
     guard let result else {
-      showStatus("Injection failed", isError: true)
+      showStatus("Paste failed", isError: true)
       return
     }
 
     switch result.status {
     case .completed, .written, .accepted, .queued:
-      showStatus("Executed: \(prompt.name)", isError: false)
+      showStatus("Pasted: \(prompt.name)", isError: false)
 
     case .failed, .cancelled, .timeout:
-      showStatus("Injection \(result.status.rawValue)", isError: true)
+      showStatus("Paste \(result.status.rawValue)", isError: true)
     }
+  }
+
+  private func validatedPromptText(_ prompt: SavedPrompt) -> String? {
+    let text = prompt.promptText.trimmingCharacters(in: .whitespacesAndNewlines)
+
+    guard !text.isEmpty else {
+      showStatus("Prompt text is empty", isError: true)
+      return nil
+    }
+
+    return text
+  }
+
+  private func activeTerminalIsInjectable() -> Bool {
+    guard let activeTab = appState.activeTab else {
+      showStatus("No active tab", isError: true)
+      return false
+    }
+
+    guard activeTab.mode == .terminal else {
+      showStatus("Active tab is not a terminal", isError: true)
+      return false
+    }
+
+    let injectableIds = Set(appState.listInjectableTabs())
+
+    guard injectableIds.contains(activeTab.id) else {
+      showStatus("Terminal surface not ready", isError: true)
+      return false
+    }
+
+    return true
   }
 
   // MARK: - Edit / Save

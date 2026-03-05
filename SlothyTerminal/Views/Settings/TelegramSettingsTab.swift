@@ -73,7 +73,7 @@ struct TelegramSettingsTab: View {
           isOn: Bindable(configManager).config.telegramAutoStartOnOpen
         )
 
-        Text("Bot always starts in Listen Only mode. Switch to Execute mode manually.")
+        Text("Bot always executes non-command messages. Slash commands (starting with /) are handled as bot commands.")
           .font(.caption)
           .foregroundColor(.secondary)
 

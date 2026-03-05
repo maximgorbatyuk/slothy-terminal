@@ -309,6 +309,9 @@ final class TelegramRelayRuntimeTests: XCTestCase {
 
     let hasAITabEvent = runtime.events.contains { $0.message.contains("Injected into AI tab") }
     XCTAssertTrue(hasAITabEvent, "Should log AI tab injection")
+
+    XCTAssertEqual(runtime.relaySession?.tabId, tabId)
+    XCTAssertEqual(runtime.relayChatId, 999)
   }
 
   func testActiveAITabWinsOverRelay() async throws {
@@ -346,8 +349,14 @@ final class TelegramRelayRuntimeTests: XCTestCase {
     XCTAssertEqual(mockDelegate.injectCalls.count, 1)
     XCTAssertEqual(mockDelegate.injectCalls[0].target, .tabId(aiTabId))
 
-    // Relay should remain active (not consumed).
-    XCTAssertNotNil(runtime.relaySession)
+    if case .text(let payload) = mockDelegate.injectCalls[0].payload {
+      XCTAssertEqual(payload, "build project\n")
+    } else {
+      XCTFail("Expected .text payload for OpenCode tab")
+    }
+
+    // Relay should switch to the AI tab so output is streamed back.
+    XCTAssertEqual(runtime.relaySession?.tabId, aiTabId)
   }
 
   func testNoAITabFallsBackToRelay() async throws {

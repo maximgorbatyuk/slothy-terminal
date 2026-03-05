@@ -32,7 +32,7 @@ struct AppConfigTests {
         "shortcuts": {},
         "telegramExecutionAgent": "Claude",
         "telegramAutoStartOnOpen": false,
-        "telegramDefaultListenMode": "passive",
+        "telegramDefaultListenMode": "execute",
         "telegramOpenDirectoryTabMode": "chat",
         "telegramOpenDirectoryAgent": "Claude",
         "sidebarTab": "explorer"
