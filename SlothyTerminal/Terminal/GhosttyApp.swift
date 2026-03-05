@@ -143,7 +143,7 @@ class GhosttyApp {
   // MARK: - Surface Lookup Helper
 
   /// Extracts the SurfaceView from a surface's userdata.
-  static func surfaceView(from surface: ghostty_surface_t) -> GhosttySurfaceView? {
+  nonisolated static func surfaceView(from surface: ghostty_surface_t) -> GhosttySurfaceView? {
     guard let ud = ghostty_surface_userdata(surface) else {
       return nil
     }

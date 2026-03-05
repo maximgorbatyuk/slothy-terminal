@@ -72,6 +72,7 @@ enum SettingsSection: String, CaseIterable, Identifiable {
 
 /// Main settings view with sidebar navigation.
 struct SettingsView: View {
+  @Environment(AppState.self) private var appState
   @State private var selectedSection: SettingsSection = .general
 
   var body: some View {
@@ -113,6 +114,12 @@ struct SettingsView: View {
     }
     .frame(minWidth: 600, idealWidth: 700, minHeight: 450)
     .background(appBackgroundColor)
+    .onAppear {
+      if let section = appState.pendingSettingsSection {
+        selectedSection = section
+        appState.pendingSettingsSection = nil
+      }
+    }
   }
 }
 

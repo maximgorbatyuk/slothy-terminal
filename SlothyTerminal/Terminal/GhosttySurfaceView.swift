@@ -999,7 +999,7 @@ extension GhosttySurfaceView {
     }
 
     return String(
-      bytes: UnsafeBufferPointer(start: ptr, count: Int(text.text_len)),
+      bytes: UnsafeRawBufferPointer(start: ptr, count: Int(text.text_len)),
       encoding: .utf8
     )
   }

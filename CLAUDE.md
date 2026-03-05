@@ -149,6 +149,10 @@ Key rules:
 ## Known Issues & Pitfalls
 
 - `BuildConfig` uses `fatalError()` on missing config files — should degrade gracefully
+- GhosttyApp C callback trampolines (free functions) cannot be `@MainActor`; helper methods they call must be `nonisolated`
+- To open the native Settings window programmatically, use `SettingsLink` (SwiftUI view), not `NSApp.sendAction(Selector(("showSettingsWindow:")))` — the latter logs an error on macOS 14+
+- `ModalRouter` in `MainView.swift` maps `ModalType` cases to views — keep it in sync when adding new modal types
+- `AppState.pendingSettingsSection` allows pre-selecting a `SettingsSection` tab when the native Settings window opens
 
 ## Terminal Environment Variables
 

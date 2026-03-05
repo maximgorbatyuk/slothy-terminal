@@ -18,6 +18,7 @@ enum ModalType: Identifiable {
       return "folderSelector-\(agent.rawValue)"
     case .settings:
       return "settings"
+
     case .addTask:
       return "addTask"
     case .taskDetail(let id):
@@ -39,6 +40,9 @@ class AppState {
   var taskOrchestrator: TaskOrchestrator?
   private(set) var injectionOrchestrator: InjectionOrchestrator?
   var telegramRuntime: TelegramBotRuntime?
+
+  /// Section to navigate to when the native Settings window opens.
+  var pendingSettingsSection: SettingsSection?
 
   /// Shared working directory preselected across tabs within this session.
   var globalWorkingDirectory: URL?
@@ -184,9 +188,15 @@ class AppState {
     activeModal = .folderSelector(agent)
   }
 
-  /// Shows the settings modal.
-  func showSettings() {
-    activeModal = .settings
+  /// Opens the native Settings window, optionally navigating to a specific section.
+  /// NOTE: Prefer using `SettingsLink` in views. This fallback exists for non-view contexts.
+  func showSettings(section: SettingsSection? = nil) {
+    pendingSettingsSection = section
+
+    if #available(macOS 14.0, *) {
+      NSApp.activate()
+      NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
+    }
   }
 
   /// Shows the add task modal.

@@ -51,11 +51,14 @@ struct TelegramSidebarView: View {
           .multilineTextAlignment(.center)
           .padding(.horizontal, 16)
 
-        Button("Open Settings") {
-          appState.activeModal = .settings
+        SettingsLink {
+          Text("Open Settings")
         }
         .buttonStyle(.borderedProminent)
         .controlSize(.regular)
+        .simultaneousGesture(TapGesture().onEnded {
+          appState.pendingSettingsSection = .telegram
+        })
       } else {
         Text("Telegram Bot ready")
           .font(.headline)

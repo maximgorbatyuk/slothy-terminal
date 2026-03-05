@@ -52,6 +52,16 @@ struct PromptsSidebarView: View {
 
         Spacer()
 
+        SettingsLink {
+          Image(systemName: "gear")
+            .font(.system(size: 10))
+            .foregroundColor(.secondary)
+        }
+        .buttonStyle(.plain)
+        .simultaneousGesture(TapGesture().onEnded {
+          appState.pendingSettingsSection = .prompts
+        })
+
         Text("\(prompts.count)")
           .font(.system(size: 9))
           .foregroundColor(.secondary.opacity(0.6))
