@@ -2,7 +2,7 @@ import Foundation
 import OSLog
 
 /// Coordinates the Telegram bot lifecycle: polling, authorization,
-/// command routing, and prompt execution.
+/// command routing, and relay/injection behavior.
 @MainActor
 @Observable
 class TelegramBotRuntime {
@@ -12,16 +12,14 @@ class TelegramBotRuntime {
   var events: [TelegramBotEvent] = []
   var messages: [TelegramTimelineMessage] = []
   var interactionState: TelegramInteractionState = .idle
-  var isExecutingPrompt: Bool = false
 
   /// Active relay session bridging Telegram to a terminal tab.
   var relaySession: TelegramRelaySession?
 
-  /// Delegate for app-level actions (report, open tab, enqueue task).
+  /// Delegate for app-level actions (report, open tab, injection, relay metadata).
   weak var delegate: TelegramBotDelegate?
 
   private var pollingTask: Task<Void, Never>?
-  private var executor: TelegramPromptExecutor?
   private var outputPoller: TerminalOutputPoller?
   var relayChatId: Int64?
   var relayClient: TelegramBotAPIClient?
@@ -66,11 +64,6 @@ class TelegramBotRuntime {
     addEvent(.info, "Starting bot in \(TelegramBotMode.execute.displayName) mode")
     addSystemMessage("Bot started in \(TelegramBotMode.execute.displayName) mode")
 
-    executor = TelegramPromptExecutor(
-      workingDirectory: workingDirectory,
-      agentType: config.telegramExecutionAgent
-    )
-
     let client = TelegramBotAPIClient(token: token)
     pollingTask = Task { [weak self] in
       await self?.pollingLoop(client: client)
@@ -87,12 +80,6 @@ class TelegramBotRuntime {
   func stop() {
     pollingTask?.cancel()
     pollingTask = nil
-
-    /// Cancel the actor-isolated executor asynchronously.
-    if let executor {
-      Task { await executor.cancel() }
-    }
-    executor = nil
 
     stopRelay()
 
@@ -320,10 +307,6 @@ class TelegramBotRuntime {
     case .openDirectory:
       await handleOpenDirectory(message: message, client: client)
 
-    case .newTask:
-      interactionState = .awaitingNewTaskText
-      await sendReply("Send task text.", chatId: message.chat.id, client: client)
-
     case .relayTabs:
       await handleRelayTabs(message: message, client: client)
 
@@ -396,15 +379,6 @@ class TelegramBotRuntime {
     case .idle:
       return false
 
-    case .awaitingNewTaskText:
-      interactionState = .awaitingNewTaskSchedule(taskText: text)
-      await sendReply(
-        "When should I start it? Reply: immediately or queue",
-        chatId: message.chat.id,
-        client: client
-      )
-      return true
-
     case .awaitingRelayTabChoice(let tabs):
       let normalized = text.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
 
@@ -436,94 +410,7 @@ class TelegramBotRuntime {
       )
       return true
 
-    case .awaitingNewTaskSchedule(let taskText):
-      let normalized = text.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-
-      if normalized == "cancel" {
-        interactionState = .idle
-        await sendReply("Task creation cancelled.", chatId: message.chat.id, client: client)
-        return true
-      }
-
-      if normalized == "immediately" || normalized == "immediate" {
-        interactionState = .idle
-
-        guard let executor else {
-          if enqueueTask(taskText) {
-            await sendReply(
-              "Executor unavailable. Added to task queue instead.",
-              chatId: message.chat.id,
-              client: client
-            )
-          } else {
-            await sendReply("App state not available.", chatId: message.chat.id, client: client)
-          }
-
-          return true
-        }
-
-        if await executor.isBusy() {
-          if enqueueTask(taskText) {
-            await sendReply(
-              "Task is already running. Added this task to queue.",
-              chatId: message.chat.id,
-              client: client
-            )
-          } else {
-            await sendReply("App state not available.", chatId: message.chat.id, client: client)
-          }
-
-          return true
-        }
-
-        await sendReply(
-          "Starting task now. I will send report when completed.",
-          chatId: message.chat.id,
-          client: client
-        )
-        await executePrompt(taskText, message: message, client: client)
-        return true
-      }
-
-      if normalized == "queue" {
-        interactionState = .idle
-
-        if enqueueTask(taskText) {
-          await sendReply("Added to task queue.", chatId: message.chat.id, client: client)
-        } else {
-          await sendReply("App state not available.", chatId: message.chat.id, client: client)
-        }
-
-        return true
-      }
-
-      await sendReply(
-        "Please reply with one option: immediately or queue",
-        chatId: message.chat.id,
-        client: client
-      )
-      return true
-
     }
-  }
-
-  // MARK: - Task Queue Bridge
-
-  private func enqueueTask(_ taskText: String) -> Bool {
-    guard let delegate else {
-      return false
-    }
-
-    let config = configManager.config
-    let title = String(taskText.prefix(80))
-    delegate.telegramBotEnqueueTask(
-      title: title,
-      prompt: taskText,
-      repoPath: workingDirectory.path,
-      agentType: config.telegramExecutionAgent
-    )
-
-    return true
   }
 
   // MARK: - Relay
@@ -735,44 +622,6 @@ class TelegramBotRuntime {
       } catch {
         addEvent(.error, "Failed to send relay output: \(error.localizedDescription)")
       }
-    }
-  }
-
-  // MARK: - Prompt Execution
-
-  private func executePrompt(
-    _ prompt: String,
-    message: TelegramAPIMessage,
-    client: TelegramBotAPIClient
-  ) async {
-    guard let executor else {
-      await sendReply("Executor not available.", chatId: message.chat.id, client: client)
-      return
-    }
-
-    addEvent(.info, "Executing prompt...")
-    addSystemMessage("Executing prompt...")
-
-    isExecutingPrompt = true
-    defer { isExecutingPrompt = false }
-
-    /// Send typing indicator.
-    try? await client.sendChatAction(chatId: message.chat.id)
-
-    do {
-      let result = try await executor.execute(prompt: prompt)
-      stats.executed += 1
-      addEvent(.info, "Execution completed (\(result.count) chars)")
-      await sendReply(result, chatId: message.chat.id, replyTo: message.messageId, client: client)
-    } catch {
-      stats.failed += 1
-      addEvent(.error, "Execution failed: \(error.localizedDescription)")
-      await sendReply(
-        "Execution failed: \(error.localizedDescription)",
-        chatId: message.chat.id,
-        replyTo: message.messageId,
-        client: client
-      )
     }
   }
 

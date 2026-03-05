@@ -27,9 +27,6 @@ struct SidebarContainerView: View {
       case .gitChanges:
         GitChangesView()
 
-      case .tasks:
-        TaskQueuePanelView()
-
       case .prompts:
         PromptsSidebarView()
 

@@ -7,8 +7,6 @@ enum ModalType: Identifiable {
   case folderSelector(AgentType)
 
   case settings
-  case addTask
-  case taskDetail(UUID)
 
   var id: String {
     switch self {
@@ -18,11 +16,6 @@ enum ModalType: Identifiable {
       return "folderSelector-\(agent.rawValue)"
     case .settings:
       return "settings"
-
-    case .addTask:
-      return "addTask"
-    case .taskDetail(let id):
-      return "taskDetail-\(id.uuidString)"
     }
   }
 }
@@ -44,8 +37,6 @@ class AppState {
     }
   }
   var activeModal: ModalType?
-  var taskQueueState = TaskQueueState()
-  var taskOrchestrator: TaskOrchestrator?
   private(set) var injectionOrchestrator: InjectionOrchestrator?
   var telegramRuntime: TelegramBotRuntime?
 
@@ -61,23 +52,11 @@ class AppState {
     let config = ConfigManager.shared.config
     self.isSidebarVisible = config.showSidebarByDefault
     self.sidebarWidth = config.sidebarWidth
-    taskQueueState.restoreFromDisk()
 
     self.injectionOrchestrator = InjectionOrchestrator(
       registry: TerminalSurfaceRegistry.shared,
       tabProvider: self
     )
-
-    let orchestrator = TaskOrchestrator(queueState: taskQueueState)
-    self.taskOrchestrator = orchestrator
-
-    let injectionRouter = TaskInjectionRouter(provider: self)
-    orchestrator.injectionRouter = injectionRouter
-
-    taskQueueState.onQueueChanged = { [weak orchestrator] in
-      orchestrator?.notifyQueueChanged()
-    }
-    orchestrator.start()
   }
 
   /// Returns the currently active tab, if any.
@@ -207,16 +186,6 @@ class AppState {
     }
   }
 
-  /// Shows the add task modal.
-  func showAddTaskModal() {
-    activeModal = .addTask
-  }
-
-  /// Shows the task detail modal.
-  func showTaskDetail(id: UUID) {
-    activeModal = .taskDetail(id)
-  }
-
   /// Dismisses the current modal.
   func dismissModal() {
     activeModal = nil
@@ -235,8 +204,6 @@ class AppState {
       tab.chatState?.terminateProcess()
     }
     telegramRuntime?.stop()
-    taskOrchestrator?.stop()
-    taskQueueState.saveImmediately()
   }
 }
 
@@ -284,38 +251,6 @@ extension AppState: InjectionTabProvider {
   }
 }
 
-// MARK: - TaskInjectionProvider
-
-extension AppState: TaskInjectionProvider {
-  func injectableTabCandidates(agentType: AgentType) -> [InjectableTabCandidate] {
-    let registeredIds = Set(TerminalSurfaceRegistry.shared.registeredTabIds())
-
-    return tabs.compactMap { tab in
-      guard tab.mode == .terminal,
-            tab.agentType == agentType
-      else {
-        return nil
-      }
-
-      return InjectableTabCandidate(
-        tabId: tab.id,
-        agentType: tab.agentType,
-        workingDirectory: tab.workingDirectory,
-        isActive: tab.id == activeTabID,
-        isRegistered: registeredIds.contains(tab.id)
-      )
-    }
-  }
-
-  func submitInjection(_ request: InjectionRequest) -> InjectionRequest? {
-    injectionOrchestrator?.submit(request)
-  }
-
-  func cancelInjection(requestId: UUID) {
-    injectionOrchestrator?.cancel(requestId: requestId)
-  }
-}
-
 // MARK: - TelegramBotDelegate
 
 extension AppState: TelegramBotDelegate {
@@ -336,10 +271,6 @@ extension AppState: TelegramBotDelegate {
       lines.append("Selected directory: \(compactTelegramPath(activeTab.workingDirectory))")
     }
 
-    let pendingCount = taskQueueState.tasks.filter { $0.status == .pending }.count
-    let runningCount = taskQueueState.tasks.filter { $0.status == .running }.count
-    lines.append("Task queue: pending \(pendingCount), running \(runningCount)")
-
     return lines.joined(separator: "\n")
   }
 
@@ -349,20 +280,6 @@ extension AppState: TelegramBotDelegate {
     } else {
       createTab(agent: agent, directory: directory)
     }
-  }
-
-  func telegramBotEnqueueTask(
-    title: String,
-    prompt: String,
-    repoPath: String,
-    agentType: AgentType
-  ) {
-    taskQueueState.enqueueTask(
-      title: title,
-      prompt: prompt,
-      repoPath: repoPath,
-      agentType: agentType
-    )
   }
 
   func telegramBotListRelayableTabs() -> [TelegramRelayTabInfo] {
@@ -411,15 +328,11 @@ extension AppState: TelegramBotDelegate {
     let repoRoot = await GitService.shared.getRepositoryRoot(for: workingDirectory)
 
     let openTabCount = tabs.count
-    let activeTaskCount = taskQueueState.tasks.filter {
-      $0.status == .pending || $0.status == .running || $0.approvalState == .waiting
-    }.count
 
     return TelegramStartupStatement.compose(
       repositoryPath: repoRoot?.path,
       workingDirectoryPath: workingDirectory.path,
-      openTabCount: openTabCount,
-      activeTaskCount: activeTaskCount
+      openTabCount: openTabCount
     )
   }
 

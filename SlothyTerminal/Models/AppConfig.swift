@@ -361,7 +361,6 @@ enum SidebarPosition: String, Codable, CaseIterable {
 enum SidebarTab: String, Codable, CaseIterable, Identifiable {
   case explorer
   case gitChanges
-  case tasks
   case prompts
   case telegram
   case automation
@@ -375,9 +374,6 @@ enum SidebarTab: String, Codable, CaseIterable, Identifiable {
 
     case .gitChanges:
       return "arrow.triangle.branch"
-
-    case .tasks:
-      return "checklist"
 
     case .prompts:
       return "text.bubble"
@@ -398,9 +394,6 @@ enum SidebarTab: String, Codable, CaseIterable, Identifiable {
     case .gitChanges:
       return "Git Changes"
 
-    case .tasks:
-      return "Tasks"
-
     case .prompts:
       return "Prompts"
 
@@ -410,6 +403,13 @@ enum SidebarTab: String, Codable, CaseIterable, Identifiable {
     case .automation:
       return "Automation"
     }
+  }
+
+  init(from decoder: Decoder) throws {
+    let container = try decoder.singleValueContainer()
+    let rawValue = try container.decode(String.self)
+
+    self = SidebarTab(rawValue: rawValue) ?? .explorer
   }
 }
 

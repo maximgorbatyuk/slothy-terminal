@@ -75,22 +75,25 @@ final class TelegramBotModelsTests: XCTestCase {
 
   func testInteractionStateEquatable() {
     XCTAssertEqual(TelegramInteractionState.idle, TelegramInteractionState.idle)
-    XCTAssertEqual(TelegramInteractionState.awaitingNewTaskText, TelegramInteractionState.awaitingNewTaskText)
     XCTAssertEqual(
-      TelegramInteractionState.awaitingNewTaskSchedule(taskText: "abc"),
-      TelegramInteractionState.awaitingNewTaskSchedule(taskText: "abc")
-    )
-    XCTAssertNotEqual(
-      TelegramInteractionState.awaitingNewTaskSchedule(taskText: "abc"),
-      TelegramInteractionState.awaitingNewTaskSchedule(taskText: "xyz")
+      TelegramInteractionState.awaitingRelayTabChoice(tabs: []),
+      TelegramInteractionState.awaitingRelayTabChoice(tabs: [])
     )
   }
 
   func testInteractionStateNotEqualAcrossCases() {
-    XCTAssertNotEqual(TelegramInteractionState.idle, TelegramInteractionState.awaitingNewTaskText)
+    XCTAssertNotEqual(TelegramInteractionState.idle, TelegramInteractionState.awaitingRelayTabChoice(tabs: []))
     XCTAssertNotEqual(
-      TelegramInteractionState.awaitingNewTaskText,
-      TelegramInteractionState.awaitingNewTaskSchedule(taskText: "")
+      TelegramInteractionState.awaitingRelayTabChoice(tabs: []),
+      TelegramInteractionState.awaitingRelayTabChoice(tabs: [
+        TelegramRelayTabInfo(
+          id: UUID(),
+          name: "Tab",
+          agentType: .claude,
+          directory: URL(fileURLWithPath: "/tmp"),
+          isActive: false
+        )
+      ])
     )
   }
 
@@ -207,7 +210,6 @@ final class TelegramBotModelsTests: XCTestCase {
     XCTAssertEqual(TelegramCommand.help, TelegramCommand.help)
     XCTAssertEqual(TelegramCommand.report, TelegramCommand.report)
     XCTAssertEqual(TelegramCommand.openDirectory, TelegramCommand.openDirectory)
-    XCTAssertEqual(TelegramCommand.newTask, TelegramCommand.newTask)
     XCTAssertEqual(TelegramCommand.unknown("/foo"), TelegramCommand.unknown("/foo"))
     XCTAssertNotEqual(TelegramCommand.unknown("/foo"), TelegramCommand.unknown("/bar"))
     XCTAssertNotEqual(TelegramCommand.help, TelegramCommand.report)

@@ -271,7 +271,7 @@ SlothyTerminal/
 │   ├── SettingsView.swift         # Settings window
 │   ├── AboutView.swift            # About window
 │   ├── FolderSelectorModal.swift  # Folder browser modal
-│   └── TaskQueue/                 # Task queue UI (panel, composer, detail, row)
+│   └── Telegram/                  # Telegram sidebar and controls
 ├── Models/
 │   ├── Tab.swift                  # Tab model for chat/cli modes
 │   ├── AgentType.swift            # Agent type enum (Terminal/Claude/OpenCode)
@@ -285,12 +285,6 @@ SlothyTerminal/
 │   ├── Parser/                    # Stream event parser types
 │   ├── Models/                    # Chat/domain models
 │   └── Views/                     # Chat UI, markdown, tool rendering
-├── TaskQueue/
-│   ├── Models/QueuedTask.swift    # Task model, status, priority, exit reasons
-│   ├── Orchestrator/              # Task scheduling, preflight, timeout, retry
-│   ├── Runner/                    # Claude/OpenCode runners, risky tool detection, log collector
-│   ├── State/TaskQueueState.swift # @Observable queue state and mutations
-│   └── Storage/                   # Queue snapshot persistence
 ├── Agents/
 │   ├── AIAgent.swift              # Agent protocol and factory
 │   ├── ClaudeAgent.swift          # Claude CLI integration

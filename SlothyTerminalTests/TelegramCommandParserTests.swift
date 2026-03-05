@@ -25,14 +25,6 @@ final class TelegramCommandParserTests: XCTestCase {
     XCTAssertEqual(TelegramCommandParser.parse("/open_directory"), .openDirectory)
   }
 
-  func testParseNewTaskHyphen() {
-    XCTAssertEqual(TelegramCommandParser.parse("/new-task"), .newTask)
-  }
-
-  func testParseNewTaskUnderscore() {
-    XCTAssertEqual(TelegramCommandParser.parse("/new_task"), .newTask)
-  }
-
   // MARK: - Unknown Commands
 
   func testParseUnknownCommand() {

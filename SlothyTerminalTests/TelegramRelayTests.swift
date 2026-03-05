@@ -212,7 +212,6 @@ final class TelegramRelayTests: XCTestCase {
   func testExistingCommandsNotBroken() {
     XCTAssertEqual(TelegramCommandParser.parse("/help"), .help)
     XCTAssertEqual(TelegramCommandParser.parse("/report"), .report)
-    XCTAssertEqual(TelegramCommandParser.parse("/new_task"), .newTask)
     XCTAssertEqual(TelegramCommandParser.parse("/open_directory"), .openDirectory)
   }
 }

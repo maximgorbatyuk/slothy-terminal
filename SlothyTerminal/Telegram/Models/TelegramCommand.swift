@@ -5,7 +5,6 @@ enum TelegramCommand: Equatable {
   case help
   case report
   case openDirectory
-  case newTask
   case relayStart
   case relayStop
   case relayStatus
@@ -17,8 +16,6 @@ enum TelegramCommand: Equatable {
 /// Conversational state for multi-step command interactions.
 enum TelegramInteractionState: Equatable {
   case idle
-  case awaitingNewTaskText
-  case awaitingNewTaskSchedule(taskText: String)
   case awaitingRelayTabChoice(tabs: [TelegramRelayTabInfo])
 }
 
@@ -56,9 +53,6 @@ enum TelegramCommandParser {
 
     case "/open-directory", "/open_directory":
       return .openDirectory
-
-    case "/new-task", "/new_task":
-      return .newTask
 
     case "/relay-start", "/relay_start":
       return .relayStart

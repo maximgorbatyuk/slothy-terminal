@@ -14,13 +14,6 @@ private class MockRelayDelegate: TelegramBotDelegate {
 
   func telegramBotOpenTab(mode: TabMode, agent: AgentType, directory: URL) {}
 
-  func telegramBotEnqueueTask(
-    title: String,
-    prompt: String,
-    repoPath: String,
-    agentType: AgentType
-  ) {}
-
   func telegramBotListRelayableTabs() -> [TelegramRelayTabInfo] {
     relayableTabs
   }
@@ -35,7 +28,7 @@ private class MockRelayDelegate: TelegramBotDelegate {
   }
 
   func telegramBotStartupStatement(workingDirectory: URL) async -> String {
-    "Status\nRepository: \(workingDirectory.path)\nOpen app tabs: 0\nTasks to implement: 0"
+    "Status\nRepository: \(workingDirectory.path)\nOpen app tabs: 0"
   }
 }
 

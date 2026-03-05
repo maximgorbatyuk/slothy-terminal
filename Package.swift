@@ -90,26 +90,11 @@ let package = Package(
         "Telegram/API/TelegramMessageChunker.swift",
         "Telegram/Runtime/TelegramBotRuntime.swift",
         "Telegram/Runtime/TelegramCommandHandler.swift",
-        "Telegram/Runtime/TelegramPromptExecutor.swift",
 
         /// Telegram Relay — Session model, output poller, ANSI stripping.
         "Telegram/Relay/TelegramRelaySession.swift",
         "Telegram/Relay/TerminalOutputPoller.swift",
         "Telegram/Relay/ANSIStripper.swift",
-
-        /// Task Queue — Models, Storage, State, Runner, Orchestrator.
-        "TaskQueue/Models/QueuedTask.swift",
-        "TaskQueue/Storage/TaskQueueSnapshot.swift",
-        "TaskQueue/Storage/TaskQueueStore.swift",
-        "TaskQueue/State/TaskQueueState.swift",
-        "TaskQueue/Runner/TaskRunner.swift",
-        "TaskQueue/Runner/ClaudeTaskRunner.swift",
-        "TaskQueue/Runner/OpenCodeTaskRunner.swift",
-        "TaskQueue/Runner/TaskLogCollector.swift",
-        "TaskQueue/Orchestrator/TaskOrchestrator.swift",
-        "TaskQueue/Runner/RiskyToolDetector.swift",
-        "TaskQueue/Runner/TaskInjectionRouter.swift",
-        "TaskQueue/Orchestrator/TaskPreflight.swift",
 
         /// Injection — Models, Registry, Orchestrator.
         "Injection/Models/InjectionPayload.swift",

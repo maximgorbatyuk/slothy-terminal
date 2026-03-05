@@ -90,7 +90,7 @@ User Action → AppState.createChatTab() → Tab(mode: .chat, ChatState)
 2. Implement: `command`, `defaultArgs`, `environmentVariables`, `contextWindowLimit`, `parseStats()`, `isAvailable()`
 3. Add case to `AgentType` enum
 4. Update `AgentFactory.createAgent()`
-5. Audit all exhaustive `switch` on `AgentType` — files include: `ConfigManager.swift`, `ChatComposerStatusBar.swift`, `TaskOrchestrator.swift`, `TelegramPromptExecutor.swift`, `TaskInjectionRouter.swift`
+5. Audit all exhaustive `switch` on `AgentType` — files include: `ConfigManager.swift`, `ChatComposerStatusBar.swift`
 
 ## Core Architecture Notes
 
@@ -170,36 +170,9 @@ These are set in:
 - `TerminalAgent.environmentVariables` - Plain terminal agent
 - `ClaudeAgent.environmentVariables` / `OpenCodeAgent.environmentVariables` - AI agent tabs
 
-## TaskQueue Subsystem
-
-Background task execution with preflight checks and log collection.
-
-- **QueuedTask** (`TaskQueue/Models/QueuedTask.swift`) - Task model with status, prompt, agent binding
-- **TaskQueueState** (`TaskQueue/State/TaskQueueState.swift`) - @Observable queue state
-- **TaskOrchestrator** (`TaskQueue/Orchestrator/TaskOrchestrator.swift`) - Schedules and dispatches queued tasks
-- **TaskPreflight** (`TaskQueue/Orchestrator/TaskPreflight.swift`) - Pre-execution validation
-- **TaskRunner** (`TaskQueue/Runner/TaskRunner.swift`) - Protocol; implementations: `ClaudeTaskRunner`, `OpenCodeTaskRunner`
-- **TaskInjectionRouter** (`TaskQueue/Runner/TaskInjectionRouter.swift`) - Injection-first execution: routes task prompts to matching open terminal tabs before falling back to headless runners
-- **TaskInjectionProvider** (protocol in `TaskInjectionRouter.swift`) - Testable abstraction for tab lookup and injection submission; `AppState` conforms
-- **RiskyToolDetector** (`TaskQueue/Runner/RiskyToolDetector.swift`) - Flags potentially destructive tool calls
-- **TaskLogCollector** (`TaskQueue/Runner/TaskLogCollector.swift`) - Captures task execution logs
-- **TaskQueueSnapshot** (`TaskQueue/Storage/TaskQueueSnapshot.swift`) - Codable snapshot models for queue state
-- **TaskQueueStore** (`TaskQueue/Storage/TaskQueueStore.swift`) - Snapshot persistence (same pattern as ChatSessionStore)
-
-### Task Execution: Injection-First Routing
-
-When `TaskOrchestrator` executes a task, it attempts injection before headless execution:
-
-1. Preflight validation (rejects `.terminal`, verifies CLI, checks repoPath)
-2. **Injection attempt** via `TaskInjectionRouter`: finds a matching open terminal tab (`mode == .terminal`, same `agentType`, same working directory, registered surface). Prefers active tab.
-3. If injected: task completes immediately with a summary directing user to the tab.
-4. If no match or injection fails: falls back to headless `ClaudeTaskRunner`/`OpenCodeTaskRunner`.
-
-The `TaskInjectionProvider` protocol keeps injection logic testable in SwiftPM without `AppState`.
-
 ## Injection Subsystem
 
-Programmatic input injection into live terminal surfaces. Used by TaskQueue for injection-first routing and available for UI/Telegram/external API use.
+Programmatic input injection into live terminal surfaces, available for UI/Telegram/external API use.
 
 - **InjectionPayload** (`Injection/Models/InjectionPayload.swift`) - Content types: `.command`, `.text`, `.paste`, `.control`, `.key`
 - **InjectionRequest** (`Injection/Models/InjectionRequest.swift`) - Request envelope with target, origin, status, timeout
@@ -217,7 +190,6 @@ The Telegram bot runs as a sidebar panel (`.telegram` in `SidebarTab`). Runtime 
 
 - **TelegramBotRuntime** (`Telegram/Runtime/TelegramBotRuntime.swift`) - Long-poll loop, message dispatch, relay orchestration
 - **TelegramCommandHandler** (`Telegram/Runtime/TelegramCommandHandler.swift`) - Slash command parsing and execution
-- **TelegramPromptExecutor** (`Telegram/Runtime/TelegramPromptExecutor.swift`) - Bridges Telegram messages into headless chat engine turns
 - **TelegramBotAPIClient** (`Telegram/API/TelegramBotAPIClient.swift`) - Telegram Bot API HTTP client
 - **TelegramMessageChunker** (`Telegram/API/TelegramMessageChunker.swift`) - Splits long messages for Telegram's size limits
 - **TelegramRelaySession** (`Telegram/Relay/TelegramRelaySession.swift`) - Relay session state and `TelegramRelayTabInfo` model
@@ -234,4 +206,4 @@ When the bot receives plain text (non-slash-command):
 2. **Relay fallback** — inject into the active relay session tab (if started via `/relay_start`)
 3. **Error reply** — no eligible target; no headless execution for plain text
 
-Slash commands and `/new_task` "immediately" flow still use headless `TelegramPromptExecutor`.
+Slash commands are handled by the bot runtime and command handler.

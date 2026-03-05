@@ -15,7 +15,6 @@ enum TelegramCommandHandler {
     /help - Show this message
     /report - Show current tab/session status
     /open_directory - Open a tab for the configured directory
-    /new_task - Create a task via guided flow
     /relay_tabs - List terminal tabs available for relay
     /relay_start - Start relaying to a terminal tab
     /relay_stop - Stop the active relay
@@ -24,7 +23,6 @@ enum TelegramCommandHandler {
 
     Send any other text to execute it in the active AI terminal tab (Claude/OpenCode).
     If no AI tab is active, relay session is used as fallback.
-    /new_task scheduling accepts: immediately | queue
     """
   }
 

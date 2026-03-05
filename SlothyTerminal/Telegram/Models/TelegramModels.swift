@@ -80,14 +80,6 @@ protocol TelegramBotDelegate: AnyObject {
   /// Opens a new tab at the given directory.
   func telegramBotOpenTab(mode: TabMode, agent: AgentType, directory: URL)
 
-  /// Enqueues a background task.
-  func telegramBotEnqueueTask(
-    title: String,
-    prompt: String,
-    repoPath: String,
-    agentType: AgentType
-  )
-
   /// Lists terminal tabs that have a registered surface and can be relayed to.
   func telegramBotListRelayableTabs() -> [TelegramRelayTabInfo]
 
@@ -108,15 +100,13 @@ enum TelegramStartupStatement {
   static func compose(
     repositoryPath: String?,
     workingDirectoryPath: String,
-    openTabCount: Int,
-    activeTaskCount: Int
+    openTabCount: Int
   ) -> String {
     let repo = repositoryPath ?? workingDirectoryPath
     return [
       "Status",
       "Repository: \(repo)",
-      "Open app tabs: \(openTabCount)",
-      "Tasks to implement: \(activeTaskCount)"
+      "Open app tabs: \(openTabCount)"
     ].joined(separator: "\n")
   }
 }
