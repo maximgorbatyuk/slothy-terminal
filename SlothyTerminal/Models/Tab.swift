@@ -21,6 +21,7 @@ enum TabMode: String, Codable, CaseIterable {
 @Observable
 class Tab: Identifiable {
   let id: UUID
+  let workspaceID: UUID
   let agentType: AgentType
   let mode: TabMode
   var workingDirectory: URL
@@ -44,6 +45,7 @@ class Tab: Identifiable {
 
   init(
     id: UUID = UUID(),
+    workspaceID: UUID,
     agentType: AgentType,
     workingDirectory: URL,
     title: String? = nil,
@@ -53,6 +55,7 @@ class Tab: Identifiable {
     resumeSessionId: String? = nil
   ) {
     self.id = id
+    self.workspaceID = workspaceID
     self.agentType = agentType
     self.mode = mode
     self.workingDirectory = workingDirectory

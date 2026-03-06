@@ -34,7 +34,7 @@ struct SidebarContainerView: View {
         TelegramSidebarView()
 
       case .automation:
-        AutomationPlaceholderView()
+        AutomationSidebarView()
       }
     }
     .frame(maxWidth: .infinity, maxHeight: .infinity)

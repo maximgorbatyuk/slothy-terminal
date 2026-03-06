@@ -1,6 +1,13 @@
 import Foundation
 import SwiftUI
 
+/// Result of attempting to close a workspace.
+enum CloseWorkspaceResult: Equatable {
+  case closed
+  case hasOpenTabs
+  case notFound
+}
+
 /// The type of modal currently being displayed.
 enum ModalType: Identifiable {
   case startupPage
@@ -24,6 +31,8 @@ enum ModalType: Identifiable {
 @MainActor
 @Observable
 class AppState {
+  var workspaces: [Workspace] = []
+  var activeWorkspaceID: UUID?
   var tabs: [Tab] = []
   var activeTabID: UUID?
   var isSidebarVisible: Bool
@@ -68,6 +77,102 @@ class AppState {
     return tabs.first { $0.id == activeTabID }
   }
 
+  /// Returns the currently active workspace, if any.
+  var activeWorkspace: Workspace? {
+    guard let activeWorkspaceID else {
+      return nil
+    }
+
+    return workspaces.first { $0.id == activeWorkspaceID }
+  }
+
+  /// Creates a new workspace from the given directory.
+  @discardableResult
+  func createWorkspace(from directory: URL) -> Workspace {
+    let workspace = Workspace(directory: directory)
+    workspaces.append(workspace)
+    activeWorkspaceID = workspace.id
+    return workspace
+  }
+
+  /// Whether the workspace has any open tabs.
+  func hasTabs(in workspaceID: UUID) -> Bool {
+    tabs.contains { $0.workspaceID == workspaceID }
+  }
+
+  /// Returns all tabs belonging to the specified workspace.
+  func tabs(in workspaceID: UUID) -> [Tab] {
+    tabs.filter { $0.workspaceID == workspaceID }
+  }
+
+  /// Looks up a workspace by ID.
+  func workspace(for id: UUID) -> Workspace? {
+    workspaces.first { $0.id == id }
+  }
+
+  /// Switches to the workspace with the specified ID.
+  /// Aligns the active tab to the selected workspace.
+  func switchWorkspace(id: UUID) {
+    guard workspaces.contains(where: { $0.id == id }) else {
+      return
+    }
+
+    activeWorkspaceID = id
+
+    /// If current active tab already belongs to this workspace, keep it.
+    if let current = activeTab, current.workspaceID == id {
+      return
+    }
+
+    /// Switch to first tab in the workspace, or nil if empty.
+    if let firstTab = tabs.first(where: { $0.workspaceID == id }) {
+      switchToTab(id: firstTab.id)
+    } else {
+      if let current = activeTab {
+        current.isActive = false
+      }
+      activeTabID = nil
+    }
+  }
+
+  /// Closes the workspace with the specified ID.
+  /// Fails if the workspace still has open tabs.
+  @discardableResult
+  func closeWorkspace(id: UUID) -> CloseWorkspaceResult {
+    guard workspaces.contains(where: { $0.id == id }) else {
+      return .notFound
+    }
+
+    guard !hasTabs(in: id) else {
+      return .hasOpenTabs
+    }
+
+    workspaces.removeAll { $0.id == id }
+
+    if activeWorkspaceID == id {
+      activeWorkspaceID = workspaces.first?.id
+    }
+
+    return .closed
+  }
+
+  /// Resolves the workspace ID for a new tab.
+  /// Creates the first workspace from the directory if none exist;
+  /// otherwise returns the active (or first) workspace ID.
+  private func resolveWorkspaceID(for directory: URL) -> UUID {
+    if let active = activeWorkspace {
+      return active.id
+    }
+
+    if let first = workspaces.first {
+      activeWorkspaceID = first.id
+      return first.id
+    }
+
+    let workspace = createWorkspace(from: directory)
+    return workspace.id
+  }
+
   /// Creates a new tab with the specified agent and working directory.
   func createTab(
     agent: AgentType,
@@ -75,7 +180,9 @@ class AppState {
     initialPrompt: SavedPrompt? = nil,
     launchArgumentsOverride: [String]? = nil
   ) {
+    let workspaceID = resolveWorkspaceID(for: directory)
     let tab = Tab(
+      workspaceID: workspaceID,
       agentType: agent,
       workingDirectory: directory,
       initialPrompt: initialPrompt,
@@ -92,7 +199,9 @@ class AppState {
     initialPrompt: String? = nil,
     resumeSessionId: String? = nil
   ) {
+    let workspaceID = resolveWorkspaceID(for: directory)
     let tab = Tab(
+      workspaceID: workspaceID,
       agentType: agent,
       workingDirectory: directory,
       mode: .chat,

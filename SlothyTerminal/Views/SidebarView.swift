@@ -804,7 +804,7 @@ struct ChatSidebarView: View {
 
 #Preview("With Active Tab") {
   let appState = AppState()
-  let tab = Tab(agentType: .claude, workingDirectory: URL(fileURLWithPath: "/Users/demo/projects"))
+  let tab = Tab(workspaceID: UUID(), agentType: .claude, workingDirectory: URL(fileURLWithPath: "/Users/demo/projects"))
   tab.usageStats.tokensIn = 12847
   tab.usageStats.tokensOut = 8234
   tab.usageStats.messageCount = 24
