@@ -189,7 +189,7 @@ struct ScriptRelativePathTests {
     #expect(result == "../scripts/build.sh")
   }
 
-  @Test("Completely different paths")
+  @Test("Completely different paths use parent traversal")
   func differentPaths() {
     let base = URL(fileURLWithPath: "/Users/dev/project")
     let target = URL(fileURLWithPath: "/opt/scripts/run.py")
@@ -231,5 +231,15 @@ struct ScriptKindTests {
     #expect(ScriptKind.from(extension: "rb") == nil)
     #expect(ScriptKind.from(extension: "js") == nil)
     #expect(ScriptKind.from(extension: "") == nil)
+  }
+
+  @Test("Shell scripts need ./ prefix for execution")
+  func shellNeedsRelativePrefix() {
+    #expect(ScriptKind.shell.needsExplicitRelativePrefix == true)
+  }
+
+  @Test("Python scripts do not need ./ prefix")
+  func pythonNoRelativePrefix() {
+    #expect(ScriptKind.python.needsExplicitRelativePrefix == false)
   }
 }

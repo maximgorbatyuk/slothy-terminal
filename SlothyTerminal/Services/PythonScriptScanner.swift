@@ -51,6 +51,19 @@ enum ScriptKind: String {
       return "/bin/sh \(escapedPath)"
     }
   }
+
+  /// Whether the insertion path should be prefixed with `./`
+  /// when the script is inside the current directory.
+  /// Shell scripts need `./` to be directly executable; Python scripts don't.
+  var needsExplicitRelativePrefix: Bool {
+    switch self {
+    case .shell:
+      return true
+
+    case .python:
+      return false
+    }
+  }
 }
 
 /// A discovered script with metadata.

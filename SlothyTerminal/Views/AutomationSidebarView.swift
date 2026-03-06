@@ -191,7 +191,11 @@ struct AutomationSidebarView: View {
       return
     }
 
-    let path = ScriptScanner.relativePath(from: directory, to: script.url)
+    var path = ScriptScanner.relativePath(from: directory, to: script.url)
+
+    if script.kind.needsExplicitRelativePrefix && !path.hasPrefix("..") {
+      path = "./\(path)"
+    }
 
     let request = InjectionRequest(
       payload: .text(path),
