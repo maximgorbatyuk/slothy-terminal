@@ -69,7 +69,7 @@ struct TelegramSettingsTab: View {
 
       Section("Behavior") {
         Toggle(
-          "Auto-start when tab opens",
+          "Auto-start when Telegram sidebar opens",
           isOn: Bindable(configManager).config.telegramAutoStartOnOpen
         )
 

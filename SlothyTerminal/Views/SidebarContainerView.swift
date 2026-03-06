@@ -21,6 +21,9 @@ struct SidebarContainerView: View {
   private var contentPanel: some View {
     Group {
       switch selectedTab {
+      case .workspaces:
+        WorkspacesSidebarView()
+
       case .explorer:
         SidebarView()
 

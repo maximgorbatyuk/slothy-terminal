@@ -86,6 +86,16 @@ class AppState {
     return workspaces.first { $0.id == activeWorkspaceID }
   }
 
+  /// Tabs belonging to the currently active workspace.
+  /// When no workspace is active, returns all tabs.
+  var visibleTabs: [Tab] {
+    guard let activeWorkspaceID else {
+      return tabs
+    }
+
+    return tabs.filter { $0.workspaceID == activeWorkspaceID }
+  }
+
   /// Creates a new workspace from the given directory.
   @discardableResult
   func createWorkspace(from directory: URL) -> Workspace {
@@ -219,7 +229,7 @@ class AppState {
   }
 
   /// Starts the Telegram bot as a sidebar service.
-  func startTelegramBot(directory: URL) {
+  func startTelegramBot(directory: URL, startImmediately: Bool = false) {
     guard telegramRuntime == nil else {
       return
     }
@@ -228,7 +238,7 @@ class AppState {
     runtime.delegate = self
     telegramRuntime = runtime
 
-    if configManager.config.telegramAutoStartOnOpen {
+    if startImmediately || configManager.config.telegramAutoStartOnOpen {
       runtime.start()
     }
   }
@@ -245,14 +255,18 @@ class AppState {
       return
     }
 
+    let closedTab = tabs[index]
+
     /// Terminate chat process if active.
-    tabs[index].chatState?.terminateProcess()
+    closedTab.chatState?.terminateProcess()
 
     tabs.remove(at: index)
 
-    /// If we closed the active tab, switch to another one.
+    /// If we closed the active tab, switch to another one in the same workspace.
     if activeTabID == id {
-      if let nextTab = tabs.first {
+      let workspaceTabs = tabs.filter { $0.workspaceID == closedTab.workspaceID }
+
+      if let nextTab = workspaceTabs.first {
         switchToTab(id: nextTab.id)
       } else {
         activeTabID = nil

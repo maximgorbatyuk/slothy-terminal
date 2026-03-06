@@ -7,16 +7,16 @@ struct TerminalContainerView: View {
 
   var body: some View {
     ZStack {
-      if appState.tabs.isEmpty {
+      if appState.visibleTabs.isEmpty {
         EmptyTerminalView()
-      } else {
-        /// Render all terminal views but only show the active one.
-        /// This keeps sessions alive when switching between tabs.
-        ForEach(appState.tabs) { tab in
-          ActiveTerminalView(tab: tab, isActive: tab.id == appState.activeTabID)
-            .opacity(tab.id == appState.activeTabID ? 1 : 0)
-            .allowsHitTesting(tab.id == appState.activeTabID)
-        }
+      }
+
+      /// Render all terminal views but only show the active one.
+      /// This keeps sessions alive when switching between tabs and workspaces.
+      ForEach(appState.tabs) { tab in
+        ActiveTerminalView(tab: tab, isActive: tab.id == appState.activeTabID)
+          .opacity(tab.id == appState.activeTabID ? 1 : 0)
+          .allowsHitTesting(tab.id == appState.activeTabID)
       }
     }
   }

@@ -30,7 +30,7 @@ struct TabBarView: View {
     VStack(spacing: 0) {
       HStack(spacing: 0) {
         /// Tab items.
-        ForEach(appState.tabs) { tab in
+        ForEach(appState.visibleTabs) { tab in
           TabItemView(tab: tab)
         }
 

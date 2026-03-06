@@ -67,7 +67,7 @@ struct MainView: View {
     .onChange(of: appState.activeTabID) {
       updateWindowTitle()
     }
-    .onChange(of: appState.tabs.count) {
+    .onChange(of: appState.visibleTabs.count) {
       updateWindowTitle()
     }
   }

@@ -123,8 +123,8 @@ struct AppConfig: Codable, Equatable {
   /// Which agent to use for prompt execution.
   var telegramExecutionAgent: AgentType = .claude
 
-  /// Whether the bot auto-starts when the tab is opened.
-  var telegramAutoStartOnOpen: Bool = true
+  /// Whether the bot auto-starts when the Telegram sidebar is opened.
+  var telegramAutoStartOnOpen: Bool = false
 
   /// Deprecated — bot always runs in execute mode now.
   /// Kept for backward-compatible JSON decoding of existing configs.
@@ -359,6 +359,7 @@ enum SidebarPosition: String, Codable, CaseIterable {
 
 /// Sidebar panel tabs.
 enum SidebarTab: String, Codable, CaseIterable, Identifiable {
+  case workspaces
   case explorer
   case gitChanges
   case prompts
@@ -369,6 +370,9 @@ enum SidebarTab: String, Codable, CaseIterable, Identifiable {
 
   var iconName: String {
     switch self {
+    case .workspaces:
+      return "square.grid.2x2"
+
     case .explorer:
       return "folder"
 
@@ -388,8 +392,11 @@ enum SidebarTab: String, Codable, CaseIterable, Identifiable {
 
   var tooltip: String {
     switch self {
+    case .workspaces:
+      return "Workspaces"
+
     case .explorer:
-      return "Explorer"
+      return "Current directory"
 
     case .gitChanges:
       return "Git Changes"

@@ -26,9 +26,6 @@ struct TelegramSidebarView: View {
       }
     }
     .background(appBackgroundColor)
-    .task {
-      startBotIfNeeded()
-    }
   }
 
   private var telegramSetupView: some View {
@@ -81,35 +78,21 @@ struct TelegramSidebarView: View {
     .frame(maxWidth: .infinity, maxHeight: .infinity)
   }
 
-  private func startBotIfNeeded() {
-    guard appState.telegramRuntime == nil else {
-      return
-    }
-
-    let config = configManager.config
-
-    guard config.telegramBotToken != nil,
-          config.telegramAllowedUserID != nil
-    else {
-      return
-    }
-
-    if let path = config.telegramRootDirectoryPath {
-      appState.startTelegramBot(directory: URL(fileURLWithPath: path))
-    } else if let dir = appState.globalWorkingDirectory ?? appState.activeTab?.workingDirectory {
-      appState.startTelegramBot(directory: dir)
-    }
-  }
-
   private func startBotWithBestDirectory() {
     let config = configManager.config
 
     if let path = config.telegramRootDirectoryPath {
-      appState.startTelegramBot(directory: URL(fileURLWithPath: path))
+      appState.startTelegramBot(
+        directory: URL(fileURLWithPath: path),
+        startImmediately: true
+      )
     } else if let dir = appState.globalWorkingDirectory ?? appState.activeTab?.workingDirectory {
-      appState.startTelegramBot(directory: dir)
+      appState.startTelegramBot(directory: dir, startImmediately: true)
     } else {
-      appState.startTelegramBot(directory: FileManager.default.homeDirectoryForCurrentUser)
+      appState.startTelegramBot(
+        directory: FileManager.default.homeDirectoryForCurrentUser,
+        startImmediately: true
+      )
     }
   }
 }
