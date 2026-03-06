@@ -101,7 +101,7 @@ class AppState {
   func createWorkspace(from directory: URL) -> Workspace {
     let workspace = Workspace(directory: directory)
     workspaces.append(workspace)
-    activeWorkspaceID = workspace.id
+    switchWorkspace(id: workspace.id)
     return workspace
   }
 
@@ -160,7 +160,11 @@ class AppState {
     workspaces.removeAll { $0.id == id }
 
     if activeWorkspaceID == id {
-      activeWorkspaceID = workspaces.first?.id
+      if let fallback = workspaces.first {
+        switchWorkspace(id: fallback.id)
+      } else {
+        activeWorkspaceID = nil
+      }
     }
 
     return .closed

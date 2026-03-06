@@ -1,10 +1,10 @@
 import SwiftUI
 
-/// Sidebar panel listing Python scripts in the active tab's working directory.
+/// Sidebar panel listing scripts in the active tab's working directory.
 struct AutomationSidebarView: View {
   @Environment(AppState.self) private var appState
 
-  @State private var scripts: [PythonScriptItem] = []
+  @State private var scripts: [ScriptItem] = []
   @State private var isLoading = false
 
   private var activeDirectory: URL? {
@@ -15,7 +15,7 @@ struct AutomationSidebarView: View {
     VStack(spacing: 0) {
       header
       Divider()
-      pythonHint
+      scriptHint
       Divider()
 
       if isLoading {
@@ -67,14 +67,14 @@ struct AutomationSidebarView: View {
     .padding(.vertical, 6)
   }
 
-  // MARK: - Python Hint
+  // MARK: - Hint
 
-  private var pythonHint: some View {
+  private var scriptHint: some View {
     HStack(spacing: 4) {
       Image(systemName: "info.circle")
         .font(.system(size: 9))
 
-      Text("Requires python3 installed on the system")
+      Text("Supports .py and .sh scripts")
         .font(.system(size: 9))
     }
     .foregroundColor(.secondary.opacity(0.7))
@@ -92,12 +92,12 @@ struct AutomationSidebarView: View {
         .font(.system(size: 24))
         .foregroundColor(.secondary)
 
-      Text("No .py files found")
+      Text("No scripts found")
         .font(.system(size: 11, weight: .medium))
         .foregroundColor(.secondary)
 
       if activeDirectory != nil {
-        Text("Place .py files in project root or scripts/ folder.")
+        Text("Place .py or .sh files in project root or scripts/ folder.")
           .font(.system(size: 10))
           .foregroundColor(.secondary.opacity(0.7))
           .multilineTextAlignment(.center)
@@ -136,7 +136,7 @@ struct AutomationSidebarView: View {
     }
 
     isLoading = true
-    scripts = await PythonScriptScanner.shared.scan(directory: directory)
+    scripts = await ScriptScanner.shared.scan(directory: directory)
     isLoading = false
   }
 
@@ -145,24 +145,27 @@ struct AutomationSidebarView: View {
     "'" + path.replacingOccurrences(of: "'", with: "'\\''") + "'"
   }
 
-  private func executeScript(_ script: PythonScriptItem) {
+  private func executeScript(_ script: ScriptItem) {
     guard let directory = activeDirectory else {
       return
     }
 
+    let escapedPath = Self.shellEscape(script.url.path)
+    let command = script.kind.executionCommand(escapedPath: escapedPath)
+
     appState.createTab(
       agent: .terminal,
       directory: directory,
-      launchArgumentsOverride: ["-c", "python3 \(Self.shellEscape(script.url.path)); echo ''; echo 'Press Enter to close...'; read"]
+      launchArgumentsOverride: ["-c", "\(command); echo ''; echo 'Press Enter to close...'; read"]
     )
   }
 }
 
 // MARK: - Script Row
 
-/// A single row displaying a Python script's name and line count.
+/// A single row displaying a script's name, kind, and line count.
 private struct ScriptRow: View {
-  let script: PythonScriptItem
+  let script: ScriptItem
   let onExecute: () -> Void
 
   private var editorApps: [ExternalApp] {
@@ -171,7 +174,7 @@ private struct ScriptRow: View {
 
   var body: some View {
     HStack(spacing: 6) {
-      Image(systemName: "doc.text")
+      Image(systemName: script.kind.iconName)
         .font(.system(size: 10))
         .foregroundColor(.secondary)
 
@@ -181,9 +184,19 @@ private struct ScriptRow: View {
           .foregroundColor(.primary)
           .lineLimit(1)
 
-        Text("\(script.lineCount) lines")
-          .font(.system(size: 9))
-          .foregroundColor(.secondary.opacity(0.7))
+        HStack(spacing: 4) {
+          Text(script.kind.displayName)
+            .font(.system(size: 9))
+            .foregroundColor(.secondary.opacity(0.7))
+
+          Text("·")
+            .font(.system(size: 9))
+            .foregroundColor(.secondary.opacity(0.5))
+
+          Text("\(script.lineCount) lines")
+            .font(.system(size: 9))
+            .foregroundColor(.secondary.opacity(0.7))
+        }
       }
 
       Spacer()

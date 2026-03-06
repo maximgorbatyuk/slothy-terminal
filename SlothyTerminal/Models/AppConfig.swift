@@ -363,8 +363,8 @@ enum SidebarTab: String, Codable, CaseIterable, Identifiable {
   case explorer
   case gitChanges
   case prompts
-  case telegram
   case automation
+  case telegram
 
   var id: String { rawValue }
 
