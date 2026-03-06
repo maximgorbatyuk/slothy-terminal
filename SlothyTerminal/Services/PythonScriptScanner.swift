@@ -166,6 +166,26 @@ final class ScriptScanner {
     )
   }
 
+  /// Computes a relative path from `base` directory to `target` file.
+  static func relativePath(from base: URL, to target: URL) -> String {
+    let baseParts = base.standardizedFileURL.pathComponents
+    let targetParts = target.standardizedFileURL.pathComponents
+
+    var commonLength = 0
+    let minLength = min(baseParts.count, targetParts.count)
+    while commonLength < minLength && baseParts[commonLength] == targetParts[commonLength] {
+      commonLength += 1
+    }
+
+    let ups = Array(repeating: "..", count: baseParts.count - commonLength)
+    let downs = targetParts[commonLength...]
+
+    let components = ups + downs
+    let result = components.joined(separator: "/")
+
+    return result.isEmpty ? "." : result
+  }
+
   static func countLines(at url: URL) -> Int {
     guard let data = try? Data(contentsOf: url, options: .mappedIfSafe) else {
       return 0

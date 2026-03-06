@@ -157,6 +157,59 @@ struct ScriptScannerTests {
   }
 }
 
+@Suite("ScriptScanner.relativePath")
+struct ScriptRelativePathTests {
+  @Test("Same directory returns filename only")
+  func sameDirectory() {
+    let base = URL(fileURLWithPath: "/tmp/project")
+    let target = URL(fileURLWithPath: "/tmp/project/deploy.py")
+
+    let result = ScriptScanner.relativePath(from: base, to: target)
+
+    #expect(result == "deploy.py")
+  }
+
+  @Test("Nested script returns relative sub-path")
+  func nestedScript() {
+    let base = URL(fileURLWithPath: "/tmp/project")
+    let target = URL(fileURLWithPath: "/tmp/project/scripts/utils/helper.sh")
+
+    let result = ScriptScanner.relativePath(from: base, to: target)
+
+    #expect(result == "scripts/utils/helper.sh")
+  }
+
+  @Test("Sibling directory uses parent traversal")
+  func siblingDirectory() {
+    let base = URL(fileURLWithPath: "/tmp/project/src")
+    let target = URL(fileURLWithPath: "/tmp/project/scripts/build.sh")
+
+    let result = ScriptScanner.relativePath(from: base, to: target)
+
+    #expect(result == "../scripts/build.sh")
+  }
+
+  @Test("Completely different paths")
+  func differentPaths() {
+    let base = URL(fileURLWithPath: "/Users/dev/project")
+    let target = URL(fileURLWithPath: "/opt/scripts/run.py")
+
+    let result = ScriptScanner.relativePath(from: base, to: target)
+
+    #expect(result == "../../../opt/scripts/run.py")
+  }
+
+  @Test("Scripts subfolder relative to project root")
+  func scriptsSubfolder() {
+    let base = URL(fileURLWithPath: "/Users/dev/myproject")
+    let target = URL(fileURLWithPath: "/Users/dev/myproject/scripts/deploy.py")
+
+    let result = ScriptScanner.relativePath(from: base, to: target)
+
+    #expect(result == "scripts/deploy.py")
+  }
+}
+
 @Suite("ScriptKind")
 struct ScriptKindTests {
   @Test("Python execution command uses python3")

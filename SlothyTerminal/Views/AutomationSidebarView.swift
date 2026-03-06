@@ -6,9 +6,25 @@ struct AutomationSidebarView: View {
 
   @State private var scripts: [ScriptItem] = []
   @State private var isLoading = false
+  @State private var actionStatus: String?
+  @State private var isStatusError: Bool = false
+  @State private var statusDismissTask: Task<Void, Never>?
 
   private var activeDirectory: URL? {
     appState.activeTab?.workingDirectory ?? appState.globalWorkingDirectory
+  }
+
+  private var isInjectable: Bool {
+    guard let activeTab = appState.activeTab else {
+      return false
+    }
+
+    guard activeTab.mode == .terminal else {
+      return false
+    }
+
+    let injectableIds = Set(appState.listInjectableTabs())
+    return injectableIds.contains(activeTab.id)
   }
 
   var body: some View {
@@ -17,7 +33,7 @@ struct AutomationSidebarView: View {
       Divider()
       scriptHint
       Divider()
-
+      statusBar
       if isLoading {
         ProgressView()
           .scaleEffect(0.7)
@@ -119,11 +135,36 @@ struct AutomationSidebarView: View {
     ScrollView {
       LazyVStack(alignment: .leading, spacing: 4) {
         ForEach(scripts) { script in
-          ScriptRow(script: script, onExecute: { executeScript(script) })
+          ScriptRow(
+            script: script,
+            isInsertDisabled: !isInjectable,
+            onInsertPath: { insertScriptPath(script) }
+          )
         }
       }
       .padding(.horizontal, 8)
       .padding(.vertical, 6)
+    }
+  }
+
+  // MARK: - Status Bar
+
+  private var statusBar: some View {
+    Group {
+      if let status = actionStatus {
+        HStack(spacing: 4) {
+          Image(systemName: isStatusError ? "exclamationmark.circle" : "checkmark.circle")
+            .font(.system(size: 9))
+
+          Text(status)
+            .font(.system(size: 9))
+            .lineLimit(1)
+        }
+        .foregroundColor(isStatusError ? .red : .green)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 4)
+        .transition(.opacity)
+      }
     }
   }
 
@@ -140,24 +181,82 @@ struct AutomationSidebarView: View {
     isLoading = false
   }
 
-  /// Escapes a string for safe use in a shell command argument.
-  private static func shellEscape(_ path: String) -> String {
-    "'" + path.replacingOccurrences(of: "'", with: "'\\''") + "'"
-  }
-
-  private func executeScript(_ script: ScriptItem) {
-    guard let directory = activeDirectory else {
+  private func insertScriptPath(_ script: ScriptItem) {
+    guard activeTerminalIsInjectable() else {
       return
     }
 
-    let escapedPath = Self.shellEscape(script.url.path)
-    let command = script.kind.executionCommand(escapedPath: escapedPath)
+    guard let directory = activeDirectory else {
+      showStatus("No active directory", isError: true)
+      return
+    }
 
-    appState.createTab(
-      agent: .terminal,
-      directory: directory,
-      launchArgumentsOverride: ["-c", "\(command); echo ''; echo 'Press Enter to close...'; read"]
+    let path = ScriptScanner.relativePath(from: directory, to: script.url)
+
+    let request = InjectionRequest(
+      payload: .text(path),
+      target: .activeTab,
+      origin: .ui
     )
+
+    let result = appState.inject(request)
+
+    guard let result else {
+      showStatus("Insert failed", isError: true)
+      return
+    }
+
+    switch result.status {
+    case .completed, .written, .accepted, .queued:
+      showStatus("Inserted: \(script.name)", isError: false)
+
+    case .failed, .cancelled, .timeout:
+      showStatus("Insert \(result.status.rawValue)", isError: true)
+    }
+  }
+
+  private func activeTerminalIsInjectable() -> Bool {
+    guard let activeTab = appState.activeTab else {
+      showStatus("No active tab", isError: true)
+      return false
+    }
+
+    guard activeTab.mode == .terminal else {
+      showStatus("Active tab is not a terminal", isError: true)
+      return false
+    }
+
+    let injectableIds = Set(appState.listInjectableTabs())
+
+    guard injectableIds.contains(activeTab.id) else {
+      showStatus("Terminal surface not ready", isError: true)
+      return false
+    }
+
+    return true
+  }
+
+  // MARK: - Status Feedback
+
+  private func showStatus(_ message: String, isError: Bool) {
+    statusDismissTask?.cancel()
+
+    withAnimation(.easeInOut(duration: 0.2)) {
+      actionStatus = message
+      isStatusError = isError
+    }
+
+    statusDismissTask = Task {
+      try? await Task.sleep(nanoseconds: 2_500_000_000)
+
+      guard !Task.isCancelled else {
+        return
+      }
+
+      withAnimation(.easeInOut(duration: 0.3)) {
+        actionStatus = nil
+      }
+    }
   }
 }
 
@@ -166,7 +265,8 @@ struct AutomationSidebarView: View {
 /// A single row displaying a script's name, kind, and line count.
 private struct ScriptRow: View {
   let script: ScriptItem
-  let onExecute: () -> Void
+  let isInsertDisabled: Bool
+  let onInsertPath: () -> Void
 
   private var editorApps: [ExternalApp] {
     ExternalAppManager.shared.installedEditorApps
@@ -205,10 +305,12 @@ private struct ScriptRow: View {
     .frame(maxWidth: .infinity, alignment: .leading)
     .background(appCardColor)
     .cornerRadius(6)
+    .opacity(isInsertDisabled ? 0.5 : 1.0)
     .contextMenu {
-      Button("Execute") {
-        onExecute()
+      Button("Insert Path to Terminal") {
+        onInsertPath()
       }
+      .disabled(isInsertDisabled)
 
       Divider()
 
