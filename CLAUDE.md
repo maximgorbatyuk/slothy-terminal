@@ -204,6 +204,16 @@ Programmatic input injection into live terminal surfaces, available for UI/Teleg
 
 `AppState` exposes `inject(_:)`, `cancelInjection(id:)`, and `listInjectableTabs()` for callers. `GhosttySurfaceView` registers/unregisters itself with `TerminalSurfaceRegistry` on create/destroy.
 
+### Sidebar Injection Pattern
+
+When a sidebar view needs to insert text into the active terminal, follow the pattern from `PromptsSidebarView`:
+1. Check `activeTerminalIsInjectable()` — validates active tab is `.terminal` mode with a registered surface in `TerminalSurfaceRegistry`
+2. Build `InjectionRequest(payload:target:.activeTab, origin:.ui)`
+3. Call `appState.inject(request)` and handle status result
+4. Show status feedback via `showStatus(_:isError:)` with auto-dismiss timer
+
+Payload choice: `.text()` for raw insertion without newline, `.paste(_:mode:.bracketed)` for multi-line content, `.command(_:submit:.insert)` for command without execution.
+
 ## Telegram Bot Subsystem
 
 The Telegram bot runs as a sidebar panel (`.telegram` in `SidebarTab`). Runtime is owned by `AppState.telegramRuntime`, decoupled via the `TelegramBotDelegate` protocol.
