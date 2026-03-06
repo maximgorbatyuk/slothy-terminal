@@ -24,6 +24,9 @@ The app SlothyTerminal combines terminal and AI agent system like opencode and o
 # Open in Xcode (then Cmd+R to build/run)
 open SlothyTerminal.xcodeproj
 
+# Xcode CLI build (no signing — for verification without certs)
+xcodebuild -project SlothyTerminal.xcodeproj -scheme SlothyTerminal -configuration Debug build CODE_SIGNING_ALLOWED=NO
+
 # SPM build & test (chat core, parsers, engine — no UI)
 swift build
 swift test
@@ -83,6 +86,8 @@ User Action → AppState.createChatTab() → Tab(mode: .chat, ChatState)
 - **ClaudeCLITransport** (`Chat/Transport/ClaudeCLITransport.swift`) - Claude stream-json process transport
 - **OpenCodeCLITransport** (`Chat/OpenCode/OpenCodeCLITransport.swift`) - OpenCode JSON event process transport
 - **ChatSessionStore** (`Chat/Storage/ChatSessionStore.swift`) - Snapshot persistence and restore for chat sessions
+- **Workspace** (`Models/Workspace.swift`) - Groups tabs under a named project directory
+- **ScriptScanner** (`Services/PythonScriptScanner.swift`) - Scans for `.py` and `.sh` scripts in project root (shallow) and `scripts/` folder (recursive)
 
 ### Adding a New Agent (Terminal/CLI Tabs)
 
@@ -91,6 +96,17 @@ User Action → AppState.createChatTab() → Tab(mode: .chat, ChatState)
 3. Add case to `AgentType` enum
 4. Update `AgentFactory.createAgent()`
 5. Audit all exhaustive `switch` on `AgentType` — files include: `ConfigManager.swift`, `ChatComposerStatusBar.swift`
+
+### Workspace Architecture
+
+Workspaces are first-class tab containers. Each workspace maps to a project directory and owns a set of tabs.
+
+- `AppState.visibleTabs` — computed property returning only tabs from the active workspace. **All UI code must use `visibleTabs`** (tab bar, terminal container, keyboard shortcuts), not `tabs` directly.
+- `AppState.tabs` — global flat list of all tabs across all workspaces. Use only for global operations (terminate all, injection, Telegram).
+- `AppState.createWorkspace(from:)` creates an empty workspace (no tab). Creating a workspace calls `switchWorkspace(id:)` to deactivate any current tab.
+- `AppState.closeTab(id:)` selects the next tab from the **same workspace**, not globally.
+- `AppState.switchWorkspace(id:)` aligns the active tab to the target workspace (first tab, or nil if empty).
+- Empty workspaces show `EmptyTerminalView`.
 
 ## Core Architecture Notes
 
@@ -145,6 +161,10 @@ Key rules:
 - Do not treat intermediate completion (`tool-calls`) as final turn completion; finalize only on terminal stop.
 - OpenCode model catalog for UI should come from `opencode models` (dynamic), not hardcoded model lists.
 - OpenCode metadata reconciliation (resolved provider/model/mode) can be refreshed from `opencode export <sessionId>`.
+
+## Xcode Project Convention
+
+The Xcode project uses `PBXFileSystemSynchronizedRootGroup` — it auto-discovers source files from the filesystem. **No manual `.pbxproj` edits are needed** when adding new Swift files. Only `Package.swift` requires manual source list updates for new non-UI files.
 
 ## Known Issues & Pitfalls
 
