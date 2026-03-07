@@ -29,6 +29,9 @@ struct GhosttyTerminalViewRepresentable: NSViewRepresentable {
   /// Callback when the surface is closed (process exits).
   var onClosed: (() -> Void)?
 
+  /// Callback when background terminal output is detected.
+  var onBackgroundActivity: (() -> Void)?
+
   func makeNSView(context: Context) -> GhosttySurfaceView {
     let surfaceView = GhosttySurfaceView()
     context.coordinator.surfaceView = surfaceView
@@ -42,6 +45,7 @@ struct GhosttyTerminalViewRepresentable: NSViewRepresentable {
     surfaceView.onCommandEntered = onCommandEntered
     surfaceView.onCommandFinished = onCommandFinished
     surfaceView.onClosed = onClosed
+    surfaceView.onBackgroundActivity = onBackgroundActivity
 
     let launchEnvironment = makeLaunchEnvironment(
       workingDirectory: workingDirectory,
@@ -71,6 +75,8 @@ struct GhosttyTerminalViewRepresentable: NSViewRepresentable {
 
   func updateNSView(_ nsView: GhosttySurfaceView, context: Context) {
     /// Update focus state when tab visibility changes.
+    nsView.setTabActive(isActive)
+
     if isActive {
       nsView.setFocused(true)
 
@@ -178,6 +184,9 @@ struct StandaloneTerminalView: View {
   /// Callback when the surface is closed.
   var onClosed: (() -> Void)? = nil
 
+  /// Callback when background terminal output is detected.
+  var onBackgroundActivity: (() -> Void)? = nil
+
   var body: some View {
     GhosttyTerminalViewRepresentable(
       workingDirectory: workingDirectory,
@@ -190,7 +199,8 @@ struct StandaloneTerminalView: View {
       onDirectoryChanged: onDirectoryChanged,
       onCommandEntered: onCommandEntered,
       onCommandFinished: onCommandFinished,
-      onClosed: onClosed
+      onClosed: onClosed,
+      onBackgroundActivity: onBackgroundActivity
     )
   }
 }

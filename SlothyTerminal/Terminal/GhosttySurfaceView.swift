@@ -39,9 +39,18 @@ class GhosttySurfaceView: NSView, NSTextInputClient {
   var onCommandEntered: (() -> Void)?
   var onCommandFinished: (() -> Void)?
   var onClosed: (() -> Void)?
+  var onBackgroundActivity: (() -> Void)?
 
   /// Set on each GHOSTTY_ACTION_RENDER, cleared by poller after reading.
   private(set) var hasNewRenderSinceLastRead = false
+
+  private var isTabActive = true
+  private var lastViewportSnapshot = ""
+  private var activityDetectionWorkItem: DispatchWorkItem?
+  private var lastUserInputAt: Date = .distantPast
+
+  private let activityDetectionDelay: TimeInterval = 0.12
+  private let userInputSuppressionInterval: TimeInterval = 0.4
 
   // MARK: - Initialization
 
@@ -343,6 +352,16 @@ class GhosttySurfaceView: NSView, NSTextInputClient {
     ghostty_surface_set_focus(surface, focused)
   }
 
+  func setTabActive(_ isActive: Bool) {
+    guard isTabActive != isActive else {
+      return
+    }
+
+    isTabActive = isActive
+    activityDetectionWorkItem?.cancel()
+    refreshViewportSnapshot()
+  }
+
   override func becomeFirstResponder() -> Bool {
     let result = super.becomeFirstResponder()
     if result {
@@ -398,6 +417,8 @@ class GhosttySurfaceView: NSView, NSTextInputClient {
   // MARK: - Keyboard Input
 
   override func keyDown(with event: NSEvent) {
+    noteUserInput()
+
     guard surface != nil else {
       self.interpretKeyEvents([event])
       return
@@ -515,6 +536,8 @@ class GhosttySurfaceView: NSView, NSTextInputClient {
       }
 
       if chars == "v" {
+        noteUserInput()
+
         /// Paste from clipboard via ghostty binding action.
         let action = "paste_from_clipboard"
         _ = ghostty_surface_binding_action(surface, action, UInt(action.count))
@@ -800,6 +823,8 @@ class GhosttySurfaceView: NSView, NSTextInputClient {
       return
     }
 
+    noteUserInput()
+
     str.withCString { ptr in
       ghostty_surface_text(surface, ptr, UInt(str.utf8.count))
     }
@@ -900,6 +925,8 @@ extension GhosttySurfaceView: InjectableSurface {
     guard let surface else {
       return false
     }
+
+    noteUserInput()
 
     return text.withCString { ptr in
       ghostty_surface_text(surface, ptr, UInt(text.utf8.count))
@@ -1023,11 +1050,59 @@ extension GhosttySurfaceView {
   /// Called from GhosttyApp action callback on GHOSTTY_ACTION_RENDER.
   func markRenderDirty() {
     hasNewRenderSinceLastRead = true
+    scheduleBackgroundActivityDetection()
   }
 
   /// Clears the dirty flag after a viewport read.
   func clearRenderDirty() {
     hasNewRenderSinceLastRead = false
+  }
+
+  private func noteUserInput() {
+    lastUserInputAt = Date()
+  }
+
+  private func scheduleBackgroundActivityDetection() {
+    activityDetectionWorkItem?.cancel()
+
+    let workItem = DispatchWorkItem { [weak self] in
+      self?.detectBackgroundActivityIfNeeded()
+    }
+
+    activityDetectionWorkItem = workItem
+    DispatchQueue.main.asyncAfter(deadline: .now() + activityDetectionDelay, execute: workItem)
+  }
+
+  private func detectBackgroundActivityIfNeeded() {
+    guard let text = readViewportText() else {
+      return
+    }
+
+    let snapshot = ANSIStripper.strip(text)
+
+    guard snapshot != lastViewportSnapshot else {
+      return
+    }
+
+    lastViewportSnapshot = snapshot
+
+    guard !isTabActive else {
+      return
+    }
+
+    guard Date().timeIntervalSince(lastUserInputAt) > userInputSuppressionInterval else {
+      return
+    }
+
+    onBackgroundActivity?()
+  }
+
+  private func refreshViewportSnapshot() {
+    guard let text = readViewportText() else {
+      return
+    }
+
+    lastViewportSnapshot = ANSIStripper.strip(text)
   }
 }
 

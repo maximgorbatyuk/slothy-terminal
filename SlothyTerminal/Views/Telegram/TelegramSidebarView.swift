@@ -71,6 +71,8 @@ struct TelegramSidebarView: View {
         }
         .buttonStyle(.borderedProminent)
         .controlSize(.regular)
+        // TODO: Re-enable after the Telegram bot start approach is clarified.
+        .disabled(true)
       }
 
       Spacer()

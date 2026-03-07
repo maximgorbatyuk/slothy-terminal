@@ -58,6 +58,9 @@ struct ActiveTerminalView: View {
           },
           onClosed: {
             tab.markTerminalIdle()
+          },
+          onBackgroundActivity: {
+            tab.markBackgroundActivity()
           }
         )
         .environment(\.colorScheme, .dark)

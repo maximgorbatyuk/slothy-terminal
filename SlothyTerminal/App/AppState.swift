@@ -289,6 +289,7 @@ class AppState {
     activeTabID = id
     if let newTab = activeTab {
       newTab.isActive = true
+      newTab.clearBackgroundActivity()
     }
   }
 

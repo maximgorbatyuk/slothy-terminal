@@ -70,17 +70,11 @@ struct TerminalSidebarView: View {
       /// Open in external app button.
       OpenInAppButton(directory: tab.workingDirectory)
 
-      /// Project docs.
-      ProjectDocsView(workingDirectory: tab.workingDirectory)
-
       /// Directory tree.
       DirectoryTreeView(rootDirectory: tab.workingDirectory)
 
-      /// Session info section.
-      StatsSection(title: "Session Info") {
-        StatRow(label: "Duration", value: formattedDuration)
-        StatRow(label: "Commands", value: "\(tab.usageStats.commandCount)")
-      }
+      /// Project docs.
+      ProjectDocsView(workingDirectory: tab.workingDirectory)
     }
     .onReceive(timer) { _ in
       currentTime = Date()
@@ -118,17 +112,11 @@ struct AgentStatsView: View {
       /// Open in external app button.
       OpenInAppButton(directory: tab.workingDirectory)
 
-      /// Project docs.
-      ProjectDocsView(workingDirectory: tab.workingDirectory)
-
       /// Directory tree.
       DirectoryTreeView(rootDirectory: tab.workingDirectory)
 
-      /// Session info section.
-      StatsSection(title: "Session Info") {
-        StatRow(label: "Duration", value: formattedDuration)
-        StatRow(label: "Commands", value: "\(tab.usageStats.commandCount)")
-      }
+      /// Project docs.
+      ProjectDocsView(workingDirectory: tab.workingDirectory)
     }
     .onReceive(timer) { _ in
       currentTime = Date()
@@ -750,11 +738,11 @@ struct ChatSidebarView: View {
       /// Open in external app button.
       OpenInAppButton(directory: tab.workingDirectory)
 
-      /// Project docs.
-      ProjectDocsView(workingDirectory: tab.workingDirectory)
-
       /// Directory tree.
       DirectoryTreeView(rootDirectory: tab.workingDirectory)
+
+      /// Project docs.
+      ProjectDocsView(workingDirectory: tab.workingDirectory)
 
       /// Chat stats section.
       StatsSection(title: "Chat Info") {

@@ -27,6 +27,7 @@ class Tab: Identifiable {
   var workingDirectory: URL
   var title: String
   var isActive: Bool = false
+  var hasBackgroundActivity: Bool = false
   var usageStats: UsageStats
   var isTerminalBusy: Bool = false
 
@@ -169,5 +170,25 @@ class Tab: Identifiable {
   /// Marks the terminal tab as idle.
   func markTerminalIdle() {
     isTerminalBusy = false
+  }
+
+  /// Marks the tab as having unseen background terminal output.
+  func markBackgroundActivity() {
+    guard !isActive,
+          !hasBackgroundActivity
+    else {
+      return
+    }
+
+    hasBackgroundActivity = true
+  }
+
+  /// Clears the unseen background terminal output indicator.
+  func clearBackgroundActivity() {
+    guard hasBackgroundActivity else {
+      return
+    }
+
+    hasBackgroundActivity = false
   }
 }

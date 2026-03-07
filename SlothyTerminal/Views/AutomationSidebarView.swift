@@ -272,6 +272,8 @@ private struct ScriptRow: View {
   let isInsertDisabled: Bool
   let onInsertPath: () -> Void
 
+  @State private var isHovered = false
+
   private var editorApps: [ExternalApp] {
     ExternalAppManager.shared.installedEditorApps
   }
@@ -307,9 +309,17 @@ private struct ScriptRow: View {
     }
     .padding(8)
     .frame(maxWidth: .infinity, alignment: .leading)
-    .background(appCardColor)
+    .background(isHovered ? Color.primary.opacity(0.05) : appCardColor)
     .cornerRadius(6)
     .opacity(isInsertDisabled ? 0.5 : 1.0)
+    .contentShape(Rectangle())
+    .onHover { hovering in
+      isHovered = hovering
+    }
+    .onTapGesture(count: 2) {
+      onInsertPath()
+    }
+    .help(isInsertDisabled ? "Open a terminal tab to insert script paths" : "Double-click to paste relative path to terminal")
     .contextMenu {
       Button("Insert Path to Terminal") {
         onInsertPath()
