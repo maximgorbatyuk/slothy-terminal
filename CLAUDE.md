@@ -10,14 +10,6 @@ SlothyTerminal is a native macOS terminal application (Swift/SwiftUI) for AI cod
 - **Language:** Swift 5.9+
 - **Build System:** Xcode 15.0+ with SPM
 
-## Project reference
-
-The app SlothyTerminal combines terminal and AI agent system like opencode and openclaw do. Source code of the apps:
-
-- opencode: `~/projects/opencode`
-- openclaw: `~/projects/openclaw`
-
-
 ## Build Commands
 
 ```bash
@@ -88,6 +80,32 @@ User Action → AppState.createChatTab() → Tab(mode: .chat, ChatState)
 - **ChatSessionStore** (`Chat/Storage/ChatSessionStore.swift`) - Snapshot persistence and restore for chat sessions
 - **Workspace** (`Models/Workspace.swift`) - Groups tabs under a named project directory
 - **ScriptScanner** (`Services/PythonScriptScanner.swift`) - Scans for `.py` and `.sh` scripts in project root (shallow) and `scripts/` folder (recursive)
+- **GitService** (`Services/GitService.swift`) - Async git operations (modified files, branch info)
+- **OpenCodeCLIService** (`Services/OpenCodeCLIService.swift`) - OpenCode CLI wrapper for model catalog and session export
+- **UpdateManager** (`Services/UpdateManager.swift`) - Sparkle-based auto-update coordinator (UI-only, excluded from SPM)
+
+### Source Directory Structure
+
+```
+SlothyTerminal/
+├── Agents/          # AIAgent protocol + implementations (Claude, OpenCode, Terminal)
+├── App/             # AppState, AppDelegate, SlothyTerminalApp entry point
+├── Chat/            # Chat mode subsystem
+│   ├── Engine/      # State machine (ChatSessionEngine)
+│   ├── Models/      # ChatMessage, ChatConversation, ToolInput
+│   ├── OpenCode/    # OpenCode stream events, parser, mapper, transport
+│   ├── Parser/      # Claude stream-json event parser
+│   ├── State/       # ChatState (view-facing coordinator)
+│   ├── Storage/     # Snapshot persistence (ChatSessionStore)
+│   ├── Transport/   # ChatTransport protocol + ClaudeCLITransport
+│   └── Views/       # Chat UI (messages, markdown, tools, composer)
+├── Injection/       # Terminal input injection (models, orchestrator, registry)
+├── Models/          # Tab, Workspace, AppConfig, AgentType, UsageStats
+├── Services/        # ConfigManager, GitService, StatsParser, etc.
+├── Telegram/        # Telegram bot (API, relay, runtime, models)
+├── Terminal/        # GhosttyApp singleton + GhosttySurfaceView
+└── Views/           # SwiftUI views (main, sidebar, settings, tab bar)
+```
 
 ### Adding a New Agent (Terminal/CLI Tabs)
 
@@ -176,58 +194,28 @@ The Xcode project uses `PBXFileSystemSynchronizedRootGroup` — it auto-discover
 
 ## Terminal Environment Variables
 
-When launching terminal sessions, the following environment variables **must** be set to ensure proper shell behavior (cursor movement, line clearing, color support):
+Terminal sessions **must** set `TERM=xterm-256color`, `COLORTERM=truecolor`, `TERM_PROGRAM=SlothyTerminal`, and `TERM_PROGRAM_VERSION` — without these, shells launched from Finder mishandle escape sequences (cursor, colors, line clearing).
 
-- `TERM=xterm-256color` - Tells shell/programs the terminal type for proper escape sequence handling
-- `COLORTERM=truecolor` - Indicates 24-bit color support
-- `TERM_PROGRAM=SlothyTerminal` - Identifies the terminal emulator
-- `TERM_PROGRAM_VERSION` - Version identifier
-
-**Why this matters:** When launched from Finder (not a terminal parent process), `ProcessInfo.processInfo.environment` won't contain these variables. Without them, shells like zsh with fancy prompts (e.g., mathiasbynens/dotfiles) won't properly handle escape sequences like carriage return (`\r`) and clear-line (`\x1b[K`), causing prompt segments to appear on new lines instead of redrawing in place.
-
-These are set in:
-- `TerminalView.makeLaunchEnvironment()` - Primary terminal view (also sets `TERM_PROGRAM` / `TERM_PROGRAM_VERSION`)
-- `TerminalAgent.environmentVariables` - Plain terminal agent
-- `ClaudeAgent.environmentVariables` / `OpenCodeAgent.environmentVariables` - AI agent tabs
+Set in: `TerminalView.makeLaunchEnvironment()`, `TerminalAgent.environmentVariables`, `ClaudeAgent.environmentVariables`, `OpenCodeAgent.environmentVariables`.
 
 ## Injection Subsystem
 
-Programmatic input injection into live terminal surfaces, available for UI/Telegram/external API use.
+Programmatic input injection into live terminal surfaces (`Injection/`). `AppState` exposes `inject(_:)`, `cancelInjection(id:)`, and `listInjectableTabs()`. `GhosttySurfaceView` registers/unregisters itself with `TerminalSurfaceRegistry` on create/destroy.
 
-- **InjectionPayload** (`Injection/Models/InjectionPayload.swift`) - Content types: `.command`, `.text`, `.paste`, `.control`, `.key`
-- **InjectionRequest** (`Injection/Models/InjectionRequest.swift`) - Request envelope with target, origin, status, timeout
-- **InjectionTarget** (`Injection/Models/InjectionTarget.swift`) - `.activeTab`, `.tabId(UUID)`, `.filtered(agentType:mode:)`
-- **InjectionOrchestrator** (`Injection/Orchestrator/InjectionOrchestrator.swift`) - Per-tab FIFO queues, timeout handling, "worst wins" status escalation
-- **TerminalSurfaceRegistry** (`Injection/Registry/TerminalSurfaceRegistry.swift`) - Weak-ref map of tab IDs to live `InjectableSurface` instances (GhosttySurfaceView)
-- **InjectionTabProvider** (protocol in `InjectionOrchestrator.swift`) - Tab lookup abstraction; `AppState` conforms
-- **InjectionEvent** / **InjectionResult** - Observable lifecycle events and per-tab outcome models
-
-`AppState` exposes `inject(_:)`, `cancelInjection(id:)`, and `listInjectableTabs()` for callers. `GhosttySurfaceView` registers/unregisters itself with `TerminalSurfaceRegistry` on create/destroy.
+Key types: `InjectionPayload` (`.command`, `.text`, `.paste`, `.control`, `.key`), `InjectionRequest` (envelope with target + origin), `InjectionTarget` (`.activeTab`, `.tabId(UUID)`, `.filtered()`), `InjectionOrchestrator` (per-tab FIFO queues). `AppState` conforms to `InjectionTabProvider`.
 
 ### Sidebar Injection Pattern
 
-When a sidebar view needs to insert text into the active terminal, follow the pattern from `PromptsSidebarView`:
-1. Check `activeTerminalIsInjectable()` — validates active tab is `.terminal` mode with a registered surface in `TerminalSurfaceRegistry`
+Follow `PromptsSidebarView` when injecting from sidebar:
+1. Check `activeTerminalIsInjectable()` — validates `.terminal` mode tab with registered surface
 2. Build `InjectionRequest(payload:target:.activeTab, origin:.ui)`
-3. Call `appState.inject(request)` and handle status result
-4. Show status feedback via `showStatus(_:isError:)` with auto-dismiss timer
+3. Call `appState.inject(request)` and show status feedback
 
-Payload choice: `.text()` for raw insertion without newline, `.paste(_:mode:.bracketed)` for multi-line content, `.command(_:submit:.insert)` for command without execution.
+Payload choice: `.text()` raw insertion, `.paste(_:mode:.bracketed)` multi-line, `.command(_:submit:.insert)` command without execution.
 
 ## Telegram Bot Subsystem
 
-The Telegram bot runs as a sidebar panel (`.telegram` in `SidebarTab`). Runtime is owned by `AppState.telegramRuntime`, decoupled via the `TelegramBotDelegate` protocol.
-
-- **TelegramBotRuntime** (`Telegram/Runtime/TelegramBotRuntime.swift`) - Long-poll loop, message dispatch, relay orchestration
-- **TelegramCommandHandler** (`Telegram/Runtime/TelegramCommandHandler.swift`) - Slash command parsing and execution
-- **TelegramBotAPIClient** (`Telegram/API/TelegramBotAPIClient.swift`) - Telegram Bot API HTTP client
-- **TelegramMessageChunker** (`Telegram/API/TelegramMessageChunker.swift`) - Splits long messages for Telegram's size limits
-- **TelegramRelaySession** (`Telegram/Relay/TelegramRelaySession.swift`) - Relay session state and `TelegramRelayTabInfo` model
-- **TerminalOutputPoller** (`Telegram/Relay/TerminalOutputPoller.swift`) - Polls terminal surface for output during relay
-- **ANSIStripper** (`Telegram/Relay/ANSIStripper.swift`) - Strips ANSI escape codes from terminal output
-- **TelegramBotDelegate** (protocol in `Telegram/Models/TelegramModels.swift`) - Decouples runtime from AppState
-- Settings UI in `Views/Settings/TelegramSettingsTab.swift`
-- Sidebar UI in `Views/Telegram/TelegramSidebarView.swift`
+Sidebar panel (`.telegram` in `SidebarTab`). Runtime owned by `AppState.telegramRuntime`, decoupled via `TelegramBotDelegate` protocol. Code in `Telegram/` (API client, runtime, relay, models). Settings in `Views/Settings/TelegramSettingsTab.swift`, sidebar in `Views/Telegram/TelegramSidebarView.swift`.
 
 ### Telegram Plain Text Routing
 
@@ -236,4 +224,15 @@ When the bot receives plain text (non-slash-command):
 2. **Relay fallback** — inject into the active relay session tab (if started via `/relay_start`)
 3. **Error reply** — no eligible target; no headless execution for plain text
 
-Slash commands are handled by the bot runtime and command handler.
+Slash commands are handled by `TelegramCommandHandler`.
+
+## Testing
+
+```bash
+swift test    # Runs all SPM tests (chat engine, parsers, transport, models)
+```
+
+- **SPM-testable**: Everything in `Package.swift` `sources:` list — engine, parsers, transports, models, services
+- **UI-only** (Xcode only): Views, GhosttyApp, GhosttySurfaceView, UpdateManager, ExternalAppManager
+- Test target auto-discovers files in `SlothyTerminalTests/` — no manual list needed for new tests
+- Use `MockChatTransport` for engine/state tests without real CLI processes
