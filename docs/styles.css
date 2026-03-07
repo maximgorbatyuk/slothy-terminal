@@ -355,6 +355,39 @@ body {
   margin-top: 8px;
 }
 
+.hero-workflow {
+  margin-top: 28px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.workflow-pill {
+  text-align: left;
+  padding: 14px 16px;
+  border-radius: 14px;
+  border: var(--card-border);
+  background:
+    linear-gradient(180deg, rgba(56, 189, 248, 0.08), rgba(34, 211, 238, 0.02)),
+    var(--bg-secondary);
+  box-shadow: 0 10px 30px rgba(2, 8, 23, 0.14);
+}
+
+.workflow-label {
+  display: block;
+  font-size: 0.78rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--accent-primary);
+  margin-bottom: 4px;
+}
+
+.workflow-value {
+  display: block;
+  font-size: 0.95rem;
+  color: var(--text-primary);
+}
+
 .platform-badge {
   display: inline-flex;
   align-items: center;
@@ -896,6 +929,11 @@ body {
   .hero-actions {
     flex-direction: column;
     align-items: center;
+  }
+
+  .hero-workflow {
+    grid-template-columns: 1fr;
+    margin-top: 24px;
   }
 
   .btn {

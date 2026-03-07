@@ -6,13 +6,13 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Slothy Terminal — Take it slow, ship it fast</title>
   <meta name="description"
-    content="A native macOS terminal for AI coding assistants. GPU-accelerated terminal via libghostty, background task queue, and tabbed sessions for Claude CLI and OpenCode.">
+    content="A native macOS terminal for AI coding assistants. GPU-accelerated via libghostty, with workspaces, automation sidebars, prompts, and tabbed sessions for Claude CLI and OpenCode.">
   <meta name="theme-color" content="#0F172A">
 
   <!-- Open Graph -->
   <meta property="og:title" content="Slothy Terminal">
   <meta property="og:description"
-    content="Take it slow, ship it fast. GPU-accelerated macOS terminal for AI coding assistants with background task queue.">
+    content="Take it slow, ship it fast. GPU-accelerated macOS terminal for AI coding assistants with workspaces, prompts, and automation sidebars.">
   <meta property="og:image" content="assets/SlothyTerminalIcon.jpg">
   <meta property="og:type" content="website">
 
@@ -85,7 +85,7 @@
         A GPU-accelerated macOS terminal for AI coding assistants.<br>
         Powered by <a href="https://github.com/ghostty-org/ghostty" target="_blank" rel="noopener"
           style="color: var(--accent-primary); text-decoration: none;">libghostty</a> with Metal rendering,
-        background task queue, and tabbed sessions.
+        workspace-aware tabs, automation sidebars, and native chat sessions.
       </p>
       <div class="hero-actions">
         <a href="#install" class="btn btn-primary">
@@ -110,6 +110,25 @@
           macOS 15.0+ &middot; Apple Silicon
         </span>
       </p>
+
+      <div class="hero-workflow" aria-label="Core workflow highlights">
+        <div class="workflow-pill">
+          <span class="workflow-label">Workspaces</span>
+          <span class="workflow-value">project-scoped tabs</span>
+        </div>
+        <div class="workflow-pill">
+          <span class="workflow-label">Automation</span>
+          <span class="workflow-value">scripts + prompt paste</span>
+        </div>
+        <div class="workflow-pill">
+          <span class="workflow-label">Awareness</span>
+          <span class="workflow-value">docs + activity badges</span>
+        </div>
+        <div class="workflow-pill">
+          <span class="workflow-label">Telegram</span>
+          <span class="workflow-value">relay terminal output</span>
+        </div>
+      </div>
     </div>
     <div class="hero-decoration">
       <div class="floating-terminal">
@@ -153,20 +172,17 @@
 
         <div class="feature-card">
           <div class="feature-icon">
-            <!-- Queue/list icon -->
+            <!-- Workspace/layout icon -->
             <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-              <line x1="8" y1="6" x2="21" y2="6"></line>
-              <line x1="8" y1="12" x2="21" y2="12"></line>
-              <line x1="8" y1="18" x2="21" y2="18"></line>
-              <line x1="3" y1="6" x2="3.01" y2="6"></line>
-              <line x1="3" y1="12" x2="3.01" y2="12"></line>
-              <line x1="3" y1="18" x2="3.01" y2="18"></line>
+              <rect x="3" y="4" width="8" height="7" rx="1"></rect>
+              <rect x="13" y="4" width="8" height="7" rx="1"></rect>
+              <rect x="3" y="13" width="18" height="7" rx="1"></rect>
             </svg>
           </div>
-          <h3 class="feature-title">Background Task Queue</h3>
+          <h3 class="feature-title">Workspace-Aware Navigation</h3>
           <p class="feature-description">
-            Queue AI prompts for headless execution without occupying a chat tab. Priority scheduling,
-            auto-retry with exponential backoff, live log streaming, and crash recovery built in.
+            Group tabs by project root, switch between workspaces without losing running sessions,
+            and keep the tab bar scoped to the project you are actively working on.
           </p>
         </div>
 
@@ -187,17 +203,20 @@
 
         <div class="feature-card">
           <div class="feature-icon">
-            <!-- Shield icon -->
+            <!-- Wand/automation icon -->
             <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+              <path d="M7 21l10-10"></path>
+              <path d="M14 4l1.5-1.5"></path>
+              <path d="M18 8l1.5-1.5"></path>
+              <path d="M3 17l4 4"></path>
+              <path d="M5 5l.5 1.5L7 7l-1.5.5L5 9l-.5-1.5L3 7l1.5-.5L5 5z"></path>
+              <path d="M19 13l.5 1.5L21 15l-1.5.5L19 17l-.5-1.5L17 15l1.5-.5L19 13z"></path>
             </svg>
           </div>
-          <h3 class="feature-title">Risky Tool Detection</h3>
+          <h3 class="feature-title">Automation Sidebar</h3>
           <p class="feature-description">
-            Background tasks are scanned for dangerous operations like <code style="font-family: var(--font-mono); font-size: 0.85em;">git push</code>,
-            <code style="font-family: var(--font-mono); font-size: 0.85em;">rm -rf</code>, or writing to
-            <code style="font-family: var(--font-mono); font-size: 0.85em;">.env</code> files. Risky tasks
-            pause the queue for your approval.
+            Scan the project root and <code style="font-family: var(--font-mono); font-size: 0.85em;">scripts/</code>
+            folder for Python and shell scripts, then insert relative paths straight into the active terminal.
           </p>
         </div>
 
@@ -218,17 +237,35 @@
 
         <div class="feature-card">
           <div class="feature-icon">
-            <!-- Message question icon -->
+            <!-- Sidebar/tools icon -->
             <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
-              <line x1="12" y1="8" x2="12" y2="12"></line>
-              <line x1="12" y1="16" x2="12.01" y2="16"></line>
+              <rect x="3" y="4" width="18" height="16" rx="2"></rect>
+              <line x1="9" y1="4" x2="9" y2="20"></line>
+              <line x1="13" y1="8" x2="18" y2="8"></line>
+              <line x1="13" y1="12" x2="18" y2="12"></line>
+              <line x1="13" y1="16" x2="16" y2="16"></line>
             </svg>
           </div>
-          <h3 class="feature-title">Ask Mode &amp; Smart Routing</h3>
+          <h3 class="feature-title">Prompts, Docs, and Activity Signals</h3>
           <p class="feature-description">
-            OpenCode Ask Mode instructs the agent to clarify requirements before coding.
-            Smart Claude CLI path resolution prefers native Mach-O binaries over Node.js wrappers.
+            Paste saved prompts from the sidebar, keep project docs like <code style="font-family: var(--font-mono); font-size: 0.85em;">README.md</code>
+            and <code style="font-family: var(--font-mono); font-size: 0.85em;">CLAUDE.md</code> close at hand,
+            and spot unseen terminal output with activity badges on inactive tabs.
+          </p>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon">
+            <!-- Telegram/relay icon -->
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+              <path d="M21 3L3 10l7 2 2 7 9-16z"></path>
+              <path d="M10 12l4 4"></path>
+            </svg>
+          </div>
+          <h3 class="feature-title">Telegram Relay Sidebar</h3>
+          <p class="feature-description">
+            Run Telegram as a sidebar service, relay messages into Claude or OpenCode terminal tabs,
+            and stream terminal output back without dedicating a full app tab to the bot.
           </p>
         </div>
       </div>
@@ -247,23 +284,23 @@
           <div class="carousel-track">
             <div class="carousel-slide active">
               <img src="assets/main_window.png" alt="Slothy Terminal main window" class="carousel-img">
-              <p class="carousel-caption">Main window with tab selector</p>
+              <p class="carousel-caption">Main window with workspace-scoped tabs and sidebar navigation</p>
             </div>
             <div class="carousel-slide">
               <img src="assets/claude.png" alt="Claude AI assistant session" class="carousel-img">
-              <p class="carousel-caption">Claude CLI session</p>
+              <p class="carousel-caption">Claude terminal session inside the native app shell</p>
             </div>
             <div class="carousel-slide">
               <img src="assets/opencode.png" alt="OpenCode session" class="carousel-img">
-              <p class="carousel-caption">OpenCode session</p>
+              <p class="carousel-caption">OpenCode session with the same shared workspace workflow</p>
             </div>
             <div class="carousel-slide">
               <img src="assets/open_new_tab.png" alt="Opening a new tab" class="carousel-img">
-              <p class="carousel-caption">New tab options</p>
+              <p class="carousel-caption">Start new sessions for terminal or chat workflows</p>
             </div>
             <div class="carousel-slide">
               <img src="assets/select_working_folder.png" alt="Selecting working folder" class="carousel-img">
-              <p class="carousel-caption">Select working folder</p>
+              <p class="carousel-caption">Choose the project folder that anchors a workspace</p>
             </div>
           </div>
         </div>
