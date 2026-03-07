@@ -69,11 +69,11 @@ struct TelegramSettingsTab: View {
 
       Section("Behavior") {
         Toggle(
-          "Auto-start when tab opens",
+          "Auto-start when Telegram sidebar opens",
           isOn: Bindable(configManager).config.telegramAutoStartOnOpen
         )
 
-        Text("Bot always starts in Listen Only mode. Switch to Execute mode manually.")
+        Text("Bot always executes non-command messages. Slash commands (starting with /) are handled as bot commands.")
           .font(.caption)
           .foregroundColor(.secondary)
 

@@ -120,7 +120,7 @@ struct StartupPageView: View {
       startButton
         .padding(20)
     }
-    .frame(width: 440)
+    .frame(width: 560)
     .fixedSize(horizontal: false, vertical: true)
     .background(appBackgroundColor)
     .task(id: selectedLaunchType) {
@@ -218,7 +218,7 @@ struct StartupPageView: View {
   // MARK: - Launch Type Picker
 
   private var launchTypePicker: some View {
-    VStack(alignment: .leading, spacing: 8) {
+    VStack(alignment: .leading, spacing: 12) {
       Text("LAUNCH TYPE")
         .font(.system(size: 10, weight: .semibold))
         .foregroundColor(.secondary)
@@ -231,55 +231,82 @@ struct StartupPageView: View {
             selectedLaunchType = launchType
             configManager.config.lastUsedLaunchType = launchType
           } label: {
-            HStack {
-              Label(launchType.displayName, systemImage: launchType.iconName)
+            HStack(spacing: 10) {
+              Image(systemName: launchType.iconName)
+                .font(.system(size: 14, weight: .semibold))
+                .frame(width: 18)
+
+              VStack(alignment: .leading, spacing: 2) {
+                Text(launchType.displayName)
+                  .font(.system(size: 12, weight: .semibold))
+
+                Text(launchType.subtitle)
+                  .font(.system(size: 10))
+                  .foregroundColor(.secondary)
+                  .lineLimit(1)
+              }
 
               if !available {
                 Text(unavailabilityHint(for: launchType))
+                  .font(.system(size: 10, weight: .medium))
+                  .foregroundColor(.orange)
               }
             }
           }
           .disabled(!available)
         }
       } label: {
-        HStack(spacing: 8) {
-          Image(systemName: selectedLaunchType.iconName)
-            .font(.system(size: 14))
-            .foregroundColor(launchTypeAccentColor(selectedLaunchType))
-            .frame(width: 20)
+        VStack(alignment: .leading, spacing: 10) {
+          HStack(alignment: .top, spacing: 10) {
+            Image(systemName: selectedLaunchType.iconName)
+              .font(.system(size: 20, weight: .semibold))
+              .foregroundColor(launchTypeAccentColor(selectedLaunchType))
+              .frame(width: 28, height: 28)
 
-          VStack(alignment: .leading, spacing: 2) {
-            Text(selectedLaunchType.displayName)
-              .font(.system(size: 12, weight: .medium))
-              .foregroundColor(.primary)
+            VStack(alignment: .leading, spacing: 3) {
+              Text(selectedLaunchType.displayName)
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundColor(.primary)
+                .multilineTextAlignment(.leading)
 
-            Text(selectedLaunchType.subtitle)
-              .font(.system(size: 11))
+              Text(selectedLaunchType.subtitle)
+                .font(.system(size: 11))
+                .foregroundColor(.secondary)
+                .lineLimit(2)
+                .multilineTextAlignment(.leading)
+            }
+
+            Spacer(minLength: 0)
+
+            Image(systemName: "chevron.up.chevron.down")
+              .font(.system(size: 10, weight: .semibold))
               .foregroundColor(.secondary)
-              .lineLimit(1)
           }
-
-          Spacer()
 
           if !isLaunchTypeAvailable {
-            Text(unavailabilityHint(for: selectedLaunchType))
-              .font(.system(size: 10))
-              .foregroundColor(.orange)
-              .padding(.horizontal, 6)
-              .padding(.vertical, 2)
-              .background(Color.orange.opacity(0.1))
-              .cornerRadius(4)
-          }
+            HStack(spacing: 4) {
+              Image(systemName: "exclamationmark.triangle.fill")
+                .font(.system(size: 10))
+                .foregroundColor(.orange)
 
-          Image(systemName: "chevron.up.chevron.down")
-            .font(.system(size: 10, weight: .semibold))
-            .foregroundColor(.secondary)
+              Text(unavailabilityHint(for: selectedLaunchType))
+                .font(.system(size: 10, weight: .medium))
+                .foregroundColor(.orange)
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(Color.orange.opacity(0.1))
+            .cornerRadius(6)
+          }
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 8)
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(14)
+        .frame(maxWidth: .infinity, minHeight: 88, alignment: .leading)
         .background(appCardColor)
-        .cornerRadius(8)
+        .overlay(
+          RoundedRectangle(cornerRadius: 10)
+            .stroke(launchTypeAccentColor(selectedLaunchType).opacity(0.35), lineWidth: 1)
+        )
+        .cornerRadius(10)
       }
       .menuStyle(.borderlessButton)
       .fixedSize(horizontal: false, vertical: true)
@@ -359,14 +386,10 @@ struct StartupPageView: View {
 
   private var promptSection: some View {
     VStack(alignment: .leading, spacing: 8) {
-      if selectedLaunchType.requiresPrompt {
-        if !savedPrompts.isEmpty {
-          PromptPicker(selectedPromptID: $selectedPromptID, savedPrompts: savedPrompts)
-        } else {
-          disabledPromptHint(text: "No saved prompts. Create prompts in Settings.")
-        }
+      if !savedPrompts.isEmpty {
+        PromptPicker(selectedPromptID: $selectedPromptID, savedPrompts: savedPrompts)
       } else {
-        disabledPromptHint(text: "Telegram Bot does not use predefined prompts")
+        disabledPromptHint(text: "No saved prompts. Create prompts in Settings.")
       }
     }
   }
@@ -461,8 +484,6 @@ struct StartupPageView: View {
     case .opencodeChat:
       appState.createChatTab(agent: .opencode, directory: directory, initialPrompt: prompt?.promptText)
 
-    case .telegramBot:
-      appState.createTelegramBotTab(directory: directory)
     }
 
     dismiss()
@@ -480,10 +501,6 @@ struct StartupPageView: View {
 
     case .opencode, .opencodeChat:
       return AgentFactory.createAgent(for: .opencode).isAvailable()
-
-    case .telegramBot:
-      let config = configManager.config
-      return config.telegramBotToken != nil && config.telegramAllowedUserID != nil
     }
   }
 
@@ -494,9 +511,6 @@ struct StartupPageView: View {
 
     case .claude, .opencode, .claudeChat, .opencodeChat:
       return "CLI not found"
-
-    case .telegramBot:
-      return "Not configured"
     }
   }
 
@@ -510,9 +524,6 @@ struct StartupPageView: View {
 
     case .opencode, .opencodeChat:
       return Color(red: 0.29, green: 0.78, blue: 0.49)
-
-    case .telegramBot:
-      return Color(red: 0.33, green: 0.67, blue: 0.91)
     }
   }
 }

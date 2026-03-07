@@ -7,16 +7,16 @@ struct TerminalContainerView: View {
 
   var body: some View {
     ZStack {
-      if appState.tabs.isEmpty {
+      if appState.visibleTabs.isEmpty {
         EmptyTerminalView()
-      } else {
-        /// Render all terminal views but only show the active one.
-        /// This keeps sessions alive when switching between tabs.
-        ForEach(appState.tabs) { tab in
-          ActiveTerminalView(tab: tab, isActive: tab.id == appState.activeTabID)
-            .opacity(tab.id == appState.activeTabID ? 1 : 0)
-            .allowsHitTesting(tab.id == appState.activeTabID)
-        }
+      }
+
+      /// Render all terminal views but only show the active one.
+      /// This keeps sessions alive when switching between tabs and workspaces.
+      ForEach(appState.tabs) { tab in
+        ActiveTerminalView(tab: tab, isActive: tab.id == appState.activeTabID)
+          .opacity(tab.id == appState.activeTabID ? 1 : 0)
+          .allowsHitTesting(tab.id == appState.activeTabID)
       }
     }
   }
@@ -33,9 +33,7 @@ struct ActiveTerminalView: View {
     ZStack {
       appCardColor
 
-      if tab.mode == .telegramBot, let runtime = tab.telegramRuntime {
-        TelegramBotView(runtime: runtime)
-      } else if tab.mode == .chat, let chatState = tab.chatState {
+      if tab.mode == .chat, let chatState = tab.chatState {
         ChatView(chatState: chatState)
       } else if let error = agentUnavailableError {
         AgentUnavailableView(agentName: tab.agent.displayName, error: error)
@@ -46,6 +44,7 @@ struct ActiveTerminalView: View {
           command: tab.command,
           arguments: tab.arguments,
           environment: tab.environment,
+          tabId: tab.id,
           shouldAutoRunCommand: tab.agentType.showsUsageStats,
           isActive: isActive,
           onDirectoryChanged: { newDirectory in
@@ -59,6 +58,9 @@ struct ActiveTerminalView: View {
           },
           onClosed: {
             tab.markTerminalIdle()
+          },
+          onBackgroundActivity: {
+            tab.markBackgroundActivity()
           }
         )
         .environment(\.colorScheme, .dark)
@@ -68,14 +70,6 @@ struct ActiveTerminalView: View {
       }
     }
     .task {
-      /// Telegram bot mode auto-start.
-      if tab.mode == .telegramBot {
-        if ConfigManager.shared.config.telegramAutoStartOnOpen {
-          tab.telegramRuntime?.start()
-        }
-        return
-      }
-
       /// Chat mode doesn't need PTY availability checks.
       if tab.mode == .chat {
         tab.usageStats.startSession()

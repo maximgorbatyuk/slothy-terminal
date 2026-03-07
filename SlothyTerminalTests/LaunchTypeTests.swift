@@ -7,7 +7,7 @@ final class LaunchTypeTests: XCTestCase {
   // MARK: - Metadata Tests
 
   func testAllCasesCount() {
-    XCTAssertEqual(LaunchType.allCases.count, 6)
+    XCTAssertEqual(LaunchType.allCases.count, 5)
   }
 
   func testDisplayNames() {
@@ -16,7 +16,6 @@ final class LaunchTypeTests: XCTestCase {
     XCTAssertEqual(LaunchType.opencode.displayName, "opencode")
     XCTAssertEqual(LaunchType.claudeChat.displayName, "Claude Chat")
     XCTAssertEqual(LaunchType.opencodeChat.displayName, "OpenCode Chat")
-    XCTAssertEqual(LaunchType.telegramBot.displayName, "Telegram Bot")
   }
 
   func testSubtitlesAreNonEmpty() {
@@ -43,7 +42,6 @@ final class LaunchTypeTests: XCTestCase {
     XCTAssertTrue(LaunchType.opencode.requiresPrompt)
     XCTAssertTrue(LaunchType.claudeChat.requiresPrompt)
     XCTAssertTrue(LaunchType.opencodeChat.requiresPrompt)
-    XCTAssertFalse(LaunchType.telegramBot.requiresPrompt)
   }
 
   func testRequiresPredefinedPrompt() {
@@ -52,7 +50,6 @@ final class LaunchTypeTests: XCTestCase {
     XCTAssertFalse(LaunchType.opencode.requiresPredefinedPrompt)
     XCTAssertFalse(LaunchType.claudeChat.requiresPredefinedPrompt)
     XCTAssertFalse(LaunchType.opencodeChat.requiresPredefinedPrompt)
-    XCTAssertFalse(LaunchType.telegramBot.requiresPredefinedPrompt)
   }
 
   func testAgentTypeMapping() {
@@ -61,7 +58,6 @@ final class LaunchTypeTests: XCTestCase {
     XCTAssertEqual(LaunchType.opencode.agentType, .opencode)
     XCTAssertEqual(LaunchType.claudeChat.agentType, .claude)
     XCTAssertEqual(LaunchType.opencodeChat.agentType, .opencode)
-    XCTAssertNil(LaunchType.telegramBot.agentType)
   }
 
   func testIdentifiable() {
@@ -86,7 +82,6 @@ final class LaunchTypeTests: XCTestCase {
     XCTAssertEqual(LaunchType.opencode.rawValue, "opencode")
     XCTAssertEqual(LaunchType.claudeChat.rawValue, "claudeChat")
     XCTAssertEqual(LaunchType.opencodeChat.rawValue, "opencodeChat")
-    XCTAssertEqual(LaunchType.telegramBot.rawValue, "telegramBot")
   }
 
   // MARK: - Config Persistence Tests

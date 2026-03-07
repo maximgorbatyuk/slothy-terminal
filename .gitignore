@@ -25,6 +25,9 @@ sparkle-tools/
 *.xcscmblueprint
 *.xccheckout
 
+# Claude Code local overrides
+.claude.local.md
+
 # Swift Package Manager
 .build/
 .swiftpm/

@@ -39,6 +39,18 @@ class GhosttySurfaceView: NSView, NSTextInputClient {
   var onCommandEntered: (() -> Void)?
   var onCommandFinished: (() -> Void)?
   var onClosed: (() -> Void)?
+  var onBackgroundActivity: (() -> Void)?
+
+  /// Set on each GHOSTTY_ACTION_RENDER, cleared by poller after reading.
+  private(set) var hasNewRenderSinceLastRead = false
+
+  private var isTabActive = true
+  private var lastViewportSnapshot = ""
+  private var activityDetectionWorkItem: DispatchWorkItem?
+  private var lastUserInputAt: Date = .distantPast
+
+  private let activityDetectionDelay: TimeInterval = 0.12
+  private let userInputSuppressionInterval: TimeInterval = 0.4
 
   // MARK: - Initialization
 
@@ -340,6 +352,16 @@ class GhosttySurfaceView: NSView, NSTextInputClient {
     ghostty_surface_set_focus(surface, focused)
   }
 
+  func setTabActive(_ isActive: Bool) {
+    guard isTabActive != isActive else {
+      return
+    }
+
+    isTabActive = isActive
+    activityDetectionWorkItem?.cancel()
+    refreshViewportSnapshot()
+  }
+
   override func becomeFirstResponder() -> Bool {
     let result = super.becomeFirstResponder()
     if result {
@@ -395,6 +417,8 @@ class GhosttySurfaceView: NSView, NSTextInputClient {
   // MARK: - Keyboard Input
 
   override func keyDown(with event: NSEvent) {
+    noteUserInput()
+
     guard surface != nil else {
       self.interpretKeyEvents([event])
       return
@@ -473,6 +497,10 @@ class GhosttySurfaceView: NSView, NSTextInputClient {
       return super.performKeyEquivalent(with: event)
     }
 
+    guard window?.firstResponder === self else {
+      return super.performKeyEquivalent(with: event)
+    }
+
     /// Check if Ghostty considers this a binding.
     var keyEvent = Self.makeKeyEvent(GHOSTTY_ACTION_PRESS, event: event)
     var flags: ghostty_binding_flags_e = .init(0)
@@ -508,6 +536,8 @@ class GhosttySurfaceView: NSView, NSTextInputClient {
       }
 
       if chars == "v" {
+        noteUserInput()
+
         /// Paste from clipboard via ghostty binding action.
         let action = "paste_from_clipboard"
         _ = ghostty_surface_binding_action(surface, action, UInt(action.count))
@@ -630,6 +660,10 @@ class GhosttySurfaceView: NSView, NSTextInputClient {
       return
     }
 
+    if window?.firstResponder !== self {
+      window?.makeFirstResponder(self)
+    }
+
     let mods = Self.ghosttyMods(event.modifierFlags)
     _ = ghostty_surface_mouse_button(surface, GHOSTTY_MOUSE_PRESS, GHOSTTY_MOUSE_LEFT, mods)
   }
@@ -648,6 +682,10 @@ class GhosttySurfaceView: NSView, NSTextInputClient {
     guard let surface else {
       super.rightMouseDown(with: event)
       return
+    }
+
+    if window?.firstResponder !== self {
+      window?.makeFirstResponder(self)
     }
 
     let mods = Self.ghosttyMods(event.modifierFlags)
@@ -672,6 +710,10 @@ class GhosttySurfaceView: NSView, NSTextInputClient {
     guard let surface else {
       super.otherMouseDown(with: event)
       return
+    }
+
+    if window?.firstResponder !== self {
+      window?.makeFirstResponder(self)
     }
 
     let mods = Self.ghosttyMods(event.modifierFlags)
@@ -781,6 +823,8 @@ class GhosttySurfaceView: NSView, NSTextInputClient {
       return
     }
 
+    noteUserInput()
+
     str.withCString { ptr in
       ghostty_surface_text(surface, ptr, UInt(str.utf8.count))
     }
@@ -871,6 +915,194 @@ class GhosttySurfaceView: NSView, NSTextInputClient {
 
   func characterIndex(for point: NSPoint) -> Int {
     NSNotFound
+  }
+}
+
+// MARK: - InjectableSurface
+
+extension GhosttySurfaceView: InjectableSurface {
+  func injectText(_ text: String) -> Bool {
+    guard let surface else {
+      return false
+    }
+
+    noteUserInput()
+
+    return text.withCString { ptr in
+      ghostty_surface_text(surface, ptr, UInt(text.utf8.count))
+      return true
+    }
+  }
+
+  func injectCommand(_ command: String, submit: CommandSubmitMode) -> Bool {
+    guard surface != nil else {
+      return false
+    }
+
+    guard injectText(command) else {
+      return false
+    }
+
+    if submit == .execute {
+      return injectText("\r")
+    }
+
+    return true
+  }
+
+  func injectPaste(_ text: String, mode: PasteMode) -> Bool {
+    guard surface != nil else {
+      return false
+    }
+
+    switch mode {
+    case .bracketed:
+      // Send bracketed paste escape sequences directly to the PTY,
+      // avoiding any system clipboard manipulation.
+      let bracketedText = "\u{1b}[200~" + text + "\u{1b}[201~"
+      return injectText(bracketedText)
+
+    case .plain:
+      return injectText(text)
+    }
+  }
+
+  func injectControl(_ signal: ControlSignal) -> Bool {
+    guard let surface else {
+      return false
+    }
+
+    var cchar = CChar(bitPattern: signal.asciiValue)
+    return withUnsafePointer(to: &cchar) { ptr in
+      ghostty_surface_text(surface, ptr, 1)
+      return true
+    }
+  }
+
+  func injectKey(keyCode: UInt32, modifiers: UInt32) -> Bool {
+    guard let surface else {
+      return false
+    }
+
+    var keyEvent = ghostty_input_key_s()
+    keyEvent.action = GHOSTTY_ACTION_PRESS
+    keyEvent.keycode = keyCode
+    keyEvent.mods = ghostty_input_mods_e(modifiers)
+    keyEvent.text = nil
+    keyEvent.composing = false
+    _ = ghostty_surface_key(surface, keyEvent)
+
+    keyEvent.action = GHOSTTY_ACTION_RELEASE
+    _ = ghostty_surface_key(surface, keyEvent)
+
+    return true
+  }
+}
+
+// MARK: - Viewport Reading & Render Dirty Flag
+
+extension GhosttySurfaceView {
+  /// Reads the full visible viewport text from the terminal surface.
+  func readViewportText() -> String? {
+    guard let surface else {
+      return nil
+    }
+
+    let size = ghostty_surface_size(surface)
+
+    guard size.columns > 0, size.rows > 0 else {
+      return nil
+    }
+
+    var sel = ghostty_selection_s()
+    sel.top_left = ghostty_point_s(
+      tag: GHOSTTY_POINT_VIEWPORT,
+      coord: GHOSTTY_POINT_COORD_TOP_LEFT,
+      x: 0,
+      y: 0
+    )
+    sel.bottom_right = ghostty_point_s(
+      tag: GHOSTTY_POINT_VIEWPORT,
+      coord: GHOSTTY_POINT_COORD_BOTTOM_RIGHT,
+      x: UInt32(size.columns - 1),
+      y: UInt32(size.rows - 1)
+    )
+    sel.rectangle = false
+
+    var text = ghostty_text_s()
+
+    guard ghostty_surface_read_text(surface, sel, &text) else {
+      return nil
+    }
+
+    defer { ghostty_surface_free_text(surface, &text) }
+
+    guard let ptr = text.text, text.text_len > 0 else {
+      return nil
+    }
+
+    return String(
+      bytes: UnsafeRawBufferPointer(start: ptr, count: Int(text.text_len)),
+      encoding: .utf8
+    )
+  }
+
+  /// Called from GhosttyApp action callback on GHOSTTY_ACTION_RENDER.
+  func markRenderDirty() {
+    hasNewRenderSinceLastRead = true
+    scheduleBackgroundActivityDetection()
+  }
+
+  /// Clears the dirty flag after a viewport read.
+  func clearRenderDirty() {
+    hasNewRenderSinceLastRead = false
+  }
+
+  private func noteUserInput() {
+    lastUserInputAt = Date()
+  }
+
+  private func scheduleBackgroundActivityDetection() {
+    activityDetectionWorkItem?.cancel()
+
+    let workItem = DispatchWorkItem { [weak self] in
+      self?.detectBackgroundActivityIfNeeded()
+    }
+
+    activityDetectionWorkItem = workItem
+    DispatchQueue.main.asyncAfter(deadline: .now() + activityDetectionDelay, execute: workItem)
+  }
+
+  private func detectBackgroundActivityIfNeeded() {
+    guard let text = readViewportText() else {
+      return
+    }
+
+    let snapshot = ANSIStripper.strip(text)
+
+    guard snapshot != lastViewportSnapshot else {
+      return
+    }
+
+    lastViewportSnapshot = snapshot
+
+    guard !isTabActive else {
+      return
+    }
+
+    guard Date().timeIntervalSince(lastUserInputAt) > userInputSuppressionInterval else {
+      return
+    }
+
+    onBackgroundActivity?()
+  }
+
+  private func refreshViewportSnapshot() {
+    guard let text = readViewportText() else {
+      return
+    }
+
+    lastViewportSnapshot = ANSIStripper.strip(text)
   }
 }
 

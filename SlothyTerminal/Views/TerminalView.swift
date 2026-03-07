@@ -8,6 +8,9 @@ struct GhosttyTerminalViewRepresentable: NSViewRepresentable {
   let arguments: [String]
   let environment: [String: String]
 
+  /// Tab ID for surface registry registration.
+  let tabId: UUID
+
   /// Whether to auto-run the command after the shell starts.
   let shouldAutoRunCommand: Bool
 
@@ -26,15 +29,23 @@ struct GhosttyTerminalViewRepresentable: NSViewRepresentable {
   /// Callback when the surface is closed (process exits).
   var onClosed: (() -> Void)?
 
+  /// Callback when background terminal output is detected.
+  var onBackgroundActivity: (() -> Void)?
+
   func makeNSView(context: Context) -> GhosttySurfaceView {
     let surfaceView = GhosttySurfaceView()
     context.coordinator.surfaceView = surfaceView
+    context.coordinator.tabId = tabId
+
+    /// Register surface for injection.
+    TerminalSurfaceRegistry.shared.register(tabId: tabId, surface: surfaceView)
 
     /// Wire callbacks.
     surfaceView.onDirectoryChanged = onDirectoryChanged
     surfaceView.onCommandEntered = onCommandEntered
     surfaceView.onCommandFinished = onCommandFinished
     surfaceView.onClosed = onClosed
+    surfaceView.onBackgroundActivity = onBackgroundActivity
 
     let launchEnvironment = makeLaunchEnvironment(
       workingDirectory: workingDirectory,
@@ -64,9 +75,18 @@ struct GhosttyTerminalViewRepresentable: NSViewRepresentable {
 
   func updateNSView(_ nsView: GhosttySurfaceView, context: Context) {
     /// Update focus state when tab visibility changes.
+    nsView.setTabActive(isActive)
+
     if isActive {
       nsView.setFocused(true)
-      nsView.window?.makeFirstResponder(nsView)
+
+      if nsView.window?.firstResponder !== nsView {
+        DispatchQueue.main.async {
+          if nsView.window?.firstResponder !== nsView {
+            nsView.window?.makeFirstResponder(nsView)
+          }
+        }
+      }
     } else {
       nsView.setFocused(false)
     }
@@ -78,6 +98,7 @@ struct GhosttyTerminalViewRepresentable: NSViewRepresentable {
 
   class Coordinator {
     weak var surfaceView: GhosttySurfaceView?
+    var tabId: UUID?
   }
 
   private func makeLaunchEnvironment(
@@ -128,6 +149,9 @@ struct GhosttyTerminalViewRepresentable: NSViewRepresentable {
   }
 
   static func dismantleNSView(_ nsView: GhosttySurfaceView, coordinator: Coordinator) {
+    if let tabId = coordinator.tabId {
+      TerminalSurfaceRegistry.shared.unregister(tabId: tabId)
+    }
     nsView.destroySurface()
   }
 }
@@ -138,6 +162,9 @@ struct StandaloneTerminalView: View {
   let command: String
   let arguments: [String]
   var environment: [String: String] = [:]
+
+  /// Tab ID for surface registry registration.
+  let tabId: UUID
 
   /// Whether to auto-run the command (true for AI agents, false for plain terminal).
   var shouldAutoRunCommand: Bool = true
@@ -157,18 +184,23 @@ struct StandaloneTerminalView: View {
   /// Callback when the surface is closed.
   var onClosed: (() -> Void)? = nil
 
+  /// Callback when background terminal output is detected.
+  var onBackgroundActivity: (() -> Void)? = nil
+
   var body: some View {
     GhosttyTerminalViewRepresentable(
       workingDirectory: workingDirectory,
       command: command,
       arguments: arguments,
       environment: environment,
+      tabId: tabId,
       shouldAutoRunCommand: shouldAutoRunCommand,
       isActive: isActive,
       onDirectoryChanged: onDirectoryChanged,
       onCommandEntered: onCommandEntered,
       onCommandFinished: onCommandFinished,
-      onClosed: onClosed
+      onClosed: onClosed,
+      onBackgroundActivity: onBackgroundActivity
     )
   }
 }
@@ -178,6 +210,7 @@ struct StandaloneTerminalView: View {
     workingDirectory: FileManager.default.homeDirectoryForCurrentUser,
     command: "/bin/zsh",
     arguments: [],
+    tabId: UUID(),
     shouldAutoRunCommand: false
   )
   .frame(width: 800, height: 600)

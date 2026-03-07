@@ -10,19 +10,14 @@ SlothyTerminal is a native macOS terminal application (Swift/SwiftUI) for AI cod
 - **Language:** Swift 5.9+
 - **Build System:** Xcode 15.0+ with SPM
 
-## Project reference
-
-The app SlothyTerminal combines terminal and AI agent system like opencode and openclaw do. Source code of the apps:
-
-- opencode: `~/projects/opencode`
-- openclaw: `~/projects/openclaw`
-
-
 ## Build Commands
 
 ```bash
 # Open in Xcode (then Cmd+R to build/run)
 open SlothyTerminal.xcodeproj
+
+# Xcode CLI build (no signing — for verification without certs)
+xcodebuild -project SlothyTerminal.xcodeproj -scheme SlothyTerminal -configuration Debug build CODE_SIGNING_ALLOWED=NO
 
 # SPM build & test (chat core, parsers, engine — no UI)
 swift build
@@ -71,7 +66,7 @@ User Action → AppState.createChatTab() → Tab(mode: .chat, ChatState)
 ### Key Components
 
 - **AppState** (`App/AppState.swift`) - @Observable global state: tabs, active tab, sidebar, modals
-- **Tab** (`Models/Tab.swift`) - Session model supporting `.terminal`, `.chat`, and `.telegramBot` modes
+- **Tab** (`Models/Tab.swift`) - Session model supporting `.terminal` and `.chat` modes
 - **GhosttyApp** (`Terminal/GhosttyApp.swift`) - Process-wide singleton managing the libghostty app instance and runtime callbacks
 - **GhosttySurfaceView** (`Terminal/GhosttySurfaceView.swift`) - NSView bridge to libghostty terminal surface; handles PTY, rendering, and input
 - **AIAgent protocol** (`Agents/AIAgent.swift`) - Defines agent interface; implementations: ClaudeAgent, OpenCodeAgent, TerminalAgent
@@ -83,6 +78,34 @@ User Action → AppState.createChatTab() → Tab(mode: .chat, ChatState)
 - **ClaudeCLITransport** (`Chat/Transport/ClaudeCLITransport.swift`) - Claude stream-json process transport
 - **OpenCodeCLITransport** (`Chat/OpenCode/OpenCodeCLITransport.swift`) - OpenCode JSON event process transport
 - **ChatSessionStore** (`Chat/Storage/ChatSessionStore.swift`) - Snapshot persistence and restore for chat sessions
+- **Workspace** (`Models/Workspace.swift`) - Groups tabs under a named project directory
+- **ScriptScanner** (`Services/PythonScriptScanner.swift`) - Scans for `.py` and `.sh` scripts in project root (shallow) and `scripts/` folder (recursive)
+- **GitService** (`Services/GitService.swift`) - Async git operations (modified files, branch info)
+- **OpenCodeCLIService** (`Services/OpenCodeCLIService.swift`) - OpenCode CLI wrapper for model catalog and session export
+- **UpdateManager** (`Services/UpdateManager.swift`) - Sparkle-based auto-update coordinator (UI-only, excluded from SPM)
+
+### Source Directory Structure
+
+```
+SlothyTerminal/
+├── Agents/          # AIAgent protocol + implementations (Claude, OpenCode, Terminal)
+├── App/             # AppState, AppDelegate, SlothyTerminalApp entry point
+├── Chat/            # Chat mode subsystem
+│   ├── Engine/      # State machine (ChatSessionEngine)
+│   ├── Models/      # ChatMessage, ChatConversation, ToolInput
+│   ├── OpenCode/    # OpenCode stream events, parser, mapper, transport
+│   ├── Parser/      # Claude stream-json event parser
+│   ├── State/       # ChatState (view-facing coordinator)
+│   ├── Storage/     # Snapshot persistence (ChatSessionStore)
+│   ├── Transport/   # ChatTransport protocol + ClaudeCLITransport
+│   └── Views/       # Chat UI (messages, markdown, tools, composer)
+├── Injection/       # Terminal input injection (models, orchestrator, registry)
+├── Models/          # Tab, Workspace, AppConfig, AgentType, UsageStats
+├── Services/        # ConfigManager, GitService, StatsParser, etc.
+├── Telegram/        # Telegram bot (API, relay, runtime, models)
+├── Terminal/        # GhosttyApp singleton + GhosttySurfaceView
+└── Views/           # SwiftUI views (main, sidebar, settings, tab bar)
+```
 
 ### Adding a New Agent (Terminal/CLI Tabs)
 
@@ -90,7 +113,18 @@ User Action → AppState.createChatTab() → Tab(mode: .chat, ChatState)
 2. Implement: `command`, `defaultArgs`, `environmentVariables`, `contextWindowLimit`, `parseStats()`, `isAvailable()`
 3. Add case to `AgentType` enum
 4. Update `AgentFactory.createAgent()`
-5. Audit all exhaustive `switch` on `AgentType` — files include: `ConfigManager.swift`, `ChatComposerStatusBar.swift`, `TaskOrchestrator.swift`, `TelegramPromptExecutor.swift`
+5. Audit all exhaustive `switch` on `AgentType` — files include: `ConfigManager.swift`, `ChatComposerStatusBar.swift`
+
+### Workspace Architecture
+
+Workspaces are first-class tab containers. Each workspace maps to a project directory and owns a set of tabs.
+
+- `AppState.visibleTabs` — computed property returning only tabs from the active workspace. **All UI code must use `visibleTabs`** (tab bar, terminal container, keyboard shortcuts), not `tabs` directly.
+- `AppState.tabs` — global flat list of all tabs across all workspaces. Use only for global operations (terminate all, injection, Telegram).
+- `AppState.createWorkspace(from:)` creates an empty workspace (no tab). Creating a workspace calls `switchWorkspace(id:)` to deactivate any current tab.
+- `AppState.closeTab(id:)` selects the next tab from the **same workspace**, not globally.
+- `AppState.switchWorkspace(id:)` aligns the active tab to the target workspace (first tab, or nil if empty).
+- Empty workspaces show `EmptyTerminalView`.
 
 ## Core Architecture Notes
 
@@ -146,47 +180,59 @@ Key rules:
 - OpenCode model catalog for UI should come from `opencode models` (dynamic), not hardcoded model lists.
 - OpenCode metadata reconciliation (resolved provider/model/mode) can be refreshed from `opencode export <sessionId>`.
 
+## Xcode Project Convention
+
+The Xcode project uses `PBXFileSystemSynchronizedRootGroup` — it auto-discovers source files from the filesystem. **No manual `.pbxproj` edits are needed** when adding new Swift files. Only `Package.swift` requires manual source list updates for new non-UI files.
+
 ## Known Issues & Pitfalls
 
 - `BuildConfig` uses `fatalError()` on missing config files — should degrade gracefully
+- GhosttyApp C callback trampolines (free functions) cannot be `@MainActor`; helper methods they call must be `nonisolated`
+- To open the native Settings window programmatically, use `SettingsLink` (SwiftUI view), not `NSApp.sendAction(Selector(("showSettingsWindow:")))` — the latter logs an error on macOS 14+
+- `ModalRouter` in `MainView.swift` maps `ModalType` cases to views — keep it in sync when adding new modal types
+- `AppState.pendingSettingsSection` allows pre-selecting a `SettingsSection` tab when the native Settings window opens
 
 ## Terminal Environment Variables
 
-When launching terminal sessions, the following environment variables **must** be set to ensure proper shell behavior (cursor movement, line clearing, color support):
+Terminal sessions **must** set `TERM=xterm-256color`, `COLORTERM=truecolor`, `TERM_PROGRAM=SlothyTerminal`, and `TERM_PROGRAM_VERSION` — without these, shells launched from Finder mishandle escape sequences (cursor, colors, line clearing).
 
-- `TERM=xterm-256color` - Tells shell/programs the terminal type for proper escape sequence handling
-- `COLORTERM=truecolor` - Indicates 24-bit color support
-- `TERM_PROGRAM=SlothyTerminal` - Identifies the terminal emulator
-- `TERM_PROGRAM_VERSION` - Version identifier
+Set in: `TerminalView.makeLaunchEnvironment()`, `TerminalAgent.environmentVariables`, `ClaudeAgent.environmentVariables`, `OpenCodeAgent.environmentVariables`.
 
-**Why this matters:** When launched from Finder (not a terminal parent process), `ProcessInfo.processInfo.environment` won't contain these variables. Without them, shells like zsh with fancy prompts (e.g., mathiasbynens/dotfiles) won't properly handle escape sequences like carriage return (`\r`) and clear-line (`\x1b[K`), causing prompt segments to appear on new lines instead of redrawing in place.
+## Injection Subsystem
 
-These are set in:
-- `TerminalView.makeLaunchEnvironment()` - Primary terminal view (also sets `TERM_PROGRAM` / `TERM_PROGRAM_VERSION`)
-- `TerminalAgent.environmentVariables` - Plain terminal agent
-- `ClaudeAgent.environmentVariables` / `OpenCodeAgent.environmentVariables` - AI agent tabs
+Programmatic input injection into live terminal surfaces (`Injection/`). `AppState` exposes `inject(_:)`, `cancelInjection(id:)`, and `listInjectableTabs()`. `GhosttySurfaceView` registers/unregisters itself with `TerminalSurfaceRegistry` on create/destroy.
 
-## TaskQueue Subsystem
+Key types: `InjectionPayload` (`.command`, `.text`, `.paste`, `.control`, `.key`), `InjectionRequest` (envelope with target + origin), `InjectionTarget` (`.activeTab`, `.tabId(UUID)`, `.filtered()`), `InjectionOrchestrator` (per-tab FIFO queues). `AppState` conforms to `InjectionTabProvider`.
 
-Background task execution with preflight checks and log collection.
+### Sidebar Injection Pattern
 
-- **QueuedTask** (`TaskQueue/Models/QueuedTask.swift`) - Task model with status, prompt, agent binding
-- **TaskQueueState** (`TaskQueue/State/TaskQueueState.swift`) - @Observable queue state
-- **TaskOrchestrator** (`TaskQueue/Orchestrator/TaskOrchestrator.swift`) - Schedules and dispatches queued tasks
-- **TaskPreflight** (`TaskQueue/Orchestrator/TaskPreflight.swift`) - Pre-execution validation
-- **TaskRunner** (`TaskQueue/Runner/TaskRunner.swift`) - Protocol; implementations: `ClaudeTaskRunner`, `OpenCodeTaskRunner`
-- **RiskyToolDetector** (`TaskQueue/Runner/RiskyToolDetector.swift`) - Flags potentially destructive tool calls
-- **TaskLogCollector** (`TaskQueue/Runner/TaskLogCollector.swift`) - Captures task execution logs
-- **TaskQueueSnapshot** (`TaskQueue/Storage/TaskQueueSnapshot.swift`) - Codable snapshot models for queue state
-- **TaskQueueStore** (`TaskQueue/Storage/TaskQueueStore.swift`) - Snapshot persistence (same pattern as ChatSessionStore)
+Follow `PromptsSidebarView` when injecting from sidebar:
+1. Check `activeTerminalIsInjectable()` — validates `.terminal` mode tab with registered surface
+2. Build `InjectionRequest(payload:target:.activeTab, origin:.ui)`
+3. Call `appState.inject(request)` and show status feedback
+
+Payload choice: `.text()` raw insertion, `.paste(_:mode:.bracketed)` multi-line, `.command(_:submit:.insert)` command without execution.
 
 ## Telegram Bot Subsystem
 
-Tab mode `.telegramBot` enables a Telegram bot that relays messages to a Claude chat session.
+Sidebar panel (`.telegram` in `SidebarTab`). Runtime owned by `AppState.telegramRuntime`, decoupled via `TelegramBotDelegate` protocol. Code in `Telegram/` (API client, runtime, relay, models). Settings in `Views/Settings/TelegramSettingsTab.swift`, sidebar in `Views/Telegram/TelegramSidebarView.swift`.
 
-- **TelegramBotRuntime** (`Telegram/Runtime/TelegramBotRuntime.swift`) - Long-poll loop, message dispatch
-- **TelegramCommandHandler** (`Telegram/Runtime/TelegramCommandHandler.swift`) - Slash command parsing and execution
-- **TelegramPromptExecutor** (`Telegram/Runtime/TelegramPromptExecutor.swift`) - Bridges Telegram messages into chat engine turns
-- **TelegramBotAPIClient** (`Telegram/API/TelegramBotAPIClient.swift`) - Telegram Bot API HTTP client
-- **TelegramMessageChunker** (`Telegram/API/TelegramMessageChunker.swift`) - Splits long messages for Telegram's size limits
-- Settings UI in `Views/Settings/TelegramSettingsTab.swift`
+### Telegram Plain Text Routing
+
+When the bot receives plain text (non-slash-command):
+1. **Active AI tab** — inject into the active terminal tab if it runs Claude/OpenCode and has a registered surface
+2. **Relay fallback** — inject into the active relay session tab (if started via `/relay_start`)
+3. **Error reply** — no eligible target; no headless execution for plain text
+
+Slash commands are handled by `TelegramCommandHandler`.
+
+## Testing
+
+```bash
+swift test    # Runs all SPM tests (chat engine, parsers, transport, models)
+```
+
+- **SPM-testable**: Everything in `Package.swift` `sources:` list — engine, parsers, transports, models, services
+- **UI-only** (Xcode only): Views, GhosttyApp, GhosttySurfaceView, UpdateManager, ExternalAppManager
+- Test target auto-discovers files in `SlothyTerminalTests/` — no manual list needed for new tests
+- Use `MockChatTransport` for engine/state tests without real CLI processes

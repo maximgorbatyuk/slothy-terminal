@@ -29,6 +29,7 @@ struct SlothyTerminalApp: App {
         }
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.willTerminateNotification)) { _ in
           appState.terminateAllSessions()
+          configManager.save()
         }
     }
     .windowStyle(.titleBar)
@@ -62,8 +63,9 @@ struct SlothyTerminalApp: App {
         }
         .keyboardShortcut("t", modifiers: [.command, .shift, .option])
 
-        Button("New Telegram Bot Tab") {
-          appState.showTelegramFolderSelector()
+        Button("Show Telegram Bot") {
+          configManager.config.sidebarTab = .telegram
+          appState.isSidebarVisible = true
         }
 
         Divider()
@@ -100,13 +102,13 @@ struct SlothyTerminalApp: App {
           navigateToNextTab()
         }
         .keyboardShortcut("]", modifiers: [.command, .shift])
-        .disabled(appState.tabs.count < 2)
+        .disabled(appState.visibleTabs.count < 2)
 
         Button("Previous Tab") {
           navigateToPreviousTab()
         }
         .keyboardShortcut("[", modifiers: [.command, .shift])
-        .disabled(appState.tabs.count < 2)
+        .disabled(appState.visibleTabs.count < 2)
       }
 
       /// Help menu.
@@ -125,7 +127,7 @@ struct SlothyTerminalApp: App {
             switchToTabAtIndex(index - 1)
           }
           .keyboardShortcut(KeyEquivalent(Character("\(index)")), modifiers: .command)
-          .disabled(appState.tabs.count < index)
+          .disabled(appState.visibleTabs.count < index)
         }
       }
     }
@@ -145,32 +147,38 @@ struct SlothyTerminalApp: App {
   }
 
   private func navigateToNextTab() {
+    let visible = appState.visibleTabs
+
     guard let currentTab = appState.activeTab,
-          let currentIndex = appState.tabs.firstIndex(where: { $0.id == currentTab.id })
+          let currentIndex = visible.firstIndex(where: { $0.id == currentTab.id })
     else {
       return
     }
 
-    let nextIndex = (currentIndex + 1) % appState.tabs.count
-    appState.switchToTab(id: appState.tabs[nextIndex].id)
+    let nextIndex = (currentIndex + 1) % visible.count
+    appState.switchToTab(id: visible[nextIndex].id)
   }
 
   private func navigateToPreviousTab() {
+    let visible = appState.visibleTabs
+
     guard let currentTab = appState.activeTab,
-          let currentIndex = appState.tabs.firstIndex(where: { $0.id == currentTab.id })
+          let currentIndex = visible.firstIndex(where: { $0.id == currentTab.id })
     else {
       return
     }
 
-    let previousIndex = currentIndex == 0 ? appState.tabs.count - 1 : currentIndex - 1
-    appState.switchToTab(id: appState.tabs[previousIndex].id)
+    let previousIndex = currentIndex == 0 ? visible.count - 1 : currentIndex - 1
+    appState.switchToTab(id: visible[previousIndex].id)
   }
 
   private func switchToTabAtIndex(_ index: Int) {
-    guard index >= 0, index < appState.tabs.count else {
+    let visible = appState.visibleTabs
+
+    guard index >= 0, index < visible.count else {
       return
     }
 
-    appState.switchToTab(id: appState.tabs[index].id)
+    appState.switchToTab(id: visible[index].id)
   }
 }

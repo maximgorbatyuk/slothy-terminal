@@ -25,14 +25,6 @@ final class TelegramCommandParserTests: XCTestCase {
     XCTAssertEqual(TelegramCommandParser.parse("/open_directory"), .openDirectory)
   }
 
-  func testParseNewTaskHyphen() {
-    XCTAssertEqual(TelegramCommandParser.parse("/new-task"), .newTask)
-  }
-
-  func testParseNewTaskUnderscore() {
-    XCTAssertEqual(TelegramCommandParser.parse("/new_task"), .newTask)
-  }
-
   // MARK: - Unknown Commands
 
   func testParseUnknownCommand() {
@@ -71,6 +63,33 @@ final class TelegramCommandParserTests: XCTestCase {
 
   func testParseCommandWithTrailingText() {
     XCTAssertEqual(TelegramCommandParser.parse("/help extra args"), .help)
+  }
+
+  // MARK: - Relay Commands
+
+  func testParseRelayStart() {
+    XCTAssertEqual(TelegramCommandParser.parse("/relay_start"), .relayStart)
+    XCTAssertEqual(TelegramCommandParser.parse("/relay-start"), .relayStart)
+  }
+
+  func testParseRelayStop() {
+    XCTAssertEqual(TelegramCommandParser.parse("/relay_stop"), .relayStop)
+    XCTAssertEqual(TelegramCommandParser.parse("/relay-stop"), .relayStop)
+  }
+
+  func testParseRelayStatus() {
+    XCTAssertEqual(TelegramCommandParser.parse("/relay_status"), .relayStatus)
+    XCTAssertEqual(TelegramCommandParser.parse("/relay-status"), .relayStatus)
+  }
+
+  func testParseRelayTabs() {
+    XCTAssertEqual(TelegramCommandParser.parse("/relay_tabs"), .relayTabs)
+    XCTAssertEqual(TelegramCommandParser.parse("/relay-tabs"), .relayTabs)
+  }
+
+  func testParseRelayInterrupt() {
+    XCTAssertEqual(TelegramCommandParser.parse("/relay_interrupt"), .relayInterrupt)
+    XCTAssertEqual(TelegramCommandParser.parse("/relay-interrupt"), .relayInterrupt)
   }
 
   // MARK: - Leading Whitespace

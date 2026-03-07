@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Start/Stop/Mode toggle controls for the Telegram bot.
+/// Start/Stop controls for the Telegram bot.
 struct TelegramControlsBar: View {
   let runtime: TelegramBotRuntime
 
@@ -23,30 +23,6 @@ struct TelegramControlsBar: View {
         .buttonStyle(.bordered)
         .tint(.red)
       }
-
-      Divider()
-        .frame(height: 20)
-
-      /// Mode toggle buttons.
-      Button {
-        runtime.switchMode(.execute)
-      } label: {
-        Text("Execute")
-          .font(.system(size: 11))
-      }
-      .buttonStyle(.bordered)
-      .tint(runtime.mode == .execute ? .green : nil)
-      .disabled(runtime.mode == .stopped)
-
-      Button {
-        runtime.switchMode(.passive)
-      } label: {
-        Text("Listen but not execute commands")
-          .font(.system(size: 11))
-      }
-      .buttonStyle(.bordered)
-      .tint(runtime.mode == .passive ? .orange : nil)
-      .disabled(runtime.mode == .stopped)
 
       Spacer()
     }

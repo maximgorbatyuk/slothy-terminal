@@ -11,7 +11,6 @@ final class TelegramCommandHandlerTests: XCTestCase {
     XCTAssertTrue(help.contains("/help"))
     XCTAssertTrue(help.contains("/report"))
     XCTAssertTrue(help.contains("/open_directory"))
-    XCTAssertTrue(help.contains("/new_task"))
   }
 
   // MARK: - Open Directory Resolution

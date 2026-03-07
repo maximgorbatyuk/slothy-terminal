@@ -70,17 +70,11 @@ struct TerminalSidebarView: View {
       /// Open in external app button.
       OpenInAppButton(directory: tab.workingDirectory)
 
-      /// Project docs.
-      ProjectDocsView(workingDirectory: tab.workingDirectory)
-
       /// Directory tree.
       DirectoryTreeView(rootDirectory: tab.workingDirectory)
 
-      /// Session info section.
-      StatsSection(title: "Session Info") {
-        StatRow(label: "Duration", value: formattedDuration)
-        StatRow(label: "Commands", value: "\(tab.usageStats.commandCount)")
-      }
+      /// Project docs.
+      ProjectDocsView(workingDirectory: tab.workingDirectory)
     }
     .onReceive(timer) { _ in
       currentTime = Date()
@@ -118,17 +112,11 @@ struct AgentStatsView: View {
       /// Open in external app button.
       OpenInAppButton(directory: tab.workingDirectory)
 
-      /// Project docs.
-      ProjectDocsView(workingDirectory: tab.workingDirectory)
-
       /// Directory tree.
       DirectoryTreeView(rootDirectory: tab.workingDirectory)
 
-      /// Session info section.
-      StatsSection(title: "Session Info") {
-        StatRow(label: "Duration", value: formattedDuration)
-        StatRow(label: "Commands", value: "\(tab.usageStats.commandCount)")
-      }
+      /// Project docs.
+      ProjectDocsView(workingDirectory: tab.workingDirectory)
     }
     .onReceive(timer) { _ in
       currentTime = Date()
@@ -750,11 +738,11 @@ struct ChatSidebarView: View {
       /// Open in external app button.
       OpenInAppButton(directory: tab.workingDirectory)
 
-      /// Project docs.
-      ProjectDocsView(workingDirectory: tab.workingDirectory)
-
       /// Directory tree.
       DirectoryTreeView(rootDirectory: tab.workingDirectory)
+
+      /// Project docs.
+      ProjectDocsView(workingDirectory: tab.workingDirectory)
 
       /// Chat stats section.
       StatsSection(title: "Chat Info") {
@@ -804,7 +792,7 @@ struct ChatSidebarView: View {
 
 #Preview("With Active Tab") {
   let appState = AppState()
-  let tab = Tab(agentType: .claude, workingDirectory: URL(fileURLWithPath: "/Users/demo/projects"))
+  let tab = Tab(workspaceID: UUID(), agentType: .claude, workingDirectory: URL(fileURLWithPath: "/Users/demo/projects"))
   tab.usageStats.tokensIn = 12847
   tab.usageStats.tokensOut = 8234
   tab.usageStats.messageCount = 24

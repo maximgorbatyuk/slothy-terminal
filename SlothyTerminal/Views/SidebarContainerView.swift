@@ -21,17 +21,23 @@ struct SidebarContainerView: View {
   private var contentPanel: some View {
     Group {
       switch selectedTab {
+      case .workspaces:
+        WorkspacesSidebarView()
+
       case .explorer:
         SidebarView()
 
       case .gitChanges:
         GitChangesView()
 
-      case .tasks:
-        TaskQueuePanelView()
+      case .prompts:
+        PromptsSidebarView()
+
+      case .telegram:
+        TelegramSidebarView()
 
       case .automation:
-        AutomationPlaceholderView()
+        AutomationSidebarView()
       }
     }
     .frame(maxWidth: .infinity, maxHeight: .infinity)

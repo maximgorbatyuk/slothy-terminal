@@ -1,14 +1,19 @@
 import Foundation
 import SwiftUI
 
+/// Result of attempting to close a workspace.
+enum CloseWorkspaceResult: Equatable {
+  case closed
+  case hasOpenTabs
+  case notFound
+}
+
 /// The type of modal currently being displayed.
 enum ModalType: Identifiable {
   case startupPage
   case folderSelector(AgentType)
-  case telegramBotFolderSelector
+
   case settings
-  case addTask
-  case taskDetail(UUID)
 
   var id: String {
     switch self {
@@ -16,14 +21,8 @@ enum ModalType: Identifiable {
       return "startupPage"
     case .folderSelector(let agent):
       return "folderSelector-\(agent.rawValue)"
-    case .telegramBotFolderSelector:
-      return "telegramBotFolderSelector"
     case .settings:
       return "settings"
-    case .addTask:
-      return "addTask"
-    case .taskDetail(let id):
-      return "taskDetail-\(id.uuidString)"
     }
   }
 }
@@ -32,13 +31,26 @@ enum ModalType: Identifiable {
 @MainActor
 @Observable
 class AppState {
+  var workspaces: [Workspace] = []
+  var activeWorkspaceID: UUID?
   var tabs: [Tab] = []
   var activeTabID: UUID?
   var isSidebarVisible: Bool
-  var sidebarWidth: CGFloat
+  var sidebarWidth: CGFloat {
+    didSet {
+      guard sidebarWidth != configManager.config.sidebarWidth else {
+        return
+      }
+
+      configManager.config.sidebarWidth = sidebarWidth
+    }
+  }
   var activeModal: ModalType?
-  var taskQueueState = TaskQueueState()
-  var taskOrchestrator: TaskOrchestrator?
+  private(set) var injectionOrchestrator: InjectionOrchestrator?
+  var telegramRuntime: TelegramBotRuntime?
+
+  /// Section to navigate to when the native Settings window opens.
+  var pendingSettingsSection: SettingsSection?
 
   /// Shared working directory preselected across tabs within this session.
   var globalWorkingDirectory: URL?
@@ -49,14 +61,11 @@ class AppState {
     let config = ConfigManager.shared.config
     self.isSidebarVisible = config.showSidebarByDefault
     self.sidebarWidth = config.sidebarWidth
-    taskQueueState.restoreFromDisk()
 
-    let orchestrator = TaskOrchestrator(queueState: taskQueueState)
-    self.taskOrchestrator = orchestrator
-    taskQueueState.onQueueChanged = { [weak orchestrator] in
-      orchestrator?.notifyQueueChanged()
-    }
-    orchestrator.start()
+    self.injectionOrchestrator = InjectionOrchestrator(
+      registry: TerminalSurfaceRegistry.shared,
+      tabProvider: self
+    )
   }
 
   /// Returns the currently active tab, if any.
@@ -68,6 +77,116 @@ class AppState {
     return tabs.first { $0.id == activeTabID }
   }
 
+  /// Returns the currently active workspace, if any.
+  var activeWorkspace: Workspace? {
+    guard let activeWorkspaceID else {
+      return nil
+    }
+
+    return workspaces.first { $0.id == activeWorkspaceID }
+  }
+
+  /// Tabs belonging to the currently active workspace.
+  /// When no workspace is active, returns all tabs.
+  var visibleTabs: [Tab] {
+    guard let activeWorkspaceID else {
+      return tabs
+    }
+
+    return tabs.filter { $0.workspaceID == activeWorkspaceID }
+  }
+
+  /// Creates a new workspace from the given directory.
+  @discardableResult
+  func createWorkspace(from directory: URL) -> Workspace {
+    let workspace = Workspace(directory: directory)
+    workspaces.append(workspace)
+    switchWorkspace(id: workspace.id)
+    return workspace
+  }
+
+  /// Whether the workspace has any open tabs.
+  func hasTabs(in workspaceID: UUID) -> Bool {
+    tabs.contains { $0.workspaceID == workspaceID }
+  }
+
+  /// Returns all tabs belonging to the specified workspace.
+  func tabs(in workspaceID: UUID) -> [Tab] {
+    tabs.filter { $0.workspaceID == workspaceID }
+  }
+
+  /// Looks up a workspace by ID.
+  func workspace(for id: UUID) -> Workspace? {
+    workspaces.first { $0.id == id }
+  }
+
+  /// Switches to the workspace with the specified ID.
+  /// Aligns the active tab to the selected workspace.
+  func switchWorkspace(id: UUID) {
+    guard workspaces.contains(where: { $0.id == id }) else {
+      return
+    }
+
+    activeWorkspaceID = id
+
+    /// If current active tab already belongs to this workspace, keep it.
+    if let current = activeTab, current.workspaceID == id {
+      return
+    }
+
+    /// Switch to first tab in the workspace, or nil if empty.
+    if let firstTab = tabs.first(where: { $0.workspaceID == id }) {
+      switchToTab(id: firstTab.id)
+    } else {
+      if let current = activeTab {
+        current.isActive = false
+      }
+      activeTabID = nil
+    }
+  }
+
+  /// Closes the workspace with the specified ID.
+  /// Fails if the workspace still has open tabs.
+  @discardableResult
+  func closeWorkspace(id: UUID) -> CloseWorkspaceResult {
+    guard workspaces.contains(where: { $0.id == id }) else {
+      return .notFound
+    }
+
+    guard !hasTabs(in: id) else {
+      return .hasOpenTabs
+    }
+
+    workspaces.removeAll { $0.id == id }
+
+    if activeWorkspaceID == id {
+      if let fallback = workspaces.first {
+        switchWorkspace(id: fallback.id)
+      } else {
+        activeWorkspaceID = nil
+      }
+    }
+
+    return .closed
+  }
+
+  /// Resolves the workspace ID for a new tab.
+  /// Creates the first workspace from the directory if none exist;
+  /// otherwise returns the active (or first) workspace ID.
+  private func resolveWorkspaceID(for directory: URL) -> UUID {
+    if let active = activeWorkspace {
+      return active.id
+    }
+
+    if let first = workspaces.first {
+      activeWorkspaceID = first.id
+      return first.id
+    }
+
+    let workspace = createWorkspace(from: directory)
+    return workspace.id
+  }
+
   /// Creates a new tab with the specified agent and working directory.
   func createTab(
     agent: AgentType,
@@ -75,7 +194,9 @@ class AppState {
     initialPrompt: SavedPrompt? = nil,
     launchArgumentsOverride: [String]? = nil
   ) {
+    let workspaceID = resolveWorkspaceID(for: directory)
     let tab = Tab(
+      workspaceID: workspaceID,
       agentType: agent,
       workingDirectory: directory,
       initialPrompt: initialPrompt,
@@ -92,7 +213,9 @@ class AppState {
     initialPrompt: String? = nil,
     resumeSessionId: String? = nil
   ) {
+    let workspaceID = resolveWorkspaceID(for: directory)
     let tab = Tab(
+      workspaceID: workspaceID,
       agentType: agent,
       workingDirectory: directory,
       mode: .chat,
@@ -109,39 +232,25 @@ class AppState {
     }
   }
 
-  /// Creates a new Telegram bot tab with the specified working directory.
-  func createTelegramBotTab(directory: URL) {
-    if let existingBotTab = existingTelegramBotTab() {
-      switchToTab(id: existingBotTab.id)
+  /// Starts the Telegram bot as a sidebar service.
+  func startTelegramBot(directory: URL, startImmediately: Bool = false) {
+    guard telegramRuntime == nil else {
       return
     }
-
-    let tab = Tab(
-      agentType: configManager.config.telegramExecutionAgent,
-      workingDirectory: directory,
-      mode: .telegramBot
-    )
 
     let runtime = TelegramBotRuntime(workingDirectory: directory)
     runtime.delegate = self
-    tab.telegramRuntime = runtime
+    telegramRuntime = runtime
 
-    tabs.append(tab)
-    switchToTab(id: tab.id)
-  }
-
-  /// Shows the Telegram bot folder selector modal.
-  func showTelegramFolderSelector() {
-    if let existingBotTab = existingTelegramBotTab() {
-      switchToTab(id: existingBotTab.id)
-      return
+    if startImmediately || configManager.config.telegramAutoStartOnOpen {
+      runtime.start()
     }
-
-    activeModal = .telegramBotFolderSelector
   }
 
-  private func existingTelegramBotTab() -> Tab? {
-    tabs.first { $0.mode == .telegramBot }
+  /// Stops and removes the Telegram bot runtime.
+  func stopTelegramBot() {
+    telegramRuntime?.stop()
+    telegramRuntime = nil
   }
 
   /// Closes the tab with the specified ID.
@@ -150,17 +259,18 @@ class AppState {
       return
     }
 
-    /// Terminate chat process if active.
-    tabs[index].chatState?.terminateProcess()
+    let closedTab = tabs[index]
 
-    /// Stop Telegram bot if active.
-    tabs[index].telegramRuntime?.stop()
+    /// Terminate chat process if active.
+    closedTab.chatState?.terminateProcess()
 
     tabs.remove(at: index)
 
-    /// If we closed the active tab, switch to another one.
+    /// If we closed the active tab, switch to another one in the same workspace.
     if activeTabID == id {
-      if let nextTab = tabs.first {
+      let workspaceTabs = tabs.filter { $0.workspaceID == closedTab.workspaceID }
+
+      if let nextTab = workspaceTabs.first {
         switchToTab(id: nextTab.id)
       } else {
         activeTabID = nil
@@ -179,6 +289,7 @@ class AppState {
     activeTabID = id
     if let newTab = activeTab {
       newTab.isActive = true
+      newTab.clearBackgroundActivity()
     }
   }
 
@@ -192,19 +303,15 @@ class AppState {
     activeModal = .folderSelector(agent)
   }
 
-  /// Shows the settings modal.
-  func showSettings() {
-    activeModal = .settings
-  }
+  /// Opens the native Settings window, optionally navigating to a specific section.
+  /// NOTE: Prefer using `SettingsLink` in views. This fallback exists for non-view contexts.
+  func showSettings(section: SettingsSection? = nil) {
+    pendingSettingsSection = section
 
-  /// Shows the add task modal.
-  func showAddTaskModal() {
-    activeModal = .addTask
-  }
-
-  /// Shows the task detail modal.
-  func showTaskDetail(id: UUID) {
-    activeModal = .taskDetail(id)
+    if #available(macOS 14.0, *) {
+      NSApp.activate()
+      NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
+    }
   }
 
   /// Dismisses the current modal.
@@ -223,10 +330,52 @@ class AppState {
     for tab in tabs {
       /// terminateProcess() calls store.saveImmediately() internally.
       tab.chatState?.terminateProcess()
-      tab.telegramRuntime?.stop()
     }
-    taskOrchestrator?.stop()
-    taskQueueState.saveImmediately()
+    telegramRuntime?.stop()
+  }
+}
+
+// MARK: - Injection
+
+extension AppState {
+  /// Submits an injection request and returns it with updated status.
+  @discardableResult
+  func inject(_ request: InjectionRequest) -> InjectionRequest? {
+    injectionOrchestrator?.submit(request)
+  }
+
+  /// Cancels a pending injection request.
+  func cancelInjection(id: UUID) {
+    injectionOrchestrator?.cancel(requestId: id)
+  }
+
+  /// Returns all tab IDs with a live registered terminal surface.
+  func listInjectableTabs() -> [UUID] {
+    TerminalSurfaceRegistry.shared.registeredTabIds()
+  }
+}
+
+// MARK: - InjectionTabProvider
+
+extension AppState: InjectionTabProvider {
+  var activeTabId: UUID? { activeTabID }
+
+  func terminalTabs(agentType: AgentType?, mode: TabMode?) -> [UUID] {
+    tabs.filter { tab in
+      guard tab.mode == .terminal else {
+        return false
+      }
+
+      if let mode, tab.mode != mode {
+        return false
+      }
+
+      if let agentType, tab.agentType != agentType {
+        return false
+      }
+
+      return true
+    }.map(\.id)
   }
 }
 
@@ -250,10 +399,6 @@ extension AppState: TelegramBotDelegate {
       lines.append("Selected directory: \(compactTelegramPath(activeTab.workingDirectory))")
     }
 
-    let pendingCount = taskQueueState.tasks.filter { $0.status == .pending }.count
-    let runningCount = taskQueueState.tasks.filter { $0.status == .running }.count
-    lines.append("Task queue: pending \(pendingCount), running \(runningCount)")
-
     return lines.joined(separator: "\n")
   }
 
@@ -265,17 +410,57 @@ extension AppState: TelegramBotDelegate {
     }
   }
 
-  func telegramBotEnqueueTask(
-    title: String,
-    prompt: String,
-    repoPath: String,
-    agentType: AgentType
-  ) {
-    taskQueueState.enqueueTask(
-      title: title,
-      prompt: prompt,
-      repoPath: repoPath,
-      agentType: agentType
+  func telegramBotListRelayableTabs() -> [TelegramRelayTabInfo] {
+    let registeredIds = Set(TerminalSurfaceRegistry.shared.registeredTabIds())
+    return tabs
+      .filter { $0.mode == .terminal && registeredIds.contains($0.id) }
+      .map {
+        TelegramRelayTabInfo(
+          id: $0.id,
+          name: $0.tabName,
+          agentType: $0.agentType,
+          directory: $0.workingDirectory,
+          isActive: $0.id == activeTabID
+        )
+      }
+  }
+
+  func telegramBotActiveInjectableAITab() -> TelegramRelayTabInfo? {
+    guard let tab = activeTab,
+          tab.mode == .terminal,
+          (tab.agentType == .claude || tab.agentType == .opencode)
+    else {
+      return nil
+    }
+
+    let registeredIds = Set(TerminalSurfaceRegistry.shared.registeredTabIds())
+
+    guard registeredIds.contains(tab.id) else {
+      return nil
+    }
+
+    return TelegramRelayTabInfo(
+      id: tab.id,
+      name: tab.tabName,
+      agentType: tab.agentType,
+      directory: tab.workingDirectory,
+      isActive: true
+    )
+  }
+
+  func telegramBotInject(_ request: InjectionRequest) -> InjectionRequest? {
+    inject(request)
+  }
+
+  func telegramBotStartupStatement(workingDirectory: URL) async -> String {
+    let repoRoot = await GitService.shared.getRepositoryRoot(for: workingDirectory)
+
+    let openTabCount = tabs.count
+
+    return TelegramStartupStatement.compose(
+      repositoryPath: repoRoot?.path,
+      workingDirectoryPath: workingDirectory.path,
+      openTabCount: openTabCount
     )
   }
 
@@ -301,22 +486,6 @@ extension AppState: TelegramBotDelegate {
 
     case .terminal:
       return "interactive"
-
-    case .telegramBot:
-      if let runtime = tab.telegramRuntime {
-        switch runtime.status {
-        case .idle:
-          return "idle"
-
-        case .running:
-          return "running (\(runtime.mode.displayName.lowercased()))"
-
-        case .error:
-          return "error"
-        }
-      }
-
-      return "idle"
     }
   }
 }

@@ -2,6 +2,74 @@
 
 All notable changes to SlothyTerminal will be documented in this file.
 
+## [2026.2.7] - 2026-03-07
+
+_Analysis range: `16c106d650777e3d7da29f23ca21b9a2e0d12bbe..working-tree` (17 commits + local changes, 86 files changed, 5502 insertions, 4565 deletions)._
+
+### Added
+- **Workspaces** as first-class project containers.
+  - Added `Workspace` model and workspace-aware tab selection/routing in `AppState`.
+  - Added dedicated Workspaces sidebar for creating, switching, and removing workspaces.
+  - Added `visibleTabs` filtering so workspace switching scopes the visible tab set without destroying background sessions.
+- **Terminal injection subsystem** for programmatic input delivery into live terminal tabs.
+  - Added `InjectionPayload`, `InjectionRequest`, `InjectionTarget`, `InjectionResult`, and `InjectionEvent`.
+  - Added `InjectionOrchestrator` with per-tab FIFO queues, timeout handling, and request lifecycle tracking.
+  - Added `TerminalSurfaceRegistry` and `InjectableSurface` support for locating live Ghostty surfaces.
+- **Automation / Scripts sidebar**.
+  - Added `ScriptScanner` for discovering `.py` and `.sh` files in the project root and `scripts/`.
+  - Added `AutomationSidebarView` for browsing scripts, opening them in editors, revealing them in Finder, copying paths, and inserting relative paths into the active terminal.
+  - Added double-click insertion for script paths and hover affordances on script rows.
+- **Prompts sidebar** for quick prompt reuse.
+  - Added sidebar list of saved prompts with tag display, quick edit, and double-click / context-menu paste into the active terminal via bracketed paste.
+- **Telegram relay architecture**.
+  - Added `TelegramRelaySession`, `TerminalOutputPoller`, and ANSI stripping / viewport diffing support for relaying live terminal output back to Telegram.
+  - Added relay commands and tab targeting flow so Telegram can attach to active Claude/OpenCode terminal tabs or selected relayable tabs.
+- **Background terminal activity indicator** in tabs.
+  - Added unseen-output tracking and a small badge for inactive tabs when new terminal output appears.
+
+### Changed
+- **Telegram bot lifecycle** moved from a dedicated tab mode to a sidebar-owned runtime.
+  - Removed `.telegramBot` tab mode and related tab-specific runtime handling.
+  - Telegram now runs as a sidebar service with status, counters, timeline, and activity log.
+- **Sidebar information architecture** was reorganized.
+  - Added Workspaces, Prompts, Automation, and Telegram sidebar panels.
+  - “Project docs” remains part of the Working directory sidebar and was moved into its own lower section, replacing Session Info for terminal/agent sidebars.
+- **Working directory + tab behavior** is now workspace-aware.
+  - Tab bar uses `visibleTabs` while terminal containers continue to keep all sessions alive in the background.
+  - Closing an active tab now prefers another tab from the same workspace.
+- **Settings navigation** now supports section preselection through native Settings window routing.
+- **Startup / app flow** continues moving toward workspace- and sidebar-driven navigation rather than task-queue-centric flows.
+
+### Fixed
+- **Terminal background activity detection** now tracks unseen output on inactive tabs and clears the badge when the tab becomes active.
+- **Script insertion UX** improved.
+  - Relative script paths can be pasted directly into the active terminal.
+  - Shell scripts preserve `./` when appropriate for local execution.
+- **Terminal focus / responder handling** improved in Ghostty-backed views, including better first-responder restoration and surface registration.
+- **Project docs placement** in the Working directory sidebar is now separated from session metrics.
+- **Telegram Start Bot button** is temporarily disabled pending start-flow design clarification, without removing Telegram functionality.
+
+### Removed
+- **Task Queue subsystem**.
+  - Removed task queue state, orchestrator, runners, storage, risky tool detector, queue panel, composer/detail/task row views, and related tests.
+  - Removed Telegram prompt-executor integration that depended on task execution / enqueue flows.
+- Removed obsolete Automation placeholder view in favor of the real Scripts sidebar.
+- Removed `FEATURES.md`.
+
+### Tests
+- Added tests for:
+  - workspace lifecycle and tab scoping,
+  - injection requests and orchestrator behavior,
+  - terminal surface registry behavior,
+  - script scanning,
+  - Telegram relay runtime behavior and startup statement generation.
+- Removed tests tied to the deleted Task Queue subsystem.
+
+### Docs
+- Updated `CLAUDE.md` with workspace architecture, injection subsystem, Telegram relay behavior, and sidebar-related implementation notes.
+- Added `docs/fix-driven-development.md`.
+- Updated `README.md` and package/source wiring to reflect the current architecture.
+
 ## [2026.2.6] - 2026-02-28
 
 _Analysis range: `b085f3c2cf16d4b325a145da6a02f43347b3fbb9..0cc1493` (24 commits, 66 files changed, 5456 insertions, 4433 deletions)._

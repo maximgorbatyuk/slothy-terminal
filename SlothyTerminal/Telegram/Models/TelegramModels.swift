@@ -4,7 +4,6 @@ import Foundation
 enum TelegramBotMode: String, Codable, CaseIterable {
   case stopped
   case execute
-  case passive
 
   var displayName: String {
     switch self {
@@ -13,9 +12,6 @@ enum TelegramBotMode: String, Codable, CaseIterable {
 
     case .execute:
       return "Execute"
-
-    case .passive:
-      return "Listen Only"
     }
   }
 }
@@ -84,11 +80,33 @@ protocol TelegramBotDelegate: AnyObject {
   /// Opens a new tab at the given directory.
   func telegramBotOpenTab(mode: TabMode, agent: AgentType, directory: URL)
 
-  /// Enqueues a background task.
-  func telegramBotEnqueueTask(
-    title: String,
-    prompt: String,
-    repoPath: String,
-    agentType: AgentType
-  )
+  /// Lists terminal tabs that have a registered surface and can be relayed to.
+  func telegramBotListRelayableTabs() -> [TelegramRelayTabInfo]
+
+  /// Injects a request into a terminal tab. Returns the request with updated status, or nil on failure.
+  func telegramBotInject(_ request: InjectionRequest) -> InjectionRequest?
+
+  /// Returns the currently active AI terminal tab (Claude/OpenCode) with a registered surface, or nil.
+  func telegramBotActiveInjectableAITab() -> TelegramRelayTabInfo?
+
+  /// Returns a startup status statement for the given working directory.
+  func telegramBotStartupStatement(workingDirectory: URL) async -> String
+}
+
+// MARK: - Startup Statement
+
+/// Pure helper for composing the Telegram startup status statement.
+enum TelegramStartupStatement {
+  static func compose(
+    repositoryPath: String?,
+    workingDirectoryPath: String,
+    openTabCount: Int
+  ) -> String {
+    let repo = repositoryPath ?? workingDirectoryPath
+    return [
+      "Status",
+      "Repository: \(repo)",
+      "Open app tabs: \(openTabCount)"
+    ].joined(separator: "\n")
+  }
 }

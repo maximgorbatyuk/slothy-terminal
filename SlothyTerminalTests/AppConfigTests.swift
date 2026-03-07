@@ -32,7 +32,7 @@ struct AppConfigTests {
         "shortcuts": {},
         "telegramExecutionAgent": "Claude",
         "telegramAutoStartOnOpen": false,
-        "telegramDefaultListenMode": "passive",
+        "telegramDefaultListenMode": "execute",
         "telegramOpenDirectoryTabMode": "chat",
         "telegramOpenDirectoryAgent": "Claude",
         "sidebarTab": "explorer"
@@ -61,6 +61,13 @@ struct AppConfigTests {
     #expect(config.chatSendKey == defaults.chatSendKey)
     #expect(config.terminalFontName == defaults.terminalFontName)
     #expect(config.terminalFontSize == defaults.terminalFontSize)
+    #expect(config.sidebarTab == .explorer)
+  }
+
+  @Test("Sidebar tabs keep Workspaces first and Current directory default")
+  func sidebarTabDefaults() {
+    #expect(SidebarTab.allCases.first == .workspaces)
+    #expect(AppConfig().sidebarTab == .explorer)
   }
 
   @Test("Decodes partial JSON, missing keys use defaults")

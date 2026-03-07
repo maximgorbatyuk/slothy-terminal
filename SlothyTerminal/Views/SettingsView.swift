@@ -1,77 +1,8 @@
 import SwiftUI
 
-/// Settings navigation sections.
-enum SettingsSection: String, CaseIterable, Identifiable {
-  case general
-  case chat
-  case agents
-  case telegram
-  case appearance
-  case shortcuts
-  case prompts
-  case licenses
-
-  var id: String { rawValue }
-
-  var displayName: String {
-    switch self {
-    case .general:
-      return "General"
-
-    case .chat:
-      return "Chat"
-
-    case .agents:
-      return "Agents"
-
-    case .telegram:
-      return "Telegram"
-
-    case .appearance:
-      return "Appearance"
-
-    case .shortcuts:
-      return "Shortcuts"
-
-    case .prompts:
-      return "Prompts"
-
-    case .licenses:
-      return "Licenses"
-    }
-  }
-
-  var icon: String {
-    switch self {
-    case .general:
-      return "gear"
-
-    case .chat:
-      return "bubble.left.and.bubble.right"
-
-    case .agents:
-      return "cpu"
-
-    case .telegram:
-      return "paperplane"
-
-    case .appearance:
-      return "paintbrush"
-
-    case .shortcuts:
-      return "keyboard"
-
-    case .prompts:
-      return "text.bubble"
-
-    case .licenses:
-      return "doc.text"
-    }
-  }
-}
-
 /// Main settings view with sidebar navigation.
 struct SettingsView: View {
+  @Environment(AppState.self) private var appState
   @State private var selectedSection: SettingsSection = .general
 
   var body: some View {
@@ -113,6 +44,12 @@ struct SettingsView: View {
     }
     .frame(minWidth: 600, idealWidth: 700, minHeight: 450)
     .background(appBackgroundColor)
+    .onAppear {
+      if let section = appState.pendingSettingsSection {
+        selectedSection = section
+        appState.pendingSettingsSection = nil
+      }
+    }
   }
 }
 
@@ -160,11 +97,18 @@ struct GeneralSettingsTab: View {
         HStack {
           Text("Sidebar width")
           Slider(
-            value: Bindable(configManager).config.sidebarWidth,
-            in: 200...400,
+            value: Binding(
+              get: {
+                appState.sidebarWidth
+              },
+              set: { newValue in
+                appState.sidebarWidth = newValue
+              }
+            ),
+            in: 200...500,
             step: 10
           )
-          Text("\(Int(configManager.config.sidebarWidth))px")
+          Text("\(Int(appState.sidebarWidth))px")
             .monospacedDigit()
             .frame(width: 50, alignment: .trailing)
         }

@@ -143,7 +143,7 @@ class GhosttyApp {
   // MARK: - Surface Lookup Helper
 
   /// Extracts the SurfaceView from a surface's userdata.
-  static func surfaceView(from surface: ghostty_surface_t) -> GhosttySurfaceView? {
+  nonisolated static func surfaceView(from surface: ghostty_surface_t) -> GhosttySurfaceView? {
     guard let ud = ghostty_surface_userdata(surface) else {
       return nil
     }
@@ -328,9 +328,15 @@ private func ghosttyAction(
     /// Embedded runtime requests a draw on the app thread.
     if Thread.isMainThread {
       ghostty_surface_draw(surface)
+      if let view = GhosttyApp.surfaceView(from: surface) {
+        view.markRenderDirty()
+      }
     } else {
       DispatchQueue.main.async {
         ghostty_surface_draw(surface)
+        if let view = GhosttyApp.surfaceView(from: surface) {
+          view.markRenderDirty()
+        }
       }
     }
 

@@ -123,12 +123,12 @@ struct AppConfig: Codable, Equatable {
   /// Which agent to use for prompt execution.
   var telegramExecutionAgent: AgentType = .claude
 
-  /// Whether the bot auto-starts when the tab is opened.
-  var telegramAutoStartOnOpen: Bool = true
+  /// Whether the bot auto-starts when the Telegram sidebar is opened.
+  var telegramAutoStartOnOpen: Bool = false
 
-  /// Deprecated — bot always starts in passive mode now.
+  /// Deprecated — bot always runs in execute mode now.
   /// Kept for backward-compatible JSON decoding of existing configs.
-  var telegramDefaultListenMode: TelegramBotMode = .passive
+  var telegramDefaultListenMode: TelegramBotMode = .execute
 
   /// Optional prefix prepended to bot replies.
   var telegramReplyPrefix: String?
@@ -359,23 +359,31 @@ enum SidebarPosition: String, Codable, CaseIterable {
 
 /// Sidebar panel tabs.
 enum SidebarTab: String, Codable, CaseIterable, Identifiable {
+  case workspaces
   case explorer
   case gitChanges
-  case tasks
+  case prompts
   case automation
+  case telegram
 
   var id: String { rawValue }
 
   var iconName: String {
     switch self {
+    case .workspaces:
+      return "square.grid.2x2"
+
     case .explorer:
       return "folder"
 
     case .gitChanges:
       return "arrow.triangle.branch"
 
-    case .tasks:
-      return "checklist"
+    case .prompts:
+      return "text.bubble"
+
+    case .telegram:
+      return "paperplane"
 
     case .automation:
       return "gearshape.2"
@@ -384,18 +392,31 @@ enum SidebarTab: String, Codable, CaseIterable, Identifiable {
 
   var tooltip: String {
     switch self {
+    case .workspaces:
+      return "Workspaces"
+
     case .explorer:
-      return "Explorer"
+      return "Current directory"
 
     case .gitChanges:
       return "Git Changes"
 
-    case .tasks:
-      return "Tasks"
+    case .prompts:
+      return "Prompts"
+
+    case .telegram:
+      return "Telegram Bot"
 
     case .automation:
       return "Automation"
     }
+  }
+
+  init(from decoder: Decoder) throws {
+    let container = try decoder.singleValueContainer()
+    let rawValue = try container.decode(String.self)
+
+    self = SidebarTab(rawValue: rawValue) ?? .explorer
   }
 }
 

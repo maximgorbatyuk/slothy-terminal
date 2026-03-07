@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Displays the current bot mode, status, user ID, and agent.
+/// Displays the current bot state, status, user ID, and agent.
 struct TelegramStatusBar: View {
   let runtime: TelegramBotRuntime
 
@@ -13,18 +13,18 @@ struct TelegramStatusBar: View {
 
   var body: some View {
     HStack(spacing: 12) {
-      /// Mode badge.
+      /// Runtime state badge.
       HStack(spacing: 4) {
         Circle()
-          .fill(modeColor)
+          .fill(stateColor)
           .frame(width: 8, height: 8)
 
-        Text(runtime.mode.displayName)
+        Text(stateText)
           .font(.system(size: 11, weight: .medium))
       }
       .padding(.horizontal, 8)
       .padding(.vertical, 4)
-      .background(modeColor.opacity(0.15))
+      .background(stateColor.opacity(0.15))
       .cornerRadius(4)
 
       /// Status text.
@@ -59,17 +59,12 @@ struct TelegramStatusBar: View {
     .background(appCardColor)
   }
 
-  private var modeColor: Color {
-    switch runtime.mode {
-    case .stopped:
-      return .secondary
+  private var stateColor: Color {
+    runtime.mode == .stopped ? .secondary : .green
+  }
 
-    case .execute:
-      return .green
-
-    case .passive:
-      return .orange
-    }
+  private var stateText: String {
+    runtime.mode == .stopped ? "Stopped" : "Execute"
   }
 
   private var statusText: String {

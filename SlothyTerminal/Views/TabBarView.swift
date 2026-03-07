@@ -30,7 +30,7 @@ struct TabBarView: View {
     VStack(spacing: 0) {
       HStack(spacing: 0) {
         /// Tab items.
-        ForEach(appState.tabs) { tab in
+        ForEach(appState.visibleTabs) { tab in
           TabItemView(tab: tab)
         }
 
@@ -67,14 +67,7 @@ struct TabItemView: View {
 
   var body: some View {
     HStack(spacing: 6) {
-      /// Agent icon or executing indicator.
-      if tab.isExecuting {
-        ExecutingIndicator(color: isActive ? tab.agentType.accentColor : .gray)
-      } else {
-        Image(systemName: tabIconName)
-          .foregroundColor(isActive ? tab.agentType.accentColor : .gray)
-          .font(.system(size: 12))
-      }
+      tabLeadingIcon
 
       /// Tab title.
       Text(tab.tabName)
@@ -102,6 +95,28 @@ struct TabItemView: View {
       appState.switchToTab(id: tab.id)
     }
   }
+
+  @ViewBuilder
+  private var tabLeadingIcon: some View {
+    ZStack(alignment: .topTrailing) {
+      Group {
+        if tab.isExecuting {
+          ExecutingIndicator(color: isActive ? tab.agentType.accentColor : .gray)
+        } else {
+          Image(systemName: tabIconName)
+            .foregroundColor(isActive ? tab.agentType.accentColor : .gray)
+            .font(.system(size: 12))
+        }
+      }
+      .frame(width: 12, height: 12)
+
+      if tab.hasBackgroundActivity && !isActive && !tab.isExecuting {
+        BackgroundActivityIndicator()
+          .offset(x: 4, y: -4)
+      }
+    }
+    .frame(width: 14, height: 14)
+  }
 }
 
 /// Button to create a new tab.
@@ -119,6 +134,31 @@ struct NewTabButton: View {
     .buttonStyle(.plain)
     .padding(.horizontal, 12)
     .padding(.vertical, 8)
+  }
+}
+
+/// Small dot shown when an inactive terminal tab has unseen output.
+struct BackgroundActivityIndicator: View {
+  @State private var isPulsing = false
+
+  var body: some View {
+    Circle()
+      .fill(Color(nsColor: .systemOrange))
+      .overlay {
+        Circle()
+          .stroke(Color(nsColor: .windowBackgroundColor), lineWidth: 1)
+      }
+      .frame(width: 7, height: 7)
+      .scaleEffect(isPulsing ? 0.82 : 1.0)
+      .opacity(isPulsing ? 0.75 : 1.0)
+      .animation(
+        .easeInOut(duration: 0.9).repeatForever(autoreverses: true),
+        value: isPulsing
+      )
+      .onAppear {
+        isPulsing = true
+      }
+      .help("New terminal activity")
   }
 }
 
