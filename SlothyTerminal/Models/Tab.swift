@@ -30,6 +30,8 @@ class Tab: Identifiable {
   var hasBackgroundActivity: Bool = false
   var usageStats: UsageStats
   var isTerminalBusy: Bool = false
+  private var terminalActivityResetTask: Task<Void, Never>?
+  private let terminalActivityIdleDelayNanoseconds: UInt64 = 800_000_000
 
   /// The saved prompt to pass as the first message to the AI agent.
   let initialPrompt: SavedPrompt?
@@ -167,8 +169,43 @@ class Tab: Identifiable {
     isTerminalBusy = true
   }
 
+  /// Records that a terminal command has started running.
+  func handleTerminalCommandEntered() {
+    usageStats.incrementCommandCount()
+    recordTerminalActivity()
+  }
+
+  /// Marks auto-run terminal sessions as busy as soon as they launch.
+  func handleTerminalLaunch(shouldAutoRunCommand: Bool) {
+    guard shouldAutoRunCommand else {
+      return
+    }
+
+    recordTerminalActivity()
+  }
+
+  /// Records terminal activity and clears the busy state after a short idle window.
+  func recordTerminalActivity() {
+    let idleDelayNanoseconds = terminalActivityIdleDelayNanoseconds
+
+    markTerminalBusy()
+    terminalActivityResetTask?.cancel()
+
+    terminalActivityResetTask = Task { @MainActor [weak self] in
+      try? await Task.sleep(nanoseconds: idleDelayNanoseconds)
+
+      guard !Task.isCancelled else {
+        return
+      }
+
+      self?.markTerminalIdle()
+    }
+  }
+
   /// Marks the terminal tab as idle.
   func markTerminalIdle() {
+    terminalActivityResetTask?.cancel()
+    terminalActivityResetTask = nil
     isTerminalBusy = false
   }
 

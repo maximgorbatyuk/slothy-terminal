@@ -51,13 +51,16 @@ struct ActiveTerminalView: View {
             tab.workingDirectory = newDirectory
           },
           onCommandEntered: {
-            tab.usageStats.incrementCommandCount()
+            tab.handleTerminalCommandEntered()
           },
           onCommandFinished: {
             tab.markTerminalIdle()
           },
           onClosed: {
             tab.markTerminalIdle()
+          },
+          onTerminalActivity: {
+            tab.recordTerminalActivity()
           },
           onBackgroundActivity: {
             tab.markBackgroundActivity()
@@ -84,6 +87,7 @@ struct ActiveTerminalView: View {
 
       /// Mark as ready to show terminal.
       isReady = true
+      tab.handleTerminalLaunch(shouldAutoRunCommand: tab.agentType.showsUsageStats)
 
       /// Start the session timer.
       tab.usageStats.startSession()

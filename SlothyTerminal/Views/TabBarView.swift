@@ -26,18 +26,27 @@ var appCardColor: Color {
 struct TabBarView: View {
   @Environment(AppState.self) private var appState
 
+  /// Reserved width for the new-tab button (icon + horizontal padding).
+  private let newTabButtonWidth: CGFloat = 36
+
   var body: some View {
     VStack(spacing: 0) {
-      HStack(spacing: 0) {
-        /// Tab items.
-        ForEach(appState.visibleTabs) { tab in
-          TabItemView(tab: tab)
+      GeometryReader { geo in
+        HStack(spacing: 0) {
+          let tabCount = appState.visibleTabs.count
+          let tabWidth = tabCount > 0
+            ? max(0, geo.size.width - newTabButtonWidth) / CGFloat(tabCount)
+            : 0
+
+          /// Tab items.
+          ForEach(appState.visibleTabs) { tab in
+            TabItemView(tab: tab, width: tabWidth)
+          }
+
+          /// New tab button.
+          NewTabButton()
+            .frame(width: newTabButtonWidth)
         }
-
-        /// New tab button.
-        NewTabButton()
-
-        Spacer()
       }
       .frame(height: 36)
 
@@ -51,6 +60,7 @@ struct TabBarView: View {
 /// A single tab item in the tab bar.
 struct TabItemView: View {
   let tab: Tab
+  let width: CGFloat
   @Environment(AppState.self) private var appState
 
   private var isActive: Bool {
@@ -88,6 +98,7 @@ struct TabItemView: View {
     }
     .padding(.horizontal, 12)
     .padding(.vertical, 8)
+    .frame(width: width)
     .background(isActive ? appCardColor : Color.clear)
     .cornerRadius(6)
     .contentShape(Rectangle())

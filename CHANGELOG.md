@@ -2,6 +2,35 @@
 
 All notable changes to SlothyTerminal will be documented in this file.
 
+## [2026.2.8] - 2026-03-09
+
+_Analysis range: `baec6b578f3a9cd971866e6777592d3e6623cb6f..79ecb8e` (4 commits, 19 files changed, 385 insertions, 51 deletions)._
+
+### Added
+- **Terminal activity tracking** in `Tab` with auto-idle timeout.
+  - `recordTerminalActivity()` marks a tab busy and auto-resets to idle after 800ms of no further output.
+  - `handleTerminalCommandEntered()` combines command-count increment with activity recording.
+  - `handleTerminalLaunch(shouldAutoRunCommand:)` marks AI agent tabs busy immediately on launch.
+- **`onTerminalActivity` callback** on `GhosttySurfaceView` and `StandaloneTerminalView`, fired whenever the terminal viewport snapshot changes.
+- **`ActivityDetectionGate`** service to prevent render-driven background-activity checks from being endlessly rescheduled.
+- **Equal-width tab layout** in `TabBarView` using `GeometryReader` so tabs share available space evenly instead of being intrinsically sized.
+- **Separate debug app icon** (`AppIconDev`) used for Debug builds, so dev and release builds are visually distinguishable in the Dock.
+- **`KNOWN_ISSUES.md`** documenting that tab activity status does not yet reliably reflect ongoing AI agent work.
+
+### Changed
+- **App icon asset** replaced (`SlothyTerminalIcon.jpg` → `STIcon.jpg`).
+- **Version bump** to 2026.2.8 (build 10).
+- **Website (`docs/`)** updated to reflect the current feature set:
+  - "Background Task Queue" → "Workspace-Aware Navigation", "Risky Tool Detection" → "Automation Sidebar", "Ask Mode & Smart Routing" → "Telegram Relay Sidebar".
+  - Added "Prompts, Docs, and Activity Signals" feature card.
+  - Added hero workflow pills (Workspaces, Automation, Awareness, Telegram).
+  - Updated meta description, carousel captions, and Open Graph tags.
+- **README** now links to `KNOWN_ISSUES.md`.
+
+### Tests
+- Added `ActivityDetectionGateTests` (3 tests) for schedule gating, finish, and cancel behavior.
+- Added `TabActivityTests` (4 tests) covering command entry, auto-run launch idle settling, interactive launch staying idle, and activity refresh extending the busy window.
+
 ## [2026.2.7] - 2026-03-07
 
 _Analysis range: `16c106d650777e3d7da29f23ca21b9a2e0d12bbe..working-tree` (17 commits + local changes, 86 files changed, 5502 insertions, 4565 deletions)._
