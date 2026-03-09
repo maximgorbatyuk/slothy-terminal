@@ -4,6 +4,8 @@ A native macOS terminal application designed for AI coding assistants with a tab
 
 Privacy-first by design. See the [Privacy Policy](PRIVACY.md).
 
+Known limitations and unresolved behavior are tracked in [KNOWN_ISSUES.md](KNOWN_ISSUES.md).
+
 ![macOS](https://img.shields.io/badge/macOS-15.0+-blue)
 ![Apple Silicon](https://img.shields.io/badge/Apple_Silicon-M1+-8A2BE2)
 ![Swift](https://img.shields.io/badge/Swift-5.9+-orange)
