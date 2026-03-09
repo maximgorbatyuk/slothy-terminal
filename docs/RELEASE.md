@@ -50,7 +50,7 @@ The terminal backend must be built from the Ghostty source. You only need to do 
 ```bash
 cd ~/projects/ghostty
 zig build -Dapp-runtime=none -Demit-xcframework -Dxcframework-target=native
-cp -R macos/GhosttyKit.xcframework /path/to/slothy-terminal/
+cp -R macos/GhosttyKit.xcframework ~/projects/macos/SlothyTerminal/
 ```
 
 If the build fails with a Metal Toolchain error:
