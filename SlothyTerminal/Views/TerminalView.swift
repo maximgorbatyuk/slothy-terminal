@@ -29,6 +29,9 @@ struct GhosttyTerminalViewRepresentable: NSViewRepresentable {
   /// Callback when the surface is closed (process exits).
   var onClosed: (() -> Void)?
 
+  /// Callback when terminal content changes.
+  var onTerminalActivity: (() -> Void)?
+
   /// Callback when background terminal output is detected.
   var onBackgroundActivity: (() -> Void)?
 
@@ -45,6 +48,7 @@ struct GhosttyTerminalViewRepresentable: NSViewRepresentable {
     surfaceView.onCommandEntered = onCommandEntered
     surfaceView.onCommandFinished = onCommandFinished
     surfaceView.onClosed = onClosed
+    surfaceView.onTerminalActivity = onTerminalActivity
     surfaceView.onBackgroundActivity = onBackgroundActivity
 
     let launchEnvironment = makeLaunchEnvironment(
@@ -184,6 +188,9 @@ struct StandaloneTerminalView: View {
   /// Callback when the surface is closed.
   var onClosed: (() -> Void)? = nil
 
+  /// Callback when terminal content changes.
+  var onTerminalActivity: (() -> Void)? = nil
+
   /// Callback when background terminal output is detected.
   var onBackgroundActivity: (() -> Void)? = nil
 
@@ -200,6 +207,7 @@ struct StandaloneTerminalView: View {
       onCommandEntered: onCommandEntered,
       onCommandFinished: onCommandFinished,
       onClosed: onClosed,
+      onTerminalActivity: onTerminalActivity,
       onBackgroundActivity: onBackgroundActivity
     )
   }

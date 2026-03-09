@@ -39,6 +39,7 @@ class GhosttySurfaceView: NSView, NSTextInputClient {
   var onCommandEntered: (() -> Void)?
   var onCommandFinished: (() -> Void)?
   var onClosed: (() -> Void)?
+  var onTerminalActivity: (() -> Void)?
   var onBackgroundActivity: (() -> Void)?
 
   /// Set on each GHOSTTY_ACTION_RENDER, cleared by poller after reading.
@@ -47,6 +48,7 @@ class GhosttySurfaceView: NSView, NSTextInputClient {
   private var isTabActive = true
   private var lastViewportSnapshot = ""
   private var activityDetectionWorkItem: DispatchWorkItem?
+  private let activityDetectionGate = ActivityDetectionGate()
   private var lastUserInputAt: Date = .distantPast
 
   private let activityDetectionDelay: TimeInterval = 0.12
@@ -359,6 +361,8 @@ class GhosttySurfaceView: NSView, NSTextInputClient {
 
     isTabActive = isActive
     activityDetectionWorkItem?.cancel()
+    activityDetectionWorkItem = nil
+    activityDetectionGate.cancelSchedule()
     refreshViewportSnapshot()
   }
 
@@ -1063,10 +1067,18 @@ extension GhosttySurfaceView {
   }
 
   private func scheduleBackgroundActivityDetection() {
-    activityDetectionWorkItem?.cancel()
+    guard activityDetectionGate.beginSchedule() else {
+      return
+    }
 
     let workItem = DispatchWorkItem { [weak self] in
-      self?.detectBackgroundActivityIfNeeded()
+      guard let self else {
+        return
+      }
+
+      self.activityDetectionWorkItem = nil
+      self.activityDetectionGate.finishSchedule()
+      self.detectBackgroundActivityIfNeeded()
     }
 
     activityDetectionWorkItem = workItem
@@ -1085,6 +1097,7 @@ extension GhosttySurfaceView {
     }
 
     lastViewportSnapshot = snapshot
+    onTerminalActivity?()
 
     guard !isTabActive else {
       return
