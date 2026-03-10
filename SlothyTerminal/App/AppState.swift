@@ -55,6 +55,9 @@ class AppState {
   /// Shared working directory preselected across tabs within this session.
   var globalWorkingDirectory: URL?
 
+  /// Tab awaiting close confirmation (set when user tries to close an inactive tab).
+  var tabPendingClose: UUID?
+
   private var configManager = ConfigManager.shared
 
   init() {
@@ -254,7 +257,41 @@ class AppState {
   }
 
   /// Closes the tab with the specified ID.
+  /// If the tab is not active, prompts for confirmation instead of closing immediately.
   func closeTab(id: UUID) {
+    guard tabs.contains(where: { $0.id == id }) else {
+      return
+    }
+
+    // Active tab closes immediately; inactive tab requires confirmation.
+    if activeTabID == id {
+      performCloseTab(id: id)
+    } else {
+      tabPendingClose = id
+    }
+  }
+
+  /// Confirms and closes the tab that was pending confirmation.
+  func confirmCloseTab() {
+    guard let id = tabPendingClose else {
+      return
+    }
+
+    tabPendingClose = nil
+    performCloseTab(id: id)
+  }
+
+  /// Cancels the pending tab close.
+  func cancelCloseTab() {
+    tabPendingClose = nil
+  }
+
+  // Performs the actual tab close: terminates processes, removes from list, selects next tab.
+  private func performCloseTab(id: UUID) {
+    if tabPendingClose == id {
+      tabPendingClose = nil
+    }
+
     guard let index = tabs.firstIndex(where: { $0.id == id }) else {
       return
     }

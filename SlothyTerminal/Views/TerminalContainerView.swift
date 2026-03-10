@@ -158,39 +158,13 @@ struct AgentUnavailableView: View {
 
 /// Empty state shown when no tabs are open.
 struct EmptyTerminalView: View {
-  @Environment(AppState.self) private var appState
-
   var body: some View {
-    VStack(spacing: 32) {
-      VStack(spacing: 8) {
-        Image(systemName: "terminal.fill")
-          .font(.system(size: 48))
-          .foregroundColor(.secondary)
-
-        Text("Slothy Terminal")
-          .font(.title)
-          .fontWeight(.semibold)
-
-        Text("Open a new session to get started")
-          .font(.subheadline)
-          .foregroundColor(.secondary)
-      }
-
-      Button {
-        appState.showStartupPage()
-      } label: {
-        HStack(spacing: 8) {
-          Image(systemName: "plus.circle.fill")
-            .font(.system(size: 16))
-          Text("New Session")
-            .font(.system(size: 14, weight: .medium))
-        }
-        .frame(maxWidth: 200)
-      }
-      .buttonStyle(.borderedProminent)
-      .controlSize(.large)
+    VStack {
+      StartSessionContentView(presentation: .embedded)
     }
     .frame(maxWidth: .infinity, maxHeight: .infinity)
+    .padding(.horizontal, 32)
+    .padding(.vertical, 28)
     .background(appBackgroundColor)
   }
 }

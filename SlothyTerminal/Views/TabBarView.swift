@@ -29,6 +29,17 @@ struct TabBarView: View {
   /// Reserved width for the new-tab button (icon + horizontal padding).
   private let newTabButtonWidth: CGFloat = 36
 
+  /// Name of the tab pending close, for the confirmation dialog.
+  private var pendingTabName: String {
+    guard let id = appState.tabPendingClose,
+          let tab = appState.tabs.first(where: { $0.id == id })
+    else {
+      return "this tab"
+    }
+
+    return "\"\(tab.tabName)\""
+  }
+
   var body: some View {
     VStack(spacing: 0) {
       GeometryReader { geo in
@@ -54,6 +65,22 @@ struct TabBarView: View {
       Divider()
     }
     .background(appBackgroundColor)
+    .alert(
+      "Close Tab",
+      isPresented: Binding(
+        get: { appState.tabPendingClose != nil },
+        set: { if !$0 { appState.cancelCloseTab() } }
+      )
+    ) {
+      Button("Close", role: .destructive) {
+        appState.confirmCloseTab()
+      }
+      Button("Cancel", role: .cancel) {
+        appState.cancelCloseTab()
+      }
+    } message: {
+      Text("Close \(pendingTabName)?")
+    }
   }
 }
 
