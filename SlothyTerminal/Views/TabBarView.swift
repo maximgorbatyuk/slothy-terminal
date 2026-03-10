@@ -99,7 +99,16 @@ struct TabItemView: View {
       return "bubble.left.and.bubble.right"
     }
 
-    return tab.agentType.iconName
+    if tab.mode == .git {
+      return "arrow.triangle.branch"
+    }
+
+    return tab.agentType?.iconName ?? "terminal"
+  }
+
+  /// Accent color for the tab icon based on agent type.
+  private var tabAccentColor: Color {
+    tab.agentType?.accentColor ?? .secondary
   }
 
   var body: some View {
@@ -139,10 +148,10 @@ struct TabItemView: View {
     ZStack(alignment: .topTrailing) {
       Group {
         if tab.isExecuting {
-          ExecutingIndicator(color: isActive ? tab.agentType.accentColor : .gray)
+          ExecutingIndicator(color: isActive ? tabAccentColor : .gray)
         } else {
           Image(systemName: tabIconName)
-            .foregroundColor(isActive ? tab.agentType.accentColor : .gray)
+            .foregroundColor(isActive ? tabAccentColor : .gray)
             .font(.system(size: 12))
         }
       }

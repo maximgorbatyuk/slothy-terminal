@@ -14,7 +14,10 @@ struct SidebarView: View {
           ScrollView {
             ChatSidebarView(tab: tab, chatState: chatState)
           }
-        } else if tab.agentType.showsUsageStats {
+        } else if tab.mode == .git {
+          // Git tabs show the directory sidebar (tree, open-in-app, docs).
+          TerminalSidebarView(tab: tab)
+        } else if tab.agentType?.showsUsageStats == true {
           ScrollView {
             AgentStatsView(tab: tab)
           }
@@ -639,13 +642,16 @@ struct ContextWindowProgress: View {
     String(format: "%.1f%%", percentage * 100)
   }
 
-  private var usageText: String {
+  private static let numberFormatter: NumberFormatter = {
     let formatter = NumberFormatter()
     formatter.numberStyle = .decimal
     formatter.groupingSeparator = ","
+    return formatter
+  }()
 
-    let usedStr = formatter.string(from: NSNumber(value: used)) ?? "\(used)"
-    let limitStr = formatter.string(from: NSNumber(value: limit)) ?? "\(limit)"
+  private var usageText: String {
+    let usedStr = Self.numberFormatter.string(from: NSNumber(value: used)) ?? "\(used)"
+    let limitStr = Self.numberFormatter.string(from: NSNumber(value: limit)) ?? "\(limit)"
 
     return "\(usedStr) / \(limitStr)"
   }
@@ -782,11 +788,15 @@ struct ChatSidebarView: View {
     }
   }
 
-  private func formatNumber(_ value: Int) -> String {
+  private static let numberFormatter: NumberFormatter = {
     let formatter = NumberFormatter()
     formatter.numberStyle = .decimal
     formatter.groupingSeparator = ","
-    return formatter.string(from: NSNumber(value: value)) ?? "\(value)"
+    return formatter
+  }()
+
+  private func formatNumber(_ value: Int) -> String {
+    Self.numberFormatter.string(from: NSNumber(value: value)) ?? "\(value)"
   }
 }
 

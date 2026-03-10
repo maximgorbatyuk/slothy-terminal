@@ -33,10 +33,12 @@ struct ActiveTerminalView: View {
     ZStack {
       appCardColor
 
-      if tab.mode == .chat, let chatState = tab.chatState {
+      if tab.mode == .git {
+        GitClientView(workingDirectory: tab.workingDirectory)
+      } else if tab.mode == .chat, let chatState = tab.chatState {
         ChatView(chatState: chatState)
       } else if let error = agentUnavailableError {
-        AgentUnavailableView(agentName: tab.agent.displayName, error: error)
+        AgentUnavailableView(agentName: tab.agent?.displayName ?? "Unknown", error: error)
           .environment(\.colorScheme, .dark)
       } else if isReady {
         StandaloneTerminalView(
@@ -45,7 +47,7 @@ struct ActiveTerminalView: View {
           arguments: tab.arguments,
           environment: tab.environment,
           tabId: tab.id,
-          shouldAutoRunCommand: tab.agentType.showsUsageStats,
+          shouldAutoRunCommand: tab.agentType?.showsUsageStats ?? false,
           isActive: isActive,
           onDirectoryChanged: { newDirectory in
             tab.workingDirectory = newDirectory
@@ -68,28 +70,33 @@ struct ActiveTerminalView: View {
         )
         .environment(\.colorScheme, .dark)
       } else {
-        ProgressView("Starting \(tab.agent.displayName)...")
+        ProgressView("Starting \(tab.agent?.displayName ?? "session")...")
           .environment(\.colorScheme, .dark)
       }
     }
     .task {
-      /// Chat mode doesn't need PTY availability checks.
+      // Git mode renders its own content; no PTY or chat setup needed.
+      if tab.mode == .git {
+        return
+      }
+
+      // Chat mode doesn't need PTY availability checks.
       if tab.mode == .chat {
         tab.usageStats.startSession()
         return
       }
 
-      /// Check if agent is available.
+      // Check if agent is available.
       if !tab.isAgentAvailable {
-        agentUnavailableError = "The \(tab.agent.displayName) CLI was not found at: \(tab.command)"
+        agentUnavailableError = "The \(tab.agent?.displayName ?? "Agent") CLI was not found at: \(tab.command)"
         return
       }
 
-      /// Mark as ready to show terminal.
+      // Mark as ready to show terminal.
       isReady = true
-      tab.handleTerminalLaunch(shouldAutoRunCommand: tab.agentType.showsUsageStats)
+      tab.handleTerminalLaunch(shouldAutoRunCommand: tab.agentType?.showsUsageStats ?? false)
 
-      /// Start the session timer.
+      // Start the session timer.
       tab.usageStats.startSession()
     }
   }

@@ -64,7 +64,7 @@ struct GeneralSettingsTab: View {
     Form {
       Section("Startup") {
         Picker("Default tab mode", selection: Bindable(configManager).config.defaultTabMode) {
-          ForEach(TabMode.allCases, id: \.self) { mode in
+          ForEach(TabMode.defaultOptions, id: \.self) { mode in
             Text(mode.displayName).tag(mode)
           }
         }

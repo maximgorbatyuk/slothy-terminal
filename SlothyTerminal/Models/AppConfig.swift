@@ -175,7 +175,8 @@ struct AppConfig: Codable, Equatable {
     sidebarPosition = (try? c.decode(SidebarPosition.self, forKey: .sidebarPosition)) ?? d.sidebarPosition
     sidebarTab = (try? c.decode(SidebarTab.self, forKey: .sidebarTab)) ?? d.sidebarTab
 
-    defaultTabMode = (try? c.decode(TabMode.self, forKey: .defaultTabMode)) ?? d.defaultTabMode
+    let decodedTabMode = (try? c.decode(TabMode.self, forKey: .defaultTabMode)) ?? d.defaultTabMode
+    defaultTabMode = TabMode.defaultOptions.contains(decodedTabMode) ? decodedTabMode : d.defaultTabMode
     defaultAgent = (try? c.decode(AgentType.self, forKey: .defaultAgent)) ?? d.defaultAgent
     maxRecentFolders = (try? c.decode(Int.self, forKey: .maxRecentFolders)) ?? d.maxRecentFolders
     lastUsedLaunchType = try? c.decode(LaunchType.self, forKey: .lastUsedLaunchType)

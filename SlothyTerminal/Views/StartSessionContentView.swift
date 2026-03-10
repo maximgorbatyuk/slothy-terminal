@@ -147,10 +147,12 @@ struct StartSessionContentView: View {
             sectionDivider
           }
 
-          promptSection
-            .padding(.horizontal, horizontalPadding)
-            .padding(.top, presentation == .modal ? 16 : 0)
-            .padding(.bottom, presentation == .modal ? 16 : 0)
+          if selectedLaunchType.requiresPrompt {
+            promptSection
+              .padding(.horizontal, horizontalPadding)
+              .padding(.top, presentation == .modal ? 16 : 0)
+              .padding(.bottom, presentation == .modal ? 16 : 0)
+          }
         }
         .frame(maxWidth: embeddedWidth)
         .frame(maxWidth: .infinity)
@@ -550,6 +552,9 @@ struct StartSessionContentView: View {
 
     case .opencodeChat:
       appState.createChatTab(agent: .opencode, directory: directory, initialPrompt: prompt?.promptText)
+
+    case .gitClient:
+      appState.createGitTab(directory: directory)
     }
 
     onStart()
@@ -559,7 +564,7 @@ struct StartSessionContentView: View {
 
   private func launchTypeAvailability(_ launchType: LaunchType) -> Bool {
     switch launchType {
-    case .terminal:
+    case .terminal, .gitClient:
       return true
 
     case .claude, .claudeChat:
@@ -572,7 +577,7 @@ struct StartSessionContentView: View {
 
   private func unavailabilityHint(for launchType: LaunchType) -> String {
     switch launchType {
-    case .terminal:
+    case .terminal, .gitClient:
       return ""
 
     case .claude, .opencode, .claudeChat, .opencodeChat:
@@ -590,6 +595,9 @@ struct StartSessionContentView: View {
 
     case .opencode, .opencodeChat:
       return Color(red: 0.29, green: 0.78, blue: 0.49)
+
+    case .gitClient:
+      return Color(red: 0.95, green: 0.55, blue: 0.15)
     }
   }
 }

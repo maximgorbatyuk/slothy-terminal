@@ -132,12 +132,12 @@ class AppState {
 
     activeWorkspaceID = id
 
-    /// If current active tab already belongs to this workspace, keep it.
+    // If current active tab already belongs to this workspace, keep it.
     if let current = activeTab, current.workspaceID == id {
       return
     }
 
-    /// Switch to first tab in the workspace, or nil if empty.
+    // Switch to first tab in the workspace, or nil if empty.
     if let firstTab = tabs.first(where: { $0.workspaceID == id }) {
       switchToTab(id: firstTab.id)
     } else {
@@ -227,12 +227,24 @@ class AppState {
     tabs.append(tab)
     switchToTab(id: tab.id)
 
-    /// Send initial prompt if provided.
+    // Send initial prompt if provided.
     if let prompt = initialPrompt,
        !prompt.isEmpty
     {
       tab.chatState?.sendMessage(prompt)
     }
+  }
+
+  /// Creates a new Git client tab with the specified working directory.
+  func createGitTab(directory: URL) {
+    let workspaceID = resolveWorkspaceID(for: directory)
+    let tab = Tab(
+      workspaceID: workspaceID,
+      workingDirectory: directory,
+      mode: .git
+    )
+    tabs.append(tab)
+    switchToTab(id: tab.id)
   }
 
   /// Starts the Telegram bot as a sidebar service.
@@ -257,14 +269,14 @@ class AppState {
   }
 
   /// Closes the tab with the specified ID.
-  /// If the tab is not active, prompts for confirmation instead of closing immediately.
+  /// Active tabs and stateless git tabs close immediately.
+  /// Inactive terminal/chat tabs prompt for confirmation first.
   func closeTab(id: UUID) {
-    guard tabs.contains(where: { $0.id == id }) else {
+    guard let tab = tabs.first(where: { $0.id == id }) else {
       return
     }
 
-    // Active tab closes immediately; inactive tab requires confirmation.
-    if activeTabID == id {
+    if activeTabID == id || tab.mode == .git {
       performCloseTab(id: id)
     } else {
       tabPendingClose = id
@@ -286,7 +298,7 @@ class AppState {
     tabPendingClose = nil
   }
 
-  // Performs the actual tab close: terminates processes, removes from list, selects next tab.
+  /// Performs the actual tab close: terminates processes, removes from list, selects next tab.
   private func performCloseTab(id: UUID) {
     if tabPendingClose == id {
       tabPendingClose = nil
@@ -298,12 +310,12 @@ class AppState {
 
     let closedTab = tabs[index]
 
-    /// Terminate chat process if active.
+    // Terminate chat process if active.
     closedTab.chatState?.terminateProcess()
 
     tabs.remove(at: index)
 
-    /// If we closed the active tab, switch to another one in the same workspace.
+    // If we closed the active tab, switch to another one in the same workspace.
     if activeTabID == id {
       let workspaceTabs = tabs.filter { $0.workspaceID == closedTab.workspaceID }
 
@@ -317,12 +329,12 @@ class AppState {
 
   /// Switches to the tab with the specified ID.
   func switchToTab(id: UUID) {
-    /// Deactivate current tab.
+    // Deactivate current tab.
     if let currentTab = activeTab {
       currentTab.isActive = false
     }
 
-    /// Activate new tab.
+    // Activate new tab.
     activeTabID = id
     if let newTab = activeTab {
       newTab.isActive = true
@@ -365,7 +377,7 @@ class AppState {
   /// Called during app quit to ensure child processes are cleaned up.
   func terminateAllSessions() {
     for tab in tabs {
-      /// terminateProcess() calls store.saveImmediately() internally.
+      // terminateProcess() calls store.saveImmediately() internally.
       tab.chatState?.terminateProcess()
     }
     telegramRuntime?.stop()
@@ -399,11 +411,9 @@ extension AppState: InjectionTabProvider {
 
   func terminalTabs(agentType: AgentType?, mode: TabMode?) -> [UUID] {
     tabs.filter { tab in
-      guard tab.mode == .terminal else {
-        return false
-      }
+      let requiredMode = mode ?? .terminal
 
-      if let mode, tab.mode != mode {
+      guard tab.mode == requiredMode else {
         return false
       }
 
@@ -440,9 +450,14 @@ extension AppState: TelegramBotDelegate {
   }
 
   func telegramBotOpenTab(mode: TabMode, agent: AgentType, directory: URL) {
-    if mode == .chat {
+    switch mode {
+    case .chat:
       createChatTab(agent: agent, directory: directory)
-    } else {
+
+    case .git:
+      createGitTab(directory: directory)
+
+    case .terminal:
       createTab(agent: agent, directory: directory)
     }
   }
@@ -450,14 +465,18 @@ extension AppState: TelegramBotDelegate {
   func telegramBotListRelayableTabs() -> [TelegramRelayTabInfo] {
     let registeredIds = Set(TerminalSurfaceRegistry.shared.registeredTabIds())
     return tabs
-      .filter { $0.mode == .terminal && registeredIds.contains($0.id) }
-      .map {
-        TelegramRelayTabInfo(
-          id: $0.id,
-          name: $0.tabName,
-          agentType: $0.agentType,
-          directory: $0.workingDirectory,
-          isActive: $0.id == activeTabID
+      .filter { $0.mode == .terminal && $0.agentType != nil && registeredIds.contains($0.id) }
+      .compactMap { tab in
+        guard let agentType = tab.agentType else {
+          return nil
+        }
+
+        return TelegramRelayTabInfo(
+          id: tab.id,
+          name: tab.tabName,
+          agentType: agentType,
+          directory: tab.workingDirectory,
+          isActive: tab.id == activeTabID
         )
       }
   }
@@ -465,7 +484,8 @@ extension AppState: TelegramBotDelegate {
   func telegramBotActiveInjectableAITab() -> TelegramRelayTabInfo? {
     guard let tab = activeTab,
           tab.mode == .terminal,
-          (tab.agentType == .claude || tab.agentType == .opencode)
+          let agentType = tab.agentType,
+          (agentType == .claude || agentType == .opencode)
     else {
       return nil
     }
@@ -479,7 +499,7 @@ extension AppState: TelegramBotDelegate {
     return TelegramRelayTabInfo(
       id: tab.id,
       name: tab.tabName,
-      agentType: tab.agentType,
+      agentType: agentType,
       directory: tab.workingDirectory,
       isActive: true
     )
@@ -523,6 +543,9 @@ extension AppState: TelegramBotDelegate {
 
     case .terminal:
       return "interactive"
+
+    case .git:
+      return "git"
     }
   }
 }
