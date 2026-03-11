@@ -252,9 +252,14 @@ Press `Cmd+R` in Xcode to build and run.
 # Xcode build
 xcodebuild -project SlothyTerminal.xcodeproj -scheme SlothyTerminal -configuration Debug build
 
-# SwiftPM tests (does not require the xcframework)
+# SwiftPM core validation (does not require the xcframework)
+swift build
 swift test
 ```
+
+The `SwiftPM` GitHub Actions workflow validates this SwiftPM core only. It does not build Ghostty-dependent or other app-only code from the Xcode target.
+
+If new code is intended to be part of the SwiftPM-covered core and is SwiftPM-compatible, add it to `Package.swift` so it stays covered by `swift build`, `swift test`, and CI. If it depends on the Ghostty/AppKit terminal runtime, or is otherwise app-only, keep it Xcode-only. Concrete Xcode-only examples include `Terminal/GhosttyApp.swift`, `Terminal/GhosttySurfaceView.swift`, `Views/`, and app-only integrations such as Sparkle-backed `Services/UpdateManager.swift`. The `SlothyTerminalLib` target uses an explicit `sources:` list, so SwiftPM-covered non-UI files must be added there manually.
 
 ## Project Structure
 
