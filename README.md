@@ -355,3 +355,4 @@ MIT License - see [LICENSE](LICENSE) for details.
 
 - [Ghostty](https://github.com/ghostty-org/ghostty) by Mitchell Hashimoto - GPU-accelerated terminal rendering via libghostty
 - [Sparkle](https://github.com/sparkle-project/Sparkle) for the update framework
+
