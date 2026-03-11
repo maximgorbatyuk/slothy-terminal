@@ -23,7 +23,8 @@ xcodebuild -project SlothyTerminal.xcodeproj -scheme SlothyTerminal -configurati
 swift build
 swift test
 # NOTE: Package.swift uses an explicit `sources:` list for the main library target (SlothyTerminalLib).
-# New non-UI source files must be added to that list manually or swift build/test will fail.
+# If new code is intended to be part of the SwiftPM-covered core and is SwiftPM-compatible, add it to that list manually or swift build/test will fail.
+# If code depends on the Ghostty/AppKit terminal runtime, or is otherwise app-only, keep it Xcode-only and out of Package.swift.
 # The test target auto-discovers files — no manual list needed for new tests.
 
 # Release build with notarization (requires .env with Apple credentials)
@@ -200,7 +201,12 @@ Key rules:
 
 ## Xcode Project Convention
 
-The Xcode project uses `PBXFileSystemSynchronizedRootGroup` — it auto-discovers source files from the filesystem. **No manual `.pbxproj` edits are needed** when adding new Swift files. Only `Package.swift` requires manual source list updates for new non-UI files.
+The Xcode project uses `PBXFileSystemSynchronizedRootGroup` — it auto-discovers source files from the filesystem. **No manual `.pbxproj` edits are needed** when adding new Swift files. Only `Package.swift` requires manual source list updates for new SwiftPM-covered non-UI files.
+
+- If new code is intended to be part of the SwiftPM-covered core and is SwiftPM-compatible, add it to `Package.swift` so it stays covered by `swift build` and `swift test`.
+- If new code depends on the Ghostty/AppKit terminal runtime, or is otherwise app-only, keep it Xcode-only.
+- Concrete Xcode-only examples: `Terminal/GhosttyApp.swift`, `Terminal/GhosttySurfaceView.swift`, files under `Views/`, and app-only integrations such as `Services/UpdateManager.swift`.
+- `Package.swift` uses an explicit `sources:` list for `SlothyTerminalLib`, so new SwiftPM-covered non-UI files must be added there manually.
 
 ## Known Issues & Pitfalls
 
