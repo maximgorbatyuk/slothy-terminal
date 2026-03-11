@@ -56,9 +56,19 @@ struct TabBarView: View {
             }
             .animation(.easeOut(duration: 0.14), value: dropIndicator)
             .onDrag {
+              appState.beginTabDrag(id: tab.id)
               draggedTabID = tab.id
               dropIndicator = .none
-              return NSItemProvider(object: tab.id.uuidString as NSString)
+              return NSItemProvider(
+                object: TabDragItem(
+                  id: tab.id,
+                  onDispose: {
+                    Task { @MainActor in
+                      appState.cancelTabDrag()
+                    }
+                  }
+                )
+              )
             }
             .onDrop(
               of: [UTType.text],
@@ -138,6 +148,7 @@ private struct TabReorderDropDelegate: DropDelegate {
   }
 
   func performDrop(info: DropInfo) -> Bool {
+    appState.completeTabDrag()
     draggedTabID = nil
     dropIndicator = .none
     return true
@@ -169,6 +180,7 @@ private struct TabReorderTrailingDropDelegate: DropDelegate {
   }
 
   func performDrop(info: DropInfo) -> Bool {
+    appState.completeTabDrag()
     draggedTabID = nil
     dropIndicator = .none
     return true
@@ -188,6 +200,32 @@ private struct TabDropInsertionIndicator: View {
       .frame(width: 3)
       .padding(.vertical, 6)
       .shadow(color: Color.accentColor.opacity(0.18), radius: 1.5, x: 0, y: 0)
+  }
+}
+
+private final class TabDragItem: NSObject, NSItemProviderWriting {
+  let id: UUID
+  let onDispose: () -> Void
+
+  init(id: UUID, onDispose: @escaping () -> Void) {
+    self.id = id
+    self.onDispose = onDispose
+  }
+
+  deinit {
+    onDispose()
+  }
+
+  static var writableTypeIdentifiersForItemProvider: [String] {
+    [UTType.text.identifier]
+  }
+
+  func loadData(
+    withTypeIdentifier typeIdentifier: String,
+    forItemProviderCompletionHandler completionHandler: @escaping (Data?, (any Error)?) -> Void
+  ) -> Progress? {
+    completionHandler(id.uuidString.data(using: .utf8), nil)
+    return nil
   }
 }
 

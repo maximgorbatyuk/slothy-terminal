@@ -392,6 +392,29 @@ struct AppStateWorkspaceTests {
     #expect(TabDropIndicator.before(UUID()).isVisible == true)
   }
 
+  @Test("Cancelled drag restores original workspace tab order")
+  @MainActor
+  func cancelledDragRestoresOriginalWorkspaceTabOrder() throws {
+    let appState = AppState()
+
+    appState.createWorkspace(from: dirA)
+    appState.createTab(agent: .terminal, directory: dirA)
+    let firstTab = try #require(appState.activeTab)
+    appState.createTab(agent: .claude, directory: dirA)
+    let secondTab = try #require(appState.activeTab)
+
+    let originalOrder = appState.visibleTabs.map(\.id)
+
+    appState.beginTabDrag(id: secondTab.id)
+    appState.moveTab(id: secondTab.id, before: firstTab.id)
+
+    #expect(appState.visibleTabs.map(\.id) == [secondTab.id, firstTab.id])
+
+    appState.cancelTabDrag()
+
+    #expect(appState.visibleTabs.map(\.id) == originalOrder)
+  }
+
   @Test("Closing tab in workspace selects next tab from same workspace")
   @MainActor
   func closeTabSelectsFromSameWorkspace() throws {

@@ -51,6 +51,12 @@ enum TabDropIndicator: Equatable {
   }
 }
 
+private struct TabDragSnapshot {
+  let draggedTabID: UUID
+  let workspaceID: UUID
+  let orderedTabIDs: [UUID]
+}
+
 /// Global application state managing tabs and UI state.
 @MainActor
 @Observable
@@ -132,6 +138,8 @@ class AppState {
 
   /// Tab awaiting close confirmation (set when user tries to close an inactive tab).
   var tabPendingClose: UUID?
+
+  private var tabDragSnapshot: TabDragSnapshot?
 
   private var configManager = ConfigManager.shared
 
@@ -443,6 +451,39 @@ class AppState {
     replaceTabs(in: workspaceID, with: workspaceTabs)
   }
 
+  /// Captures the original workspace order before drag reordering begins.
+  func beginTabDrag(id: UUID) {
+    guard let draggedTab = tabs.first(where: { $0.id == id }) else {
+      return
+    }
+
+    let workspaceID = draggedTab.workspaceID
+    let orderedTabIDs = tabs
+      .filter { $0.workspaceID == workspaceID }
+      .map(\.id)
+
+    tabDragSnapshot = TabDragSnapshot(
+      draggedTabID: id,
+      workspaceID: workspaceID,
+      orderedTabIDs: orderedTabIDs
+    )
+  }
+
+  /// Restores the original order if a drag ends without a committed drop.
+  func cancelTabDrag() {
+    guard let snapshot = tabDragSnapshot else {
+      return
+    }
+
+    restoreWorkspaceTabOrder(for: snapshot)
+    tabDragSnapshot = nil
+  }
+
+  /// Clears drag snapshot after a successful drop.
+  func completeTabDrag() {
+    tabDragSnapshot = nil
+  }
+
   /// Moves a tab to the end of its workspace.
   func moveTabToEnd(id: UUID) {
     guard let sourceTab = tabs.first(where: { $0.id == id }) else {
@@ -500,6 +541,13 @@ class AppState {
 
       return reorderedIterator.next() ?? tab
     }
+  }
+
+  /// Restores a workspace to a previously captured tab order.
+  private func restoreWorkspaceTabOrder(for snapshot: TabDragSnapshot) {
+    let tabsByID = Dictionary(uniqueKeysWithValues: tabs.map { ($0.id, $0) })
+    let restoredTabs = snapshot.orderedTabIDs.compactMap { tabsByID[$0] }
+    replaceTabs(in: snapshot.workspaceID, with: restoredTabs)
   }
 
   /// Shows the startup page for creating a new session.
