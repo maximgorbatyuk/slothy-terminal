@@ -48,7 +48,7 @@ struct StartSessionContentView: View {
   /// The directory that will be used for the new session.
   private var currentDirectory: URL {
     selectedDirectory
-      ?? appState.globalWorkingDirectory
+      ?? appState.preferredNewSessionDirectory
       ?? recentFoldersManager.recentFolders.first
       ?? FileManager.default.homeDirectoryForCurrentUser
   }

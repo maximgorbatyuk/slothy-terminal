@@ -1,4 +1,5 @@
 import SwiftUI
+import UniformTypeIdentifiers
 
 /// App theme color — adaptive for light/dark appearance.
 var appBackgroundColor: Color {
@@ -25,20 +26,11 @@ var appCardColor: Color {
 /// The tab bar displaying all open terminal tabs.
 struct TabBarView: View {
   @Environment(AppState.self) private var appState
+  @State private var draggedTabID: UUID?
+  @State private var dropIndicator: TabDropIndicator = .none
 
   /// Reserved width for the new-tab button (icon + horizontal padding).
   private let newTabButtonWidth: CGFloat = 36
-
-  /// Name of the tab pending close, for the confirmation dialog.
-  private var pendingTabName: String {
-    guard let id = appState.tabPendingClose,
-          let tab = appState.tabs.first(where: { $0.id == id })
-    else {
-      return "this tab"
-    }
-
-    return "\"\(tab.tabName)\""
-  }
 
   var body: some View {
     VStack(spacing: 0) {
@@ -51,12 +43,52 @@ struct TabBarView: View {
 
           /// Tab items.
           ForEach(appState.visibleTabs) { tab in
-            TabItemView(tab: tab, width: tabWidth)
+            TabItemView(
+              tab: tab,
+              label: appState.tabBarLabel(for: tab),
+              width: tabWidth
+            )
+            .overlay(alignment: .leading) {
+              if dropIndicator == .before(tab.id) {
+                TabDropInsertionIndicator()
+                  .transition(.opacity.combined(with: .scale(scale: 0.92, anchor: .center)))
+              }
+            }
+            .animation(.easeOut(duration: 0.14), value: dropIndicator)
+            .onDrag {
+              draggedTabID = tab.id
+              dropIndicator = .none
+              return NSItemProvider(object: tab.id.uuidString as NSString)
+            }
+            .onDrop(
+              of: [UTType.text],
+              delegate: TabReorderDropDelegate(
+                targetTab: tab,
+                appState: appState,
+                draggedTabID: $draggedTabID,
+                dropIndicator: $dropIndicator
+              )
+            )
           }
 
           /// New tab button.
           NewTabButton()
             .frame(width: newTabButtonWidth)
+            .overlay(alignment: .leading) {
+              if dropIndicator == .end {
+                TabDropInsertionIndicator()
+                  .transition(.opacity.combined(with: .scale(scale: 0.92, anchor: .center)))
+              }
+            }
+            .animation(.easeOut(duration: 0.14), value: dropIndicator)
+            .onDrop(
+              of: [UTType.text],
+              delegate: TabReorderTrailingDropDelegate(
+                appState: appState,
+                draggedTabID: $draggedTabID,
+                dropIndicator: $dropIndicator
+              )
+            )
         }
       }
       .frame(height: 36)
@@ -79,14 +111,90 @@ struct TabBarView: View {
         appState.cancelCloseTab()
       }
     } message: {
-      Text("Close \(pendingTabName)?")
+      Text("Close \(appState.pendingCloseTabLabel)?")
     }
+  }
+}
+
+private struct TabReorderDropDelegate: DropDelegate {
+  let targetTab: Tab
+  let appState: AppState
+  @Binding var draggedTabID: UUID?
+  @Binding var dropIndicator: TabDropIndicator
+
+  func dropEntered(info: DropInfo) {
+    guard let draggedTabID,
+          draggedTabID != targetTab.id
+    else {
+      return
+    }
+
+    dropIndicator = appState.tabDropIndicator(for: draggedTabID, targetTabID: targetTab.id)
+    appState.moveTab(id: draggedTabID, before: targetTab.id)
+  }
+
+  func dropUpdated(info: DropInfo) -> DropProposal? {
+    DropProposal(operation: .move)
+  }
+
+  func performDrop(info: DropInfo) -> Bool {
+    draggedTabID = nil
+    dropIndicator = .none
+    return true
+  }
+
+  func dropExited(info: DropInfo) {
+    if dropIndicator == .before(targetTab.id) {
+      dropIndicator = .none
+    }
+  }
+}
+
+private struct TabReorderTrailingDropDelegate: DropDelegate {
+  let appState: AppState
+  @Binding var draggedTabID: UUID?
+  @Binding var dropIndicator: TabDropIndicator
+
+  func dropEntered(info: DropInfo) {
+    guard let draggedTabID else {
+      return
+    }
+
+    dropIndicator = appState.tabDropIndicator(for: draggedTabID, targetTabID: nil)
+    appState.moveTabToEnd(id: draggedTabID)
+  }
+
+  func dropUpdated(info: DropInfo) -> DropProposal? {
+    DropProposal(operation: .move)
+  }
+
+  func performDrop(info: DropInfo) -> Bool {
+    draggedTabID = nil
+    dropIndicator = .none
+    return true
+  }
+
+  func dropExited(info: DropInfo) {
+    if dropIndicator == .end {
+      dropIndicator = .none
+    }
+  }
+}
+
+private struct TabDropInsertionIndicator: View {
+  var body: some View {
+    RoundedRectangle(cornerRadius: 1)
+      .fill(Color.accentColor)
+      .frame(width: 3)
+      .padding(.vertical, 6)
+      .shadow(color: Color.accentColor.opacity(0.18), radius: 1.5, x: 0, y: 0)
   }
 }
 
 /// A single tab item in the tab bar.
 struct TabItemView: View {
   let tab: Tab
+  let label: String
   let width: CGFloat
   @Environment(AppState.self) private var appState
 
@@ -116,7 +224,7 @@ struct TabItemView: View {
       tabLeadingIcon
 
       /// Tab title.
-      Text(tab.tabName)
+      Text(label)
         .font(.system(size: 12))
         .foregroundColor(isActive ? .primary : .gray)
         .lineLimit(1)

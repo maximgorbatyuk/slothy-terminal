@@ -88,7 +88,7 @@ struct TelegramSidebarView: View {
         directory: URL(fileURLWithPath: path),
         startImmediately: true
       )
-    } else if let dir = appState.globalWorkingDirectory ?? appState.activeTab?.workingDirectory {
+    } else if let dir = appState.currentContextDirectory {
       appState.startTelegramBot(directory: dir, startImmediately: true)
     } else {
       appState.startTelegramBot(
