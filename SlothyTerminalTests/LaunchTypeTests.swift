@@ -7,7 +7,7 @@ final class LaunchTypeTests: XCTestCase {
   // MARK: - Metadata Tests
 
   func testAllCasesCount() {
-    XCTAssertEqual(LaunchType.allCases.count, 5)
+    XCTAssertEqual(LaunchType.allCases.count, 6)
   }
 
   func testDisplayNames() {

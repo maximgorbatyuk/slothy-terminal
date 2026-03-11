@@ -7,6 +7,7 @@ enum LaunchType: String, CaseIterable, Identifiable, Codable {
   case opencode
   case claudeChat
   case opencodeChat
+  case gitClient
 
   var id: String { rawValue }
 
@@ -27,6 +28,9 @@ enum LaunchType: String, CaseIterable, Identifiable, Codable {
 
     case .opencodeChat:
       return "OpenCode Chat"
+
+    case .gitClient:
+      return "Git client"
     }
   }
 
@@ -47,6 +51,9 @@ enum LaunchType: String, CaseIterable, Identifiable, Codable {
 
     case .opencodeChat:
       return "Chat interface for OpenCode"
+
+    case .gitClient:
+      return "Built-in Git repository browser"
     }
   }
 
@@ -67,6 +74,9 @@ enum LaunchType: String, CaseIterable, Identifiable, Codable {
 
     case .opencodeChat:
       return "bubble.left.and.bubble.right"
+
+    case .gitClient:
+      return "arrow.triangle.branch"
     }
   }
 
@@ -76,6 +86,9 @@ enum LaunchType: String, CaseIterable, Identifiable, Codable {
     switch self {
     case .terminal, .claude, .opencode, .claudeChat, .opencodeChat:
       return true
+
+    case .gitClient:
+      return false
     }
   }
 
@@ -83,7 +96,7 @@ enum LaunchType: String, CaseIterable, Identifiable, Codable {
   /// Desktop launches require an explicit prompt selection.
   var requiresPredefinedPrompt: Bool {
     switch self {
-    case .terminal, .claude, .opencode, .claudeChat, .opencodeChat:
+    case .terminal, .claude, .opencode, .claudeChat, .opencodeChat, .gitClient:
       return false
     }
   }
@@ -99,6 +112,9 @@ enum LaunchType: String, CaseIterable, Identifiable, Codable {
 
     case .opencode, .opencodeChat:
       return .opencode
+
+    case .gitClient:
+      return nil
     }
   }
 }

@@ -27,6 +27,36 @@ enum ModalType: Identifiable {
   }
 }
 
+/// Input that determines when the status bar should re-fetch the git branch.
+struct GitBranchRefreshContext: Equatable {
+  let tabID: UUID
+  let workingDirectory: URL
+  let isTerminalBusy: Bool
+}
+
+enum TabDropIndicator: Equatable {
+  case none
+  case before(UUID)
+  case end
+
+  var isVisible: Bool {
+    switch self {
+    case .none:
+      return false
+
+    case .before,
+         .end:
+      return true
+    }
+  }
+}
+
+private struct TabDragSnapshot {
+  let draggedTabID: UUID
+  let workspaceID: UUID
+  let orderedTabIDs: [UUID]
+}
+
 /// Global application state managing tabs and UI state.
 @MainActor
 @Observable
@@ -54,6 +84,62 @@ class AppState {
 
   /// Shared working directory preselected across tabs within this session.
   var globalWorkingDirectory: URL?
+
+  /// Preferred default directory for launching a new session.
+  var preferredNewSessionDirectory: URL? {
+    if let activeWorkspace {
+      return activeWorkspace.rootDirectory
+    }
+
+    return globalWorkingDirectory
+  }
+
+  /// Best available directory for workspace-aware sidebars and services.
+  var currentContextDirectory: URL? {
+    if let activeTab {
+      return activeTab.workingDirectory
+    }
+
+    return preferredNewSessionDirectory
+  }
+
+  /// Refresh context for the bottom-bar git branch display.
+  var gitBranchRefreshContext: GitBranchRefreshContext? {
+    guard let activeTab else {
+      return nil
+    }
+
+    return GitBranchRefreshContext(
+      tabID: activeTab.id,
+      workingDirectory: activeTab.workingDirectory,
+      isTerminalBusy: activeTab.mode == .terminal ? activeTab.isTerminalBusy : false
+    )
+  }
+
+  /// Display label for a tab in the current workspace tab bar.
+  func tabBarLabel(for tab: Tab) -> String {
+    guard let index = visibleTabs.firstIndex(where: { $0.id == tab.id }) else {
+      return tab.tabName
+    }
+
+    return "\(index + 1). \(tab.tabName)"
+  }
+
+  /// Display label for the tab awaiting close confirmation.
+  var pendingCloseTabLabel: String {
+    guard let id = tabPendingClose,
+          let tab = tabs.first(where: { $0.id == id })
+    else {
+      return "this tab"
+    }
+
+    return "\"\(tabBarLabel(for: tab))\""
+  }
+
+  /// Tab awaiting close confirmation (set when user tries to close an inactive tab).
+  var tabPendingClose: UUID?
+
+  private var tabDragSnapshot: TabDragSnapshot?
 
   private var configManager = ConfigManager.shared
 
@@ -129,12 +215,12 @@ class AppState {
 
     activeWorkspaceID = id
 
-    /// If current active tab already belongs to this workspace, keep it.
+    // If current active tab already belongs to this workspace, keep it.
     if let current = activeTab, current.workspaceID == id {
       return
     }
 
-    /// Switch to first tab in the workspace, or nil if empty.
+    // Switch to first tab in the workspace, or nil if empty.
     if let firstTab = tabs.first(where: { $0.workspaceID == id }) {
       switchToTab(id: firstTab.id)
     } else {
@@ -224,12 +310,24 @@ class AppState {
     tabs.append(tab)
     switchToTab(id: tab.id)
 
-    /// Send initial prompt if provided.
+    // Send initial prompt if provided.
     if let prompt = initialPrompt,
        !prompt.isEmpty
     {
       tab.chatState?.sendMessage(prompt)
     }
+  }
+
+  /// Creates a new Git client tab with the specified working directory.
+  func createGitTab(directory: URL) {
+    let workspaceID = resolveWorkspaceID(for: directory)
+    let tab = Tab(
+      workspaceID: workspaceID,
+      workingDirectory: directory,
+      mode: .git
+    )
+    tabs.append(tab)
+    switchToTab(id: tab.id)
   }
 
   /// Starts the Telegram bot as a sidebar service.
@@ -254,19 +352,53 @@ class AppState {
   }
 
   /// Closes the tab with the specified ID.
+  /// Active tabs and stateless git tabs close immediately.
+  /// Inactive terminal/chat tabs prompt for confirmation first.
   func closeTab(id: UUID) {
+    guard let tab = tabs.first(where: { $0.id == id }) else {
+      return
+    }
+
+    if activeTabID == id || tab.mode == .git {
+      performCloseTab(id: id)
+    } else {
+      tabPendingClose = id
+    }
+  }
+
+  /// Confirms and closes the tab that was pending confirmation.
+  func confirmCloseTab() {
+    guard let id = tabPendingClose else {
+      return
+    }
+
+    tabPendingClose = nil
+    performCloseTab(id: id)
+  }
+
+  /// Cancels the pending tab close.
+  func cancelCloseTab() {
+    tabPendingClose = nil
+  }
+
+  /// Performs the actual tab close: terminates processes, removes from list, selects next tab.
+  private func performCloseTab(id: UUID) {
+    if tabPendingClose == id {
+      tabPendingClose = nil
+    }
+
     guard let index = tabs.firstIndex(where: { $0.id == id }) else {
       return
     }
 
     let closedTab = tabs[index]
 
-    /// Terminate chat process if active.
+    // Terminate chat process if active.
     closedTab.chatState?.terminateProcess()
 
     tabs.remove(at: index)
 
-    /// If we closed the active tab, switch to another one in the same workspace.
+    // If we closed the active tab, switch to another one in the same workspace.
     if activeTabID == id {
       let workspaceTabs = tabs.filter { $0.workspaceID == closedTab.workspaceID }
 
@@ -280,17 +412,142 @@ class AppState {
 
   /// Switches to the tab with the specified ID.
   func switchToTab(id: UUID) {
-    /// Deactivate current tab.
+    // Deactivate current tab.
     if let currentTab = activeTab {
       currentTab.isActive = false
     }
 
-    /// Activate new tab.
+    // Activate new tab.
     activeTabID = id
     if let newTab = activeTab {
       newTab.isActive = true
       newTab.clearBackgroundActivity()
     }
+  }
+
+  /// Moves a tab before another tab within the same workspace.
+  func moveTab(id: UUID, before targetID: UUID) {
+    guard id != targetID,
+          let sourceTab = tabs.first(where: { $0.id == id }),
+          let targetTab = tabs.first(where: { $0.id == targetID }),
+          sourceTab.workspaceID == targetTab.workspaceID
+    else {
+      return
+    }
+
+    let workspaceID = sourceTab.workspaceID
+    var workspaceTabs = tabs.filter { $0.workspaceID == workspaceID }
+
+    guard let sourceIndex = workspaceTabs.firstIndex(where: { $0.id == id }),
+          let targetIndex = workspaceTabs.firstIndex(where: { $0.id == targetID })
+    else {
+      return
+    }
+
+    let movedTab = workspaceTabs.remove(at: sourceIndex)
+    let insertionIndex = sourceIndex < targetIndex ? targetIndex - 1 : targetIndex
+    workspaceTabs.insert(movedTab, at: insertionIndex)
+
+    replaceTabs(in: workspaceID, with: workspaceTabs)
+  }
+
+  /// Captures the original workspace order before drag reordering begins.
+  func beginTabDrag(id: UUID) {
+    guard let draggedTab = tabs.first(where: { $0.id == id }) else {
+      return
+    }
+
+    let workspaceID = draggedTab.workspaceID
+    let orderedTabIDs = tabs
+      .filter { $0.workspaceID == workspaceID }
+      .map(\.id)
+
+    tabDragSnapshot = TabDragSnapshot(
+      draggedTabID: id,
+      workspaceID: workspaceID,
+      orderedTabIDs: orderedTabIDs
+    )
+  }
+
+  /// Restores the original order if a drag ends without a committed drop.
+  func cancelTabDrag() {
+    guard let snapshot = tabDragSnapshot else {
+      return
+    }
+
+    restoreWorkspaceTabOrder(for: snapshot)
+    tabDragSnapshot = nil
+  }
+
+  /// Clears drag snapshot after a successful drop.
+  func completeTabDrag() {
+    tabDragSnapshot = nil
+  }
+
+  /// Moves a tab to the end of its workspace.
+  func moveTabToEnd(id: UUID) {
+    guard let sourceTab = tabs.first(where: { $0.id == id }) else {
+      return
+    }
+
+    let workspaceID = sourceTab.workspaceID
+    var workspaceTabs = tabs.filter { $0.workspaceID == workspaceID }
+
+    guard let sourceIndex = workspaceTabs.firstIndex(where: { $0.id == id }) else {
+      return
+    }
+
+    let movedTab = workspaceTabs.remove(at: sourceIndex)
+    workspaceTabs.append(movedTab)
+
+    replaceTabs(in: workspaceID, with: workspaceTabs)
+  }
+
+  /// Returns the insertion indicator for the current drag target.
+  func tabDropIndicator(for draggedTabID: UUID?, targetTabID: UUID?) -> TabDropIndicator {
+    guard let draggedTabID,
+          let draggedTab = tabs.first(where: { $0.id == draggedTabID })
+    else {
+      return .none
+    }
+
+    if let targetTabID {
+      guard targetTabID != draggedTabID,
+            let targetTab = tabs.first(where: { $0.id == targetTabID }),
+            targetTab.workspaceID == draggedTab.workspaceID,
+            targetTab.workspaceID == activeWorkspaceID
+      else {
+        return .none
+      }
+
+      return .before(targetTabID)
+    }
+
+    guard draggedTab.workspaceID == activeWorkspaceID else {
+      return .none
+    }
+
+    return .end
+  }
+
+  /// Replaces tabs for a workspace while preserving other workspace positions.
+  private func replaceTabs(in workspaceID: UUID, with reorderedTabs: [Tab]) {
+    var reorderedIterator = reorderedTabs.makeIterator()
+
+    tabs = tabs.map { tab in
+      guard tab.workspaceID == workspaceID else {
+        return tab
+      }
+
+      return reorderedIterator.next() ?? tab
+    }
+  }
+
+  /// Restores a workspace to a previously captured tab order.
+  private func restoreWorkspaceTabOrder(for snapshot: TabDragSnapshot) {
+    let tabsByID = Dictionary(uniqueKeysWithValues: tabs.map { ($0.id, $0) })
+    let restoredTabs = snapshot.orderedTabIDs.compactMap { tabsByID[$0] }
+    replaceTabs(in: snapshot.workspaceID, with: restoredTabs)
   }
 
   /// Shows the startup page for creating a new session.
@@ -328,7 +585,7 @@ class AppState {
   /// Called during app quit to ensure child processes are cleaned up.
   func terminateAllSessions() {
     for tab in tabs {
-      /// terminateProcess() calls store.saveImmediately() internally.
+      // terminateProcess() calls store.saveImmediately() internally.
       tab.chatState?.terminateProcess()
     }
     telegramRuntime?.stop()
@@ -362,11 +619,9 @@ extension AppState: InjectionTabProvider {
 
   func terminalTabs(agentType: AgentType?, mode: TabMode?) -> [UUID] {
     tabs.filter { tab in
-      guard tab.mode == .terminal else {
-        return false
-      }
+      let requiredMode = mode ?? .terminal
 
-      if let mode, tab.mode != mode {
+      guard tab.mode == requiredMode else {
         return false
       }
 
@@ -403,9 +658,14 @@ extension AppState: TelegramBotDelegate {
   }
 
   func telegramBotOpenTab(mode: TabMode, agent: AgentType, directory: URL) {
-    if mode == .chat {
+    switch mode {
+    case .chat:
       createChatTab(agent: agent, directory: directory)
-    } else {
+
+    case .git:
+      createGitTab(directory: directory)
+
+    case .terminal:
       createTab(agent: agent, directory: directory)
     }
   }
@@ -413,14 +673,18 @@ extension AppState: TelegramBotDelegate {
   func telegramBotListRelayableTabs() -> [TelegramRelayTabInfo] {
     let registeredIds = Set(TerminalSurfaceRegistry.shared.registeredTabIds())
     return tabs
-      .filter { $0.mode == .terminal && registeredIds.contains($0.id) }
-      .map {
-        TelegramRelayTabInfo(
-          id: $0.id,
-          name: $0.tabName,
-          agentType: $0.agentType,
-          directory: $0.workingDirectory,
-          isActive: $0.id == activeTabID
+      .filter { $0.mode == .terminal && $0.agentType != nil && registeredIds.contains($0.id) }
+      .compactMap { tab in
+        guard let agentType = tab.agentType else {
+          return nil
+        }
+
+        return TelegramRelayTabInfo(
+          id: tab.id,
+          name: tab.tabName,
+          agentType: agentType,
+          directory: tab.workingDirectory,
+          isActive: tab.id == activeTabID
         )
       }
   }
@@ -428,7 +692,8 @@ extension AppState: TelegramBotDelegate {
   func telegramBotActiveInjectableAITab() -> TelegramRelayTabInfo? {
     guard let tab = activeTab,
           tab.mode == .terminal,
-          (tab.agentType == .claude || tab.agentType == .opencode)
+          let agentType = tab.agentType,
+          (agentType == .claude || agentType == .opencode)
     else {
       return nil
     }
@@ -442,7 +707,7 @@ extension AppState: TelegramBotDelegate {
     return TelegramRelayTabInfo(
       id: tab.id,
       name: tab.tabName,
-      agentType: tab.agentType,
+      agentType: agentType,
       directory: tab.workingDirectory,
       isActive: true
     )
@@ -486,6 +751,9 @@ extension AppState: TelegramBotDelegate {
 
     case .terminal:
       return "interactive"
+
+    case .git:
+      return "git"
     }
   }
 }

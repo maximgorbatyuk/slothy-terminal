@@ -11,7 +11,7 @@ struct AutomationSidebarView: View {
   @State private var statusDismissTask: Task<Void, Never>?
 
   private var activeDirectory: URL? {
-    appState.activeTab?.workingDirectory ?? appState.globalWorkingDirectory
+    appState.currentContextDirectory
   }
 
   private var isInjectable: Bool {

@@ -203,7 +203,7 @@ struct StatusBarView: View {
     .padding(.horizontal, 12)
     .padding(.vertical, 4)
     .background(appCardColor)
-    .task(id: activeDirectory) {
+    .task(id: appState.gitBranchRefreshContext) {
       await updateGitBranch()
     }
   }

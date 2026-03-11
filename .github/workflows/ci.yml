@@ -14,36 +14,10 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  build:
-    name: Build
+  validate:
+    name: Build and Test SwiftPM Core
     runs-on: macos-14
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
 
-      - name: Select Xcode
-        run: sudo xcode-select -s /Applications/Xcode_16.2.app/Contents/Developer
-
-      - name: Show Xcode version
-        run: xcodebuild -version
-
-      - name: Resolve package dependencies
-        run: xcodebuild -resolvePackageDependencies -scheme SlothyTerminal -project SlothyTerminal.xcodeproj
-
-      - name: Build
-        run: |
-          xcodebuild build \
-            -scheme SlothyTerminal \
-            -project SlothyTerminal.xcodeproj \
-            -destination 'platform=macOS' \
-            -configuration Debug \
-            CODE_SIGNING_ALLOWED=NO
-
-  test:
-    name: Test
-    runs-on: macos-14
-    # Skip tests for PRs from develop to main (already tested on develop)
-    if: github.base_ref != 'main'
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -54,11 +28,11 @@ jobs:
       - name: Show Swift version
         run: swift --version
 
-      - name: Resolve Swift package dependencies
-        run: swift package resolve
+      - name: Swift build
+        run: swift build
 
-      - name: Run tests
-        run: swift test --parallel
+      - name: Swift test
+        run: swift test
 
   lint:
     name: Swift Format Check

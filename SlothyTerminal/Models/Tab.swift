@@ -4,6 +4,12 @@ import Foundation
 enum TabMode: String, Codable, CaseIterable {
   case terminal
   case chat
+  case git
+
+  /// Modes available as a default startup option in settings.
+  static var defaultOptions: [TabMode] {
+    [.terminal, .chat]
+  }
 
   var displayName: String {
     switch self {
@@ -12,6 +18,9 @@ enum TabMode: String, Codable, CaseIterable {
 
     case .chat:
       return "Chat"
+
+    case .git:
+      return "Git client"
     }
   }
 }
@@ -22,7 +31,7 @@ enum TabMode: String, Codable, CaseIterable {
 class Tab: Identifiable {
   let id: UUID
   let workspaceID: UUID
-  let agentType: AgentType
+  let agentType: AgentType?
   let mode: TabMode
   var workingDirectory: URL
   var title: String
@@ -40,8 +49,8 @@ class Tab: Identifiable {
   /// When set, replaces the agent's default argument construction.
   let launchArgumentsOverride: [String]?
 
-  /// The AI agent for this tab.
-  let agent: AIAgent
+  /// The AI agent for this tab (nil for non-agent modes like `.git`).
+  let agent: AIAgent?
 
   /// The chat state for chat-mode tabs.
   var chatState: ChatState?
@@ -49,7 +58,7 @@ class Tab: Identifiable {
   init(
     id: UUID = UUID(),
     workspaceID: UUID,
-    agentType: AgentType,
+    agentType: AgentType? = nil,
     workingDirectory: URL,
     title: String? = nil,
     initialPrompt: SavedPrompt? = nil,
@@ -57,6 +66,11 @@ class Tab: Identifiable {
     mode: TabMode = .terminal,
     resumeSessionId: String? = nil
   ) {
+    assert(
+      mode != .git || agentType == nil,
+      "Git tabs must not have an agentType"
+    )
+
     self.id = id
     self.workspaceID = workspaceID
     self.agentType = agentType
@@ -66,12 +80,16 @@ class Tab: Identifiable {
     self.initialPrompt = initialPrompt
     self.launchArgumentsOverride = launchArgumentsOverride
     self.usageStats = UsageStats()
-    self.agent = AgentFactory.createAgent(for: agentType)
 
-    /// Set context window limit from agent.
-    self.usageStats.contextWindowLimit = agent.contextWindowLimit
+    if let agentType {
+      let createdAgent = AgentFactory.createAgent(for: agentType)
+      self.agent = createdAgent
+      self.usageStats.contextWindowLimit = createdAgent.contextWindowLimit
+    } else {
+      self.agent = nil
+    }
 
-    if mode == .chat {
+    if mode == .chat, let agentType {
       if let resumeSessionId {
         self.chatState = ChatState(
           workingDirectory: workingDirectory,
@@ -93,9 +111,13 @@ class Tab: Identifiable {
   }
 
   /// Stable tab label shown in the tab bar.
-  /// Examples: "Claude | chat", "Opencode | cli", "Telegram | bot".
+  /// Examples: "Claude | chat", "Opencode | cli", "Git client".
   var tabName: String {
-    "\(agentNameForTab) | \(modeNameForTab)"
+    if mode == .git {
+      return "Git client"
+    }
+
+    return "\(agentNameForTab) | \(modeNameForTab)"
   }
 
   /// Agent label used in tab/window titles.
@@ -109,6 +131,9 @@ class Tab: Identifiable {
 
     case .terminal:
       return "Terminal"
+
+    case nil:
+      return ""
     }
   }
 
@@ -120,17 +145,24 @@ class Tab: Identifiable {
 
     case .terminal:
       return "cli"
+
+    case .git:
+      return "git"
     }
   }
 
   /// The command to execute for this tab's agent.
   var command: String {
-    agent.command
+    agent?.command ?? ""
   }
 
   /// The arguments to pass to the agent command.
   /// Uses launch override if set, otherwise delegates to the agent.
   var arguments: [String] {
+    guard let agent else {
+      return []
+    }
+
     if let launchArgumentsOverride {
       return launchArgumentsOverride
     }
@@ -144,12 +176,12 @@ class Tab: Identifiable {
 
   /// The environment variables for the agent process.
   var environment: [String: String] {
-    agent.environmentVariables
+    agent?.environmentVariables ?? [:]
   }
 
   /// Checks if the agent is available (installed).
   var isAgentAvailable: Bool {
-    agent.isAvailable()
+    agent?.isAvailable() ?? false
   }
 
   /// Whether this tab is actively executing work.
@@ -160,6 +192,9 @@ class Tab: Identifiable {
 
     case .terminal:
       return isTerminalBusy
+
+    case .git:
+      return false
     }
   }
 

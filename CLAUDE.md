@@ -23,7 +23,8 @@ xcodebuild -project SlothyTerminal.xcodeproj -scheme SlothyTerminal -configurati
 swift build
 swift test
 # NOTE: Package.swift uses an explicit `sources:` list for the main library target (SlothyTerminalLib).
-# New non-UI source files must be added to that list manually or swift build/test will fail.
+# If new code is intended to be part of the SwiftPM-covered core and is SwiftPM-compatible, add it to that list manually or swift build/test will fail.
+# If code depends on the Ghostty/AppKit terminal runtime, or is otherwise app-only, keep it Xcode-only and out of Package.swift.
 # The test target auto-discovers files — no manual list needed for new tests.
 
 # Release build with notarization (requires .env with Apple credentials)
@@ -61,12 +62,25 @@ User Action → AppState.createChatTab() → Tab(mode: .chat, ChatState)
                      ChatConversation update + snapshot persistence
                                         ↓
                         ChatView/MessageBubble render markdown/tools
+
+Git Client Tabs
+User Action → AppState.createGitTab() → Tab(mode: .git)
+                                        ↓
+                              GitClientView (sub-tab picker)
+                                        ↓
+        GitTab enum routes to: Overview | RevisionGraph | stubs
+                                        ↓
+              GitStatsService / GitProcessRunner → git CLI
+                                        ↓
+           GraphLaneCalculator (pure logic, background thread)
+                                        ↓
+              RevisionGraphView / GitOverviewContentView render
 ```
 
 ### Key Components
 
 - **AppState** (`App/AppState.swift`) - @Observable global state: tabs, active tab, sidebar, modals
-- **Tab** (`Models/Tab.swift`) - Session model supporting `.terminal` and `.chat` modes
+- **Tab** (`Models/Tab.swift`) - Session model supporting `.terminal`, `.chat`, and `.git` modes
 - **GhosttyApp** (`Terminal/GhosttyApp.swift`) - Process-wide singleton managing the libghostty app instance and runtime callbacks
 - **GhosttySurfaceView** (`Terminal/GhosttySurfaceView.swift`) - NSView bridge to libghostty terminal surface; handles PTY, rendering, and input
 - **AIAgent protocol** (`Agents/AIAgent.swift`) - Defines agent interface; implementations: ClaudeAgent, OpenCodeAgent, TerminalAgent
@@ -81,6 +95,9 @@ User Action → AppState.createChatTab() → Tab(mode: .chat, ChatState)
 - **Workspace** (`Models/Workspace.swift`) - Groups tabs under a named project directory
 - **ScriptScanner** (`Services/PythonScriptScanner.swift`) - Scans for `.py` and `.sh` scripts in project root (shallow) and `scripts/` folder (recursive)
 - **GitService** (`Services/GitService.swift`) - Async git operations (modified files, branch info)
+- **GitProcessRunner** (`Services/GitProcessRunner.swift`) - Shared utility for running git commands via `Process`; used by GitService and GitStatsService
+- **GitStatsService** (`Services/GitStatsService.swift`) - Repository statistics: author stats, daily activity, commit graph, repo summary
+- **GraphLaneCalculator** (`Services/GraphLaneCalculator.swift`) - Pure-logic lane assignment for revision graph rendering (no I/O, synchronous)
 - **OpenCodeCLIService** (`Services/OpenCodeCLIService.swift`) - OpenCode CLI wrapper for model catalog and session export
 - **UpdateManager** (`Services/UpdateManager.swift`) - Sparkle-based auto-update coordinator (UI-only, excluded from SPM)
 
@@ -100,11 +117,13 @@ SlothyTerminal/
 │   ├── Transport/   # ChatTransport protocol + ClaudeCLITransport
 │   └── Views/       # Chat UI (messages, markdown, tools, composer)
 ├── Injection/       # Terminal input injection (models, orchestrator, registry)
-├── Models/          # Tab, Workspace, AppConfig, AgentType, UsageStats
-├── Services/        # ConfigManager, GitService, StatsParser, etc.
+├── Models/          # Tab, Workspace, AppConfig, AgentType, UsageStats, GitStats, GitTab
+├── Services/        # ConfigManager, GitService, GitStatsService, GraphLaneCalculator, StatsParser, etc.
 ├── Telegram/        # Telegram bot (API, relay, runtime, models)
 ├── Terminal/        # GhosttyApp singleton + GhosttySurfaceView
-└── Views/           # SwiftUI views (main, sidebar, settings, tab bar)
+└── Views/           # SwiftUI views (main, sidebar, tab bar, git client)
+    ├── Settings/    # Settings tabs (general, telegram, etc.)
+    └── Telegram/    # Telegram sidebar views
 ```
 
 ### Adding a New Agent (Terminal/CLI Tabs)
@@ -182,7 +201,12 @@ Key rules:
 
 ## Xcode Project Convention
 
-The Xcode project uses `PBXFileSystemSynchronizedRootGroup` — it auto-discovers source files from the filesystem. **No manual `.pbxproj` edits are needed** when adding new Swift files. Only `Package.swift` requires manual source list updates for new non-UI files.
+The Xcode project uses `PBXFileSystemSynchronizedRootGroup` — it auto-discovers source files from the filesystem. **No manual `.pbxproj` edits are needed** when adding new Swift files. Only `Package.swift` requires manual source list updates for new SwiftPM-covered non-UI files.
+
+- If new code is intended to be part of the SwiftPM-covered core and is SwiftPM-compatible, add it to `Package.swift` so it stays covered by `swift build` and `swift test`.
+- If new code depends on the Ghostty/AppKit terminal runtime, or is otherwise app-only, keep it Xcode-only.
+- Concrete Xcode-only examples: `Terminal/GhosttyApp.swift`, `Terminal/GhosttySurfaceView.swift`, files under `Views/`, and app-only integrations such as `Services/UpdateManager.swift`.
+- `Package.swift` uses an explicit `sources:` list for `SlothyTerminalLib`, so new SwiftPM-covered non-UI files must be added there manually.
 
 ## Known Issues & Pitfalls
 
@@ -191,6 +215,7 @@ The Xcode project uses `PBXFileSystemSynchronizedRootGroup` — it auto-discover
 - To open the native Settings window programmatically, use `SettingsLink` (SwiftUI view), not `NSApp.sendAction(Selector(("showSettingsWindow:")))` — the latter logs an error on macOS 14+
 - `ModalRouter` in `MainView.swift` maps `ModalType` cases to views — keep it in sync when adding new modal types
 - `AppState.pendingSettingsSection` allows pre-selecting a `SettingsSection` tab when the native Settings window opens
+- All git `Process` calls must go through `GitProcessRunner.run()` — it reads pipe data before `waitUntilExit()` to prevent deadlocks when output exceeds the 64KB pipe buffer
 
 ## Terminal Environment Variables
 
@@ -212,6 +237,26 @@ Follow `PromptsSidebarView` when injecting from sidebar:
 3. Call `appState.inject(request)` and show status feedback
 
 Payload choice: `.text()` raw insertion, `.paste(_:mode:.bracketed)` multi-line, `.command(_:submit:.insert)` command without execution.
+
+## Git Client Subsystem
+
+Built-in Git repository browser (`.git` tab mode). No agent or PTY — pure SwiftUI views backed by async git CLI calls.
+
+- **GitClientView** (`Views/GitClientView.swift`) — Top-level container with sub-tab picker (`GitTab` enum). Checks `isGitRepository` on `.task`.
+- **GitTab** (`Models/GitTab.swift`) — Sub-tab enum: `.overview`, `.revisionGraph`, `.commit` (stub), `.comingSoon1`, `.comingSoon2`. `isStub` controls which tabs show placeholder content.
+- **GitOverviewContentView** (in `GitClientView.swift`) — Repo header, summary stats, author stats with proportional bars, activity heatmap grid.
+- **RevisionGraphView** (`Views/RevisionGraphView.swift`) — Scrollable commit history with lane-based graph. Uses `Canvas` for drawing lane lines/dots. Paginated loading (200 commits per batch). Lane calculation runs on background thread via `Task.detached`.
+- **ActivityHeatmapGrid** (in `GitClientView.swift`) — Takes precomputed `activityMap` and `weeks` (call `ActivityHeatmapGrid.precompute(from:)` once when data loads, not on every render).
+
+Key models in `Models/GitStats.swift`: `GraphCommit`, `LaneAssignment`, `LaneState`, `AuthorStats`, `DailyActivity`, `RepositorySummary`.
+
+### Adding a Git Sub-Tab
+
+1. Add case to `GitTab` enum in `Models/GitTab.swift`
+2. Implement `displayName`, `iconName`, set `isStub = false` when ready
+3. Create the view (Xcode-only, not in `Package.swift`)
+4. Wire in `GitClientView.repoContent` switch statement
+5. Add any new service/model files to `Package.swift` sources list
 
 ## Telegram Bot Subsystem
 

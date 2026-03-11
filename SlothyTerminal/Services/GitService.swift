@@ -40,41 +40,7 @@ final class GitService {
 
   /// Runs a git command off the cooperative thread pool and returns trimmed stdout.
   private func runGit(_ arguments: [String], in directory: URL) async -> String? {
-    await withCheckedContinuation { continuation in
-      DispatchQueue.global(qos: .userInitiated).async {
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/git")
-        process.arguments = arguments
-        process.currentDirectoryURL = directory
-
-        let pipe = Pipe()
-        process.standardOutput = pipe
-        process.standardError = FileHandle.nullDevice
-
-        do {
-          try process.run()
-          process.waitUntilExit()
-
-          guard process.terminationStatus == 0 else {
-            continuation.resume(returning: nil)
-            return
-          }
-
-          let data = pipe.fileHandleForReading.readDataToEndOfFile()
-          let output = String(data: data, encoding: .utf8)?
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-
-          guard let result = output, !result.isEmpty else {
-            continuation.resume(returning: nil)
-            return
-          }
-
-          continuation.resume(returning: result)
-        } catch {
-          continuation.resume(returning: nil)
-        }
-      }
-    }
+    await GitProcessRunner.run(arguments, in: directory)
   }
 
   /// Parses `git status --porcelain` output into `GitModifiedFile` values.
@@ -90,7 +56,7 @@ final class GitService {
       let workTreeStatus = line[line.index(after: line.startIndex)]
       let path = String(line.dropFirst(3))
 
-      /// Prefer working tree status; fall back to index status.
+      // Prefer working tree status; fall back to index status.
       let statusChar: Character
       if workTreeStatus != " " && workTreeStatus != "?" && workTreeStatus != "!" {
         statusChar = workTreeStatus
@@ -102,7 +68,7 @@ final class GitService {
         continue
       }
 
-      /// Handle renames: "R  old -> new" — use the new path.
+      // Handle renames: "R  old -> new" — use the new path.
       let filePath: String
       if status == .renamed, let arrowRange = path.range(of: " -> ") {
         filePath = String(path[arrowRange.upperBound...])

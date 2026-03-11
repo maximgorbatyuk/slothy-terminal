@@ -215,6 +215,206 @@ struct AppStateWorkspaceTests {
     #expect(appState.tabs(in: workspaceA.id).isEmpty)
   }
 
+  @Test("Active workspace root directory is preferred for new sessions")
+  @MainActor
+  func activeWorkspaceRootDirectoryIsPreferredForNewSessions() {
+    let appState = AppState()
+
+    appState.globalWorkingDirectory = dirA
+    appState.createWorkspace(from: dirB)
+
+    #expect(appState.preferredNewSessionDirectory == dirB)
+  }
+
+  @Test("Global working directory is used when no workspace is active")
+  @MainActor
+  func globalWorkingDirectoryIsUsedWithoutActiveWorkspace() {
+    let appState = AppState()
+
+    appState.globalWorkingDirectory = dirA
+
+    #expect(appState.preferredNewSessionDirectory == dirA)
+  }
+
+  @Test("Current context directory prefers active tab over workspace root")
+  @MainActor
+  func currentContextDirectoryPrefersActiveTab() {
+    let appState = AppState()
+
+    appState.globalWorkingDirectory = dirA
+    appState.createWorkspace(from: dirB)
+    appState.createTab(agent: .terminal, directory: dirC)
+
+    #expect(appState.currentContextDirectory == dirC)
+  }
+
+  @Test("Current context directory falls back to active workspace root")
+  @MainActor
+  func currentContextDirectoryFallsBackToWorkspaceRoot() {
+    let appState = AppState()
+
+    appState.globalWorkingDirectory = dirA
+    appState.createWorkspace(from: dirB)
+
+    #expect(appState.currentContextDirectory == dirB)
+  }
+
+  @Test("Git branch refresh context changes when active terminal tab completes work")
+  @MainActor
+  func gitBranchRefreshContextChangesAfterTerminalCommand() throws {
+    let appState = AppState()
+
+    appState.createTab(agent: .terminal, directory: dirA)
+    let tab = try #require(appState.activeTab)
+    let idleContext = try #require(appState.gitBranchRefreshContext)
+
+    tab.markTerminalBusy()
+    let busyContext = try #require(appState.gitBranchRefreshContext)
+
+    #expect(busyContext != idleContext)
+
+    tab.markTerminalIdle()
+    let settledContext = try #require(appState.gitBranchRefreshContext)
+
+    #expect(settledContext != busyContext)
+    #expect(settledContext == idleContext)
+  }
+
+  @Test("Visible tab labels are numbered by active workspace order")
+  @MainActor
+  func visibleTabLabelsAreNumberedByActiveWorkspaceOrder() throws {
+    let appState = AppState()
+
+    let workspaceA = appState.createWorkspace(from: dirA)
+    appState.createTab(agent: .terminal, directory: dirA)
+    let tabA1 = try #require(appState.activeTab)
+    appState.createTab(agent: .claude, directory: dirA)
+    let tabA2 = try #require(appState.activeTab)
+
+    appState.createWorkspace(from: dirB)
+    appState.createGitTab(directory: dirB)
+
+    appState.switchWorkspace(id: workspaceA.id)
+
+    #expect(appState.tabBarLabel(for: tabA1) == "1. Terminal | cli")
+    #expect(appState.tabBarLabel(for: tabA2) == "2. Claude | cli")
+  }
+
+  @Test("Pending close label uses numbered workspace tab label")
+  @MainActor
+  func pendingCloseLabelUsesNumberedWorkspaceTabLabel() throws {
+    let appState = AppState()
+
+    appState.createWorkspace(from: dirA)
+    appState.createTab(agent: .terminal, directory: dirA)
+    let firstTab = try #require(appState.activeTab)
+    appState.createTab(agent: .claude, directory: dirA)
+    let secondTab = try #require(appState.activeTab)
+
+    appState.closeTab(id: firstTab.id)
+
+    #expect(appState.pendingCloseTabLabel == "\"1. Terminal | cli\"")
+    #expect(appState.tabBarLabel(for: secondTab) == "2. Claude | cli")
+  }
+
+  @Test("Tabs can be reordered within the active workspace")
+  @MainActor
+  func tabsCanBeReorderedWithinActiveWorkspace() throws {
+    let appState = AppState()
+
+    appState.createWorkspace(from: dirA)
+    appState.createTab(agent: .terminal, directory: dirA)
+    let firstTab = try #require(appState.activeTab)
+    appState.createTab(agent: .claude, directory: dirA)
+    let secondTab = try #require(appState.activeTab)
+
+    appState.moveTab(id: secondTab.id, before: firstTab.id)
+
+    #expect(appState.visibleTabs.map(\.id) == [secondTab.id, firstTab.id])
+    #expect(appState.tabBarLabel(for: secondTab) == "1. Claude | cli")
+    #expect(appState.tabBarLabel(for: firstTab) == "2. Terminal | cli")
+  }
+
+  @Test("Reordering one workspace does not affect another workspace")
+  @MainActor
+  func reorderingOneWorkspaceDoesNotAffectAnotherWorkspace() throws {
+    let appState = AppState()
+
+    let workspaceA = appState.createWorkspace(from: dirA)
+    appState.createTab(agent: .terminal, directory: dirA)
+    let tabA1 = try #require(appState.activeTab)
+
+    let workspaceB = appState.createWorkspace(from: dirB)
+    appState.createTab(agent: .claude, directory: dirB)
+    let tabB1 = try #require(appState.activeTab)
+    appState.createTab(agent: .terminal, directory: dirB)
+    let tabB2 = try #require(appState.activeTab)
+
+    appState.moveTab(id: tabB2.id, before: tabB1.id)
+
+    #expect(appState.visibleTabs.map(\.id) == [tabB2.id, tabB1.id])
+
+    appState.switchWorkspace(id: workspaceA.id)
+
+    #expect(appState.visibleTabs.map(\.id) == [tabA1.id])
+    #expect(appState.activeWorkspaceID == workspaceA.id)
+    #expect(workspaceB.id != workspaceA.id)
+  }
+
+  @Test("Tab drop indicator only appears for valid workspace drop targets")
+  @MainActor
+  func tabDropIndicatorOnlyAppearsForValidWorkspaceDropTargets() throws {
+    let appState = AppState()
+
+    let workspaceA = appState.createWorkspace(from: dirA)
+    appState.createTab(agent: .terminal, directory: dirA)
+    let tabA1 = try #require(appState.activeTab)
+    appState.createTab(agent: .claude, directory: dirA)
+    let tabA2 = try #require(appState.activeTab)
+
+    appState.createWorkspace(from: dirB)
+    appState.createTab(agent: .terminal, directory: dirB)
+    let tabB1 = try #require(appState.activeTab)
+
+    appState.switchWorkspace(id: workspaceA.id)
+
+    #expect(appState.tabDropIndicator(for: tabA1.id, targetTabID: tabA2.id) == .before(tabA2.id))
+    #expect(appState.tabDropIndicator(for: tabA1.id, targetTabID: nil) == .end)
+    #expect(appState.tabDropIndicator(for: tabA1.id, targetTabID: tabA1.id) == .none)
+    #expect(appState.tabDropIndicator(for: tabA1.id, targetTabID: tabB1.id) == .none)
+  }
+
+  @Test("Tab drop indicator visibility matches insertion states")
+  @MainActor
+  func tabDropIndicatorVisibilityMatchesInsertionStates() {
+    #expect(TabDropIndicator.none.isVisible == false)
+    #expect(TabDropIndicator.end.isVisible == true)
+    #expect(TabDropIndicator.before(UUID()).isVisible == true)
+  }
+
+  @Test("Cancelled drag restores original workspace tab order")
+  @MainActor
+  func cancelledDragRestoresOriginalWorkspaceTabOrder() throws {
+    let appState = AppState()
+
+    appState.createWorkspace(from: dirA)
+    appState.createTab(agent: .terminal, directory: dirA)
+    let firstTab = try #require(appState.activeTab)
+    appState.createTab(agent: .claude, directory: dirA)
+    let secondTab = try #require(appState.activeTab)
+
+    let originalOrder = appState.visibleTabs.map(\.id)
+
+    appState.beginTabDrag(id: secondTab.id)
+    appState.moveTab(id: secondTab.id, before: firstTab.id)
+
+    #expect(appState.visibleTabs.map(\.id) == [secondTab.id, firstTab.id])
+
+    appState.cancelTabDrag()
+
+    #expect(appState.visibleTabs.map(\.id) == originalOrder)
+  }
+
   @Test("Closing tab in workspace selects next tab from same workspace")
   @MainActor
   func closeTabSelectsFromSameWorkspace() throws {
