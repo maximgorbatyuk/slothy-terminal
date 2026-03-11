@@ -2,6 +2,43 @@
 
 All notable changes to SlothyTerminal will be documented in this file.
 
+## [2026.2.9] - 2026-03-11
+
+_Analysis range: `54b9879d44fcb545b2810b6387aa054b377ffc90..d32d81d` (7 commits, 43 files changed, 3995 insertions, 764 deletions)._
+
+### Added
+- **Git client tab** with repository overview and revision graph views.
+  - Added `GitTab`, `GitStats` models, `GitProcessRunner`, `GitStatsService`, and `GraphLaneCalculator` for commit graph parsing, repository metrics, and lane assignment.
+  - Added `GitClientView` and `RevisionGraphView` for browsing repository stats and commit history inside the app.
+- **Reusable startup session flow** in `StartSessionContentView`.
+  - Added a richer launch flow with working-directory selection, recent folders, and launch-type-specific session creation in a standalone view reused by the startup page and empty workspace state.
+- **Workspace tab improvements**.
+  - Added numbered workspace tab labels and numbered close-confirmation text.
+  - Added draggable tab reordering within a workspace, trailing-drop support, insertion indicators, and drag-cancel restoration.
+- **SwiftPM GitHub Actions workflow**.
+  - Added a `SwiftPM` CI lane that runs `swift build` and `swift test` without requiring Ghostty.
+
+### Changed
+- **Startup page architecture** now uses the extracted `StartSessionContentView` instead of keeping the full session-creation UI inline.
+- **Workspace directory defaults** are now resolved from the active workspace/tab context before falling back to older global working-directory state.
+- **Bottom status bar branch display** now refreshes based on active tab execution context, not only directory changes.
+- **README and CLAUDE guidance** now document the SwiftPM-covered versus Xcode-only boundary more explicitly.
+- **Website/docs assets** refreshed, including updated screenshots and icon assets.
+
+### Fixed
+- **New workspace tab launches** now use the workspace's root folder instead of incorrectly inheriting the previous workspace's folder.
+- **Automation and Telegram directory fallback** now respects the active workspace/tab context instead of stale global directory state.
+- **Bottom bar git branch label** now updates after in-repo branch changes such as `git checkout`.
+- **Tab drag cancellation** now restores the original workspace tab order if the drag ends without a valid drop.
+
+### Tests
+- Added test coverage for:
+  - workspace-specific directory resolution,
+  - git branch refresh context,
+  - numbered tab labels and close-confirmation labels,
+  - workspace tab reordering and drop-indicator behavior,
+  - git stats parsing and graph lane calculation.
+
 ## [2026.2.8] - 2026-03-09
 
 _Analysis range: `baec6b578f3a9cd971866e6777592d3e6623cb6f..79ecb8e` (4 commits, 19 files changed, 385 insertions, 51 deletions)._

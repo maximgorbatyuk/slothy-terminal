@@ -31,3 +31,6 @@ sparkle-tools/
 # Swift Package Manager
 .build/
 .swiftpm/
+
+# Local git worktrees
+.worktrees/
