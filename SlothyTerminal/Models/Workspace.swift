@@ -1,6 +1,7 @@
 import Foundation
 
 /// A workspace groups tabs under a named project context.
+/// Empty workspaces may be reused for a newly selected folder.
 struct Workspace: Identifiable, Codable {
   let id: UUID
   let name: String

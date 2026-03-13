@@ -35,6 +35,7 @@ class Tab: Identifiable {
   let mode: TabMode
   var workingDirectory: URL
   var title: String
+  var lastSubmittedCommandLabel: String?
   var isActive: Bool = false
   var hasBackgroundActivity: Bool = false
   var usageStats: UsageStats
@@ -77,6 +78,7 @@ class Tab: Identifiable {
     self.mode = mode
     self.workingDirectory = workingDirectory
     self.title = title ?? workingDirectory.lastPathComponent
+    self.lastSubmittedCommandLabel = nil
     self.initialPrompt = initialPrompt
     self.launchArgumentsOverride = launchArgumentsOverride
     self.usageStats = UsageStats()
@@ -117,7 +119,191 @@ class Tab: Identifiable {
       return "Git client"
     }
 
+    if let submittedCommandLabel = submittedCommandLabelForTab {
+      return "\(submittedCommandLabel) | \(modeNameForTab)"
+    }
+
     return "\(agentNameForTab) | \(modeNameForTab)"
+  }
+
+  nonisolated static func commandLabel(from rawCommandLine: String) -> String? {
+    let trimmedCommand = rawCommandLine.trimmingCharacters(in: .whitespacesAndNewlines)
+
+    guard !trimmedCommand.isEmpty else {
+      return nil
+    }
+
+    let tokens = commandTokens(from: trimmedCommand)
+
+    guard !tokens.isEmpty else {
+      return nil
+    }
+
+    var currentIndex = 0
+
+    while currentIndex < tokens.count {
+      let token = tokens[currentIndex]
+      let loweredToken = token.lowercased()
+
+      if isEnvironmentAssignment(token) {
+        currentIndex += 1
+        continue
+      }
+
+      if wrapperCommands.contains(loweredToken) {
+        currentIndex = nextCommandIndex(afterWrapper: loweredToken, start: currentIndex + 1, in: tokens)
+        continue
+      }
+
+      return normalizedCommandLabel(from: token)
+    }
+
+    return nil
+  }
+
+  private nonisolated static let wrapperCommands: Set<String> = ["command", "env", "sudo"]
+  private nonisolated static let sudoOptionsRequiringValue: Set<String> = ["-c", "-g", "-h", "-p", "-r", "-t", "-u"]
+
+  private nonisolated static func normalizedCommandLabel(from token: String) -> String {
+    if token.contains("/") {
+      return URL(fileURLWithPath: token).lastPathComponent
+    }
+
+    return token
+  }
+
+  private nonisolated static func commandTokens(from commandLine: String) -> [String] {
+    var tokens: [String] = []
+    var currentToken = ""
+    var activeQuote: Character?
+    var isEscaping = false
+
+    for character in commandLine {
+      if isEscaping {
+        currentToken.append(character)
+        isEscaping = false
+        continue
+      }
+
+      if let currentQuote = activeQuote {
+        if character == currentQuote {
+          activeQuote = nil
+        } else if character == "\\" && currentQuote != "'" {
+          isEscaping = true
+        } else {
+          currentToken.append(character)
+        }
+
+        continue
+      }
+
+      if character == "'" || character == "\"" {
+        activeQuote = character
+        continue
+      }
+
+      if character == "\\" {
+        isEscaping = true
+        continue
+      }
+
+      if character.isWhitespace {
+        if !currentToken.isEmpty {
+          tokens.append(currentToken)
+          currentToken.removeAll(keepingCapacity: true)
+        }
+
+        continue
+      }
+
+      currentToken.append(character)
+    }
+
+    if isEscaping {
+      currentToken.append("\\")
+    }
+
+    if !currentToken.isEmpty {
+      tokens.append(currentToken)
+    }
+
+    return tokens
+  }
+
+  private nonisolated static func isEnvironmentAssignment(_ token: String) -> Bool {
+    guard let separatorIndex = token.firstIndex(of: "="),
+          separatorIndex != token.startIndex
+    else {
+      return false
+    }
+
+    let variableName = token[..<separatorIndex]
+
+    guard let firstCharacter = variableName.first,
+          firstCharacter == "_" || firstCharacter.isLetter
+    else {
+      return false
+    }
+
+    return variableName.dropFirst().allSatisfy { character in
+      character == "_" || character.isLetter || character.isNumber
+    }
+  }
+
+  private nonisolated static func nextCommandIndex(afterWrapper wrapper: String, start index: Int, in tokens: [String]) -> Int {
+    var currentIndex = index
+
+    while currentIndex < tokens.count {
+      let token = tokens[currentIndex]
+      let loweredToken = token.lowercased()
+
+      if token == "--" {
+        return currentIndex + 1
+      }
+
+      switch wrapper {
+      case "command":
+        if token.hasPrefix("-") {
+          currentIndex += 1
+          continue
+        }
+
+      case "env":
+        if token.hasPrefix("-") || isEnvironmentAssignment(token) {
+          currentIndex += 1
+          continue
+        }
+
+      case "sudo":
+        if token.hasPrefix("-") {
+          currentIndex += 1
+
+          if sudoOptionsRequiringValue.contains(loweredToken), currentIndex < tokens.count {
+            currentIndex += 1
+          }
+
+          continue
+        }
+
+      default:
+        break
+      }
+
+      return currentIndex
+    }
+
+    return currentIndex
+  }
+
+  func updateLastSubmittedCommandLabel(from rawCommandLine: String) {
+    guard mode == .terminal,
+          agentType == .terminal,
+          let label = Self.commandLabel(from: rawCommandLine)
+    else {
+      return
+    }
+
+    lastSubmittedCommandLabel = label
   }
 
   /// Agent label used in tab/window titles.
@@ -135,6 +321,17 @@ class Tab: Identifiable {
     case nil:
       return ""
     }
+  }
+
+  private var submittedCommandLabelForTab: String? {
+    guard mode == .terminal,
+          agentType == .terminal,
+          let lastSubmittedCommandLabel
+    else {
+      return nil
+    }
+
+    return lastSubmittedCommandLabel
   }
 
   /// Mode label used in tab/window titles.

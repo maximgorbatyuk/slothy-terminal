@@ -23,6 +23,9 @@ struct GhosttyTerminalViewRepresentable: NSViewRepresentable {
   /// Callback when user presses Enter in terminal input.
   var onCommandEntered: (() -> Void)?
 
+  /// Callback when a raw command line is submitted.
+  var onCommandSubmitted: ((String) -> Void)?
+
   /// Callback when a command finishes executing.
   var onCommandFinished: (() -> Void)?
 
@@ -46,6 +49,7 @@ struct GhosttyTerminalViewRepresentable: NSViewRepresentable {
     /// Wire callbacks.
     surfaceView.onDirectoryChanged = onDirectoryChanged
     surfaceView.onCommandEntered = onCommandEntered
+    surfaceView.onCommandSubmitted = onCommandSubmitted
     surfaceView.onCommandFinished = onCommandFinished
     surfaceView.onClosed = onClosed
     surfaceView.onTerminalActivity = onTerminalActivity
@@ -182,6 +186,9 @@ struct StandaloneTerminalView: View {
   /// Callback when user presses Enter in terminal input.
   var onCommandEntered: (() -> Void)? = nil
 
+  /// Callback when a raw command line is submitted.
+  var onCommandSubmitted: ((String) -> Void)? = nil
+
   /// Callback when a command finishes executing.
   var onCommandFinished: (() -> Void)? = nil
 
@@ -205,6 +212,7 @@ struct StandaloneTerminalView: View {
       isActive: isActive,
       onDirectoryChanged: onDirectoryChanged,
       onCommandEntered: onCommandEntered,
+      onCommandSubmitted: onCommandSubmitted,
       onCommandFinished: onCommandFinished,
       onClosed: onClosed,
       onTerminalActivity: onTerminalActivity,
