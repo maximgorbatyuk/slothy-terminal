@@ -57,6 +57,7 @@ let package = Package(
         "Models/GitDiffModels.swift",
         "Models/GitModifiedFile.swift",
         "Models/GitWorkingTreeModels.swift",
+        "Models/MakeCommitComposerState.swift",
         "Models/GitStats.swift",
         "Models/GitTab.swift",
         "Models/Tab.swift",

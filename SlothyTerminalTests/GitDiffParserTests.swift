@@ -34,4 +34,21 @@ struct GitDiffParserTests {
     #expect(result.isBinary)
     #expect(result.rows.isEmpty)
   }
+
+  @Test("Untracked file content is rendered as additions")
+  func untrackedFileContentRendersAsAdditions() {
+    let result = service.makeUntrackedDiffDocument(
+      from: "line 1\nline 2"
+    )
+
+    #expect(result.isBinary == false)
+    #expect(result.rows.count == 2)
+    #expect(result.rows[0].kind == .addition)
+    #expect(result.rows[0].oldLineNumber == nil)
+    #expect(result.rows[0].newLineNumber == 1)
+    #expect(result.rows[0].rightText == "line 1")
+    #expect(result.rows[1].kind == .addition)
+    #expect(result.rows[1].newLineNumber == 2)
+    #expect(result.rows[1].rightText == "line 2")
+  }
 }

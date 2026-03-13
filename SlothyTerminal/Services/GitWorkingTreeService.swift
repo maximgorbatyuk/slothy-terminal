@@ -294,19 +294,26 @@ final class GitWorkingTreeService {
   }
 
   func loadDiff(
-    for section: GitChangeSection,
-    path: String,
+    for change: GitScopedChange,
+    section: GitChangeSection,
     in directory: URL
   ) async -> GitDiffDocument {
+    if section == .unstaged, change.isUntracked {
+      return await loadUntrackedDiff(
+        path: change.repoRelativePath,
+        in: directory
+      )
+    }
+
     let repositoryRoot = await repositoryRoot(for: directory)
     let arguments: [String]
 
     switch section {
     case .staged:
-      arguments = ["diff", "--cached", "--", path]
+      arguments = ["diff", "--cached", "--", change.repoRelativePath]
 
     case .unstaged:
-      arguments = ["diff", "--", path]
+      arguments = ["diff", "--", change.repoRelativePath]
     }
 
     let result = await GitProcessRunner.runResult(arguments, in: repositoryRoot)
@@ -316,6 +323,26 @@ final class GitWorkingTreeService {
     }
 
     return parseDiffOutput(result.stdout)
+  }
+
+  func makeUntrackedDiffDocument(from fileContents: String) -> GitDiffDocument {
+    var lines = fileContents.components(separatedBy: "\n")
+    if fileContents.hasSuffix("\n") {
+      lines.removeLast()
+    }
+
+    let rows = lines.enumerated().map { index, line in
+      GitDiffRow(
+        id: "untracked-row-\(index)",
+        oldLineNumber: nil,
+        newLineNumber: index + 1,
+        leftText: "",
+        rightText: line,
+        kind: .addition
+      )
+    }
+
+    return GitDiffDocument(rows: rows)
   }
 
   func parseStatusOutput(
@@ -365,7 +392,10 @@ final class GitWorkingTreeService {
     }
 
     let rawPath = String(characters.dropFirst(3))
-    let repoRelativePath = normalizedStatusPath(from: rawPath)
+    let repoRelativePath = normalizedStatusPath(
+      from: rawPath,
+      isRename: indexStatus == .renamed || workTreeStatus == .renamed
+    )
     let displayPath = displayPath(for: repoRelativePath, scopePath: scopePath)
 
     return GitScopedChange(
@@ -376,12 +406,18 @@ final class GitWorkingTreeService {
     )
   }
 
-  private func normalizedStatusPath(from rawPath: String) -> String {
-    guard let arrowRange = rawPath.range(of: " -> ") else {
-      return rawPath
+  private func normalizedStatusPath(
+    from rawPath: String,
+    isRename: Bool
+  ) -> String {
+    let path: String
+    if isRename, let arrowRange = rawPath.range(of: " -> ") {
+      path = String(rawPath[arrowRange.upperBound...])
+    } else {
+      path = rawPath
     }
 
-    return String(rawPath[arrowRange.upperBound...])
+    return unquotedStatusPath(path)
   }
 
   private func normalizeScopePath(_ scopePath: String?) -> String? {
@@ -476,6 +512,96 @@ final class GitWorkingTreeService {
   ) async -> GitProcessResult {
     let repositoryRoot = await repositoryRoot(for: directory)
     return await GitProcessRunner.runResult(arguments, in: repositoryRoot)
+  }
+
+  private func loadUntrackedDiff(
+    path: String,
+    in directory: URL
+  ) async -> GitDiffDocument {
+    let repositoryRoot = await repositoryRoot(for: directory)
+    let fileURL = repositoryRoot.appendingPathComponent(path)
+
+    guard let data = try? Data(contentsOf: fileURL) else {
+      return GitDiffDocument()
+    }
+
+    guard let contents = String(data: data, encoding: .utf8) else {
+      return GitDiffDocument(isBinary: true)
+    }
+
+    return makeUntrackedDiffDocument(from: contents)
+  }
+
+  private func unquotedStatusPath(_ path: String) -> String {
+    guard path.count >= 2, path.first == "\"", path.last == "\"" else {
+      return path
+    }
+
+    let body = path.dropFirst().dropLast()
+    var result = ""
+    var index = body.startIndex
+
+    while index < body.endIndex {
+      let character = body[index]
+      guard character == "\\" else {
+        result.append(character)
+        index = body.index(after: index)
+        continue
+      }
+
+      let escapeIndex = body.index(after: index)
+      guard escapeIndex < body.endIndex else {
+        result.append("\\")
+        break
+      }
+
+      let escape = body[escapeIndex]
+      switch escape {
+      case "\"":
+        result.append("\"")
+        index = body.index(after: escapeIndex)
+
+      case "\\":
+        result.append("\\")
+        index = body.index(after: escapeIndex)
+
+      case "n":
+        result.append("\n")
+        index = body.index(after: escapeIndex)
+
+      case "r":
+        result.append("\r")
+        index = body.index(after: escapeIndex)
+
+      case "t":
+        result.append("\t")
+        index = body.index(after: escapeIndex)
+
+      case "0"..."7":
+        var octalDigits = String(escape)
+        var scanIndex = body.index(after: escapeIndex)
+        while scanIndex < body.endIndex, octalDigits.count < 3 {
+          let next = body[scanIndex]
+          guard ("0"..."7").contains(next) else {
+            break
+          }
+
+          octalDigits.append(next)
+          scanIndex = body.index(after: scanIndex)
+        }
+
+        if let scalarValue = UInt8(octalDigits, radix: 8) {
+          result.append(Character(UnicodeScalar(scalarValue)))
+        }
+        index = scanIndex
+
+      default:
+        result.append(escape)
+        index = body.index(after: escapeIndex)
+      }
+    }
+
+    return result
   }
 
   private func parseHunkHeader(_ line: String) -> (oldStart: Int, newStart: Int)? {

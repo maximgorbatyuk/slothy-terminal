@@ -115,6 +115,7 @@ struct MakeCommitView: View {
   @State private var commitMessage = ""
   @State private var newBranchName = ""
   @State private var isAmendingLastCommit = false
+  @State private var activeAmendLoadRequestID: String?
   @State private var lastOperation: String?
   @State private var isLoadingSnapshot = false
   @State private var isLoadingDiff = false
@@ -145,11 +146,19 @@ struct MakeCommitView: View {
     }
     .onChange(of: isAmendingLastCommit) { _, isEnabled in
       guard isEnabled else {
+        activeAmendLoadRequestID = nil
         return
       }
 
+      let requestID = UUID().uuidString
+      let initialMessage = commitMessage
+      activeAmendLoadRequestID = requestID
+
       Task {
-        await preloadLastCommitMessage()
+        await preloadLastCommitMessage(
+          requestID: requestID,
+          initialMessage: initialMessage
+        )
       }
     }
     .sheet(isPresented: $isShowingNewBranchSheet) {
@@ -661,9 +670,15 @@ struct MakeCommitView: View {
 
     isLoadingDiff = true
     let selection = selectedChange
+    guard let change = snapshot.changes.first(where: { $0.repoRelativePath == selection.path }) else {
+      diffDocument = GitDiffDocument()
+      isLoadingDiff = false
+      return
+    }
+
     let loadedDiff = await GitWorkingTreeService.shared.loadDiff(
-      for: selection.section,
-      path: selection.path,
+      for: change,
+      section: selection.section,
       in: workingDirectory
     )
     guard selection == self.selectedChange else {
@@ -726,7 +741,10 @@ struct MakeCommitView: View {
   }
 
   @MainActor
-  private func preloadLastCommitMessage() async {
+  private func preloadLastCommitMessage(
+    requestID: String,
+    initialMessage: String
+  ) async {
     isLoadingAmendMessage = true
 
     defer {
@@ -736,8 +754,29 @@ struct MakeCommitView: View {
     guard let message = await GitWorkingTreeService.shared.getLastCommitMessage(
       in: workingDirectory
     ) else {
+      guard requestID == activeAmendLoadRequestID, isAmendingLastCommit else {
+        return
+      }
+
+      activeAmendLoadRequestID = nil
       isAmendingLastCommit = false
       lastOperation = "Unable to load the last commit message."
+      return
+    }
+
+    let shouldApplyMessage = MakeCommitComposerState.shouldApplyLoadedAmendMessage(
+      requestID: requestID,
+      activeRequestID: activeAmendLoadRequestID,
+      isAmending: isAmendingLastCommit,
+      initialMessage: initialMessage,
+      currentMessage: commitMessage
+    )
+
+    if requestID == activeAmendLoadRequestID {
+      activeAmendLoadRequestID = nil
+    }
+
+    guard shouldApplyMessage else {
       return
     }
 

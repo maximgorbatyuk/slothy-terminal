@@ -50,6 +50,21 @@ struct GitWorkingTreeServiceTests {
     #expect(snapshot.hasStagedChangesOutsideScope)
   }
 
+  @Test("Status parsing unquotes porcelain paths")
+  func parseQuotedPorcelainPath() throws {
+    let output = #"""
+    ?? "dir with space/file name.txt"
+    """#
+
+    let snapshot = service.parseStatusOutput(output)
+
+    let change = try #require(snapshot.changes.first)
+    #expect(change.repoRelativePath == "dir with space/file name.txt")
+    #expect(change.displayPath == "dir with space/file name.txt")
+    #expect(change.filename == "file name.txt")
+    #expect(change.isUntracked)
+  }
+
   @Test("Push uses set-upstream when no upstream exists")
   func pushArgumentsWithoutUpstream() {
     let arguments = GitWorkingTreeService.shared.pushArguments(

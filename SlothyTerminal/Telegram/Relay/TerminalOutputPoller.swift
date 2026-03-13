@@ -21,9 +21,9 @@ class TerminalOutputPoller {
   private let flushCharThreshold = 400
   private let flushTimeThreshold: TimeInterval = 1.5
 
-  init(tabId: UUID, registry: TerminalSurfaceRegistry = .shared) {
+  init(tabId: UUID, registry: TerminalSurfaceRegistry? = nil) {
     self.tabId = tabId
-    self.registry = registry
+    self.registry = registry ?? .shared
   }
 
   /// Starts polling. Calls `handler` with batched output text and `surfaceLost` if the surface disappears.
