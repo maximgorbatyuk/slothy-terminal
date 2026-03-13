@@ -33,7 +33,10 @@ enum GitTab: String, CaseIterable, Identifiable {
     case .overview, .revisionGraph:
       return false
 
-    case .commit, .comingSoon1, .comingSoon2:
+    case .commit:
+      return false
+
+    case .comingSoon1, .comingSoon2:
       return true
     }
   }

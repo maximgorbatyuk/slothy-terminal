@@ -46,7 +46,7 @@ struct GitClientView: View {
           RevisionGraphView(workingDirectory: workingDirectory)
 
         case .commit:
-          GitStubContentView(tab: .commit)
+          MakeCommitView(workingDirectory: workingDirectory)
 
         case .comingSoon1, .comingSoon2:
           GitStubContentView(tab: selectedTab)
