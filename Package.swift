@@ -54,6 +54,7 @@ let package = Package(
         "Services/GraphLaneCalculator.swift",
         "Models/UsageStats.swift",
         "Models/AgentType.swift",
+        "Models/GitDiffModels.swift",
         "Models/GitModifiedFile.swift",
         "Models/GitWorkingTreeModels.swift",
         "Models/GitStats.swift",

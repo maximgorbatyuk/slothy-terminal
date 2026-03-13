@@ -4,6 +4,11 @@ import Foundation
 final class GitWorkingTreeService {
   static let shared = GitWorkingTreeService()
 
+  private struct BufferedDiffLine {
+    let lineNumber: Int
+    let text: String
+  }
+
   private init() {}
 
   func pushArguments(
@@ -73,6 +78,168 @@ final class GitWorkingTreeService {
     in directory: URL
   ) async -> GitProcessResult {
     await runMutation(["switch", "-c", branchName], in: directory)
+  }
+
+  func parseUnifiedDiff(_ output: String) -> [GitDiffRow] {
+    var rows: [GitDiffRow] = []
+    var oldLineNumber: Int?
+    var newLineNumber: Int?
+    var deletionBuffer: [BufferedDiffLine] = []
+    var additionBuffer: [BufferedDiffLine] = []
+
+    func flushBuffers() {
+      let pairedCount = max(deletionBuffer.count, additionBuffer.count)
+
+      guard pairedCount > 0 else {
+        return
+      }
+
+      for index in 0..<pairedCount {
+        let deletion = index < deletionBuffer.count ? deletionBuffer[index] : nil
+        let addition = index < additionBuffer.count ? additionBuffer[index] : nil
+
+        switch (deletion, addition) {
+        case let (.some(deletion), .some(addition)):
+          rows.append(
+            GitDiffRow(
+              oldLineNumber: deletion.lineNumber,
+              newLineNumber: addition.lineNumber,
+              leftText: deletion.text,
+              rightText: addition.text,
+              kind: .modification
+            )
+          )
+
+        case let (.some(deletion), .none):
+          rows.append(
+            GitDiffRow(
+              oldLineNumber: deletion.lineNumber,
+              newLineNumber: nil,
+              leftText: deletion.text,
+              rightText: "",
+              kind: .deletion
+            )
+          )
+
+        case let (.none, .some(addition)):
+          rows.append(
+            GitDiffRow(
+              oldLineNumber: nil,
+              newLineNumber: addition.lineNumber,
+              leftText: "",
+              rightText: addition.text,
+              kind: .addition
+            )
+          )
+
+        case (.none, .none):
+          break
+        }
+      }
+
+      deletionBuffer.removeAll(keepingCapacity: true)
+      additionBuffer.removeAll(keepingCapacity: true)
+    }
+
+    for rawLine in output.split(separator: "\n", omittingEmptySubsequences: false) {
+      let line = String(rawLine)
+
+      if let hunkRange = parseHunkHeader(line) {
+        flushBuffers()
+        oldLineNumber = hunkRange.oldStart
+        newLineNumber = hunkRange.newStart
+        continue
+      }
+
+      guard
+        let prefix = line.first,
+        oldLineNumber != nil || newLineNumber != nil
+      else {
+        continue
+      }
+
+      switch prefix {
+      case " ":
+        flushBuffers()
+        rows.append(
+          GitDiffRow(
+            oldLineNumber: oldLineNumber,
+            newLineNumber: newLineNumber,
+            leftText: String(line.dropFirst()),
+            rightText: String(line.dropFirst()),
+            kind: .context
+          )
+        )
+        oldLineNumber = oldLineNumber.map { $0 + 1 }
+        newLineNumber = newLineNumber.map { $0 + 1 }
+
+      case "-":
+        deletionBuffer.append(
+          BufferedDiffLine(
+            lineNumber: oldLineNumber ?? 0,
+            text: String(line.dropFirst())
+          )
+        )
+        oldLineNumber = oldLineNumber.map { $0 + 1 }
+
+      case "+":
+        additionBuffer.append(
+          BufferedDiffLine(
+            lineNumber: newLineNumber ?? 0,
+            text: String(line.dropFirst())
+          )
+        )
+        newLineNumber = newLineNumber.map { $0 + 1 }
+
+      case "\\":
+        continue
+
+      default:
+        continue
+      }
+    }
+
+    flushBuffers()
+    return rows
+  }
+
+  func parseDiffOutput(_ output: String) -> GitDiffDocument {
+    let trimmedOutput = output.trimmingCharacters(in: .whitespacesAndNewlines)
+
+    guard !trimmedOutput.isEmpty else {
+      return GitDiffDocument()
+    }
+
+    if trimmedOutput.contains("Binary files ") && trimmedOutput.contains(" differ") {
+      return GitDiffDocument(isBinary: true)
+    }
+
+    return GitDiffDocument(rows: parseUnifiedDiff(output))
+  }
+
+  func loadDiff(
+    for section: GitChangeSection,
+    path: String,
+    in directory: URL
+  ) async -> GitDiffDocument {
+    let repositoryRoot = await repositoryRoot(for: directory)
+    let arguments: [String]
+
+    switch section {
+    case .staged:
+      arguments = ["diff", "--cached", "--", path]
+
+    case .unstaged:
+      arguments = ["diff", "--", path]
+    }
+
+    let result = await GitProcessRunner.runResult(arguments, in: repositoryRoot)
+
+    guard result.isSuccess else {
+      return GitDiffDocument()
+    }
+
+    return parseDiffOutput(result.stdout)
   }
 
   func parseStatusOutput(
@@ -214,5 +381,42 @@ final class GitWorkingTreeService {
   ) async -> GitProcessResult {
     let repositoryRoot = await repositoryRoot(for: directory)
     return await GitProcessRunner.runResult(arguments, in: repositoryRoot)
+  }
+
+  private func parseHunkHeader(_ line: String) -> (oldStart: Int, newStart: Int)? {
+    guard line.hasPrefix("@@") else {
+      return nil
+    }
+
+    let components = line.split(separator: " ")
+
+    guard components.count >= 3 else {
+      return nil
+    }
+
+    guard
+      let oldStart = parseHunkRangeComponent(String(components[1]), prefix: "-"),
+      let newStart = parseHunkRangeComponent(String(components[2]), prefix: "+")
+    else {
+      return nil
+    }
+
+    return (oldStart, newStart)
+  }
+
+  private func parseHunkRangeComponent(
+    _ component: String,
+    prefix: Character
+  ) -> Int? {
+    guard component.first == prefix else {
+      return nil
+    }
+
+    let range = component.dropFirst().split(separator: ",", maxSplits: 1)
+    guard let start = range.first else {
+      return nil
+    }
+
+    return Int(start)
   }
 }
