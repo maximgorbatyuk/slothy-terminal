@@ -4,6 +4,23 @@ import Testing
 
 @Suite("Make Commit Composer")
 struct MakeCommitComposerStateTests {
+  @Test("Commit message normalization keeps only the first line")
+  func normalizesMessageToSingleLine() {
+    #expect(
+      MakeCommitComposerState.normalizedCommitMessage(
+        "Fix flaky test\n\nDetailed explanation"
+      ) == "Fix flaky test"
+    )
+  }
+
+  @Test("Commit message normalization trims a single-line message")
+  func trimsSingleLineMessage() {
+    #expect(
+      MakeCommitComposerState.normalizedCommitMessage("  Tighten git tab layout  ")
+        == "Tighten git tab layout"
+    )
+  }
+
   @Test("Loaded amend message is ignored when amend mode is no longer active")
   func ignoresLoadedMessageAfterAmendDisabled() {
     #expect(

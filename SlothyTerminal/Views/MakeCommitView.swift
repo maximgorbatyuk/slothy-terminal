@@ -578,11 +578,17 @@ struct MakeCommitView: View {
         .foregroundStyle(.orange)
       }
 
-      TextEditor(text: $commitMessage)
+      TextField(
+        "Summarize the staged changes",
+        text: Binding(
+          get: { commitMessage },
+          set: { commitMessage = MakeCommitComposerState.singleLineMessageInput($0) }
+        )
+      )
+        .textFieldStyle(.plain)
         .font(.system(size: 12))
-        .frame(minHeight: 84)
-        .scrollContentBackground(.hidden)
-        .padding(6)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
         .background(appCardColor)
         .clipShape(.rect(cornerRadius: 10))
         .disabled(isBusy)
@@ -780,13 +786,15 @@ struct MakeCommitView: View {
       return
     }
 
-    commitMessage = message
+    commitMessage = MakeCommitComposerState.normalizedCommitMessage(message)
     lastOperation = "Loaded the last commit message."
   }
 
   @MainActor
   private func commitChanges() async {
-    guard canSubmitCommit else {
+    let normalizedMessage = MakeCommitComposerState.normalizedCommitMessage(commitMessage)
+
+    guard snapshot.canCommit(message: normalizedMessage), !isBusy else {
       return
     }
 
@@ -798,7 +806,7 @@ struct MakeCommitView: View {
 
     let wasAmending = isAmendingLastCommit
     let result = await GitWorkingTreeService.shared.commit(
-      message: commitMessage,
+      message: normalizedMessage,
       amend: wasAmending,
       in: workingDirectory
     )
@@ -810,6 +818,8 @@ struct MakeCommitView: View {
 
     if !wasAmending {
       commitMessage = ""
+    } else {
+      commitMessage = normalizedMessage
     }
 
     isAmendingLastCommit = false
