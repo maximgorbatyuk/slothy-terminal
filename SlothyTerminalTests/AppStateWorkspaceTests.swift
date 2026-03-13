@@ -113,6 +113,110 @@ struct AppStateWorkspaceTests {
     #expect(appState.workspaces[0].id == workspaceID)
   }
 
+  @Test("Creating a tab retargets an empty active workspace")
+  @MainActor
+  func creatingTabRetargetsEmptyActiveWorkspace() throws {
+    let appState = AppState()
+
+    appState.createTab(agent: .terminal, directory: dirA)
+    let workspaceID = try #require(appState.activeWorkspaceID)
+    let tabID = try #require(appState.activeTabID)
+
+    appState.closeTab(id: tabID)
+    appState.createTab(agent: .terminal, directory: dirB)
+
+    #expect(appState.workspaces.count == 1)
+    #expect(appState.activeWorkspaceID == workspaceID)
+    #expect(appState.activeWorkspace?.rootDirectory == dirB)
+    #expect(appState.activeWorkspace?.name == "workspace-b")
+    #expect(appState.activeTab?.workingDirectory == dirB)
+    #expect(appState.preferredNewSessionDirectory == dirB)
+  }
+
+  @Test("Creating a tab retargets an explicitly empty active workspace")
+  @MainActor
+  func creatingTabRetargetsExplicitlyEmptyActiveWorkspace() throws {
+    let appState = AppState()
+
+    let workspace = appState.createWorkspace(from: dirA)
+
+    appState.createTab(agent: .terminal, directory: dirB)
+
+    #expect(appState.workspaces.count == 1)
+    #expect(appState.activeWorkspaceID == workspace.id)
+    #expect(appState.activeWorkspace?.rootDirectory == dirB)
+    #expect(appState.activeTab?.workingDirectory == dirB)
+  }
+
+  @Test("Empty active workspace reuses an existing workspace for the selected folder")
+  @MainActor
+  func emptyActiveWorkspaceReusesExistingWorkspaceForSelectedFolder() throws {
+    let appState = AppState()
+
+    let workspaceA = appState.createWorkspace(from: dirA)
+    let workspaceB = appState.createWorkspace(from: dirB)
+
+    appState.switchWorkspace(id: workspaceA.id)
+    appState.createTab(agent: .terminal, directory: dirB)
+
+    let newTab = try #require(appState.activeTab)
+    #expect(appState.workspaces.count == 1)
+    #expect(appState.activeWorkspaceID == workspaceB.id)
+    #expect(appState.workspace(for: workspaceA.id) == nil)
+    #expect(newTab.workspaceID == workspaceB.id)
+  }
+
+  @Test("Creating a chat tab retargets an empty active workspace")
+  @MainActor
+  func creatingChatTabRetargetsEmptyActiveWorkspace() throws {
+    let appState = AppState()
+
+    appState.createTab(agent: .terminal, directory: dirA)
+    let workspaceID = try #require(appState.activeWorkspaceID)
+    let tabID = try #require(appState.activeTabID)
+
+    appState.closeTab(id: tabID)
+    appState.createChatTab(agent: .claude, directory: dirB)
+
+    #expect(appState.workspaces.count == 1)
+    #expect(appState.activeWorkspaceID == workspaceID)
+    #expect(appState.activeWorkspace?.rootDirectory == dirB)
+    #expect(appState.activeTab?.workingDirectory == dirB)
+  }
+
+  @Test("Creating a Git tab retargets an empty active workspace")
+  @MainActor
+  func creatingGitTabRetargetsEmptyActiveWorkspace() throws {
+    let appState = AppState()
+
+    appState.createTab(agent: .terminal, directory: dirA)
+    let workspaceID = try #require(appState.activeWorkspaceID)
+    let tabID = try #require(appState.activeTabID)
+
+    appState.closeTab(id: tabID)
+    appState.createGitTab(directory: dirB)
+
+    #expect(appState.workspaces.count == 1)
+    #expect(appState.activeWorkspaceID == workspaceID)
+    #expect(appState.activeWorkspace?.rootDirectory == dirB)
+    #expect(appState.activeTab?.workingDirectory == dirB)
+  }
+
+  @Test("Creating a tab in a non-empty active workspace keeps its original folder")
+  @MainActor
+  func creatingTabInNonEmptyActiveWorkspaceKeepsOriginalFolder() throws {
+    let appState = AppState()
+
+    appState.createTab(agent: .terminal, directory: dirA)
+    let workspaceID = try #require(appState.activeWorkspaceID)
+    appState.createTab(agent: .terminal, directory: dirB)
+
+    #expect(appState.workspaces.count == 1)
+    #expect(appState.activeWorkspaceID == workspaceID)
+    #expect(appState.activeWorkspace?.rootDirectory == dirA)
+    #expect(appState.activeWorkspace?.name == "workspace-a")
+  }
+
   // MARK: - Workspace creation without tab
 
   @Test("createWorkspace does not create any tabs")
@@ -315,6 +419,19 @@ struct AppStateWorkspaceTests {
 
     #expect(appState.pendingCloseTabLabel == "\"1. Terminal | cli\"")
     #expect(appState.tabBarLabel(for: secondTab) == "2. Claude | cli")
+  }
+
+  @Test("Tab bar label uses the last submitted command for plain terminal tabs")
+  @MainActor
+  func tabBarLabelUsesLastSubmittedCommandForPlainTerminalTab() throws {
+    let appState = AppState()
+
+    appState.createTab(agent: .terminal, directory: dirA)
+
+    let tab = try #require(appState.activeTab)
+    tab.updateLastSubmittedCommandLabel(from: "npm run dev")
+
+    #expect(appState.tabBarLabel(for: tab) == "1. npm | cli")
   }
 
   @Test("Tabs can be reordered within the active workspace")

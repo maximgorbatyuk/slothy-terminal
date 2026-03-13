@@ -55,6 +55,9 @@ struct ActiveTerminalView: View {
           onCommandEntered: {
             tab.handleTerminalCommandEntered()
           },
+          onCommandSubmitted: { rawCommandLine in
+            tab.updateLastSubmittedCommandLabel(from: rawCommandLine)
+          },
           onCommandFinished: {
             tab.markTerminalIdle()
           },

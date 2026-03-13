@@ -257,11 +257,12 @@ class AppState {
   }
 
   /// Resolves the workspace ID for a new tab.
+  /// Retargets the active workspace when it is empty and a new directory is selected.
   /// Creates the first workspace from the directory if none exist;
   /// otherwise returns the active (or first) workspace ID.
   private func resolveWorkspaceID(for directory: URL) -> UUID {
-    if let active = activeWorkspace {
-      return active.id
+    if let activeWorkspaceID = resolvedActiveWorkspaceID(for: directory) {
+      return activeWorkspaceID
     }
 
     if let first = workspaces.first {
@@ -271,6 +272,44 @@ class AppState {
 
     let workspace = createWorkspace(from: directory)
     return workspace.id
+  }
+
+  private func resolvedActiveWorkspaceID(for directory: URL) -> UUID? {
+    guard let activeWorkspace else {
+      return nil
+    }
+
+    guard !hasTabs(in: activeWorkspace.id) else {
+      return activeWorkspace.id
+    }
+
+    if let existingWorkspace = workspaces.first(where: { $0.rootDirectory == directory }),
+       existingWorkspace.id != activeWorkspace.id
+    {
+      let orphanedID = activeWorkspace.id
+      workspaces.removeAll { $0.id == orphanedID }
+      activeWorkspaceID = existingWorkspace.id
+      return existingWorkspace.id
+    }
+
+    retargetWorkspace(id: activeWorkspace.id, to: directory)
+    return activeWorkspace.id
+  }
+
+  private func retargetWorkspace(id: UUID, to directory: URL) {
+    guard let index = workspaces.firstIndex(where: { $0.id == id }) else {
+      return
+    }
+
+    guard workspaces[index].rootDirectory != directory else {
+      return
+    }
+
+    workspaces[index] = Workspace(
+      id: id,
+      name: directory.lastPathComponent,
+      rootDirectory: directory
+    )
   }
 
   /// Creates a new tab with the specified agent and working directory.

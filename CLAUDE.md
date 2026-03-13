@@ -10,6 +10,10 @@ SlothyTerminal is a native macOS terminal application (Swift/SwiftUI) for AI cod
 - **Language:** Swift 5.9+
 - **Build System:** Xcode 15.0+ with SPM
 
+## Repository rules
+
+- Do not use git worktrees for implementing features.
+
 ## Build Commands
 
 ```bash

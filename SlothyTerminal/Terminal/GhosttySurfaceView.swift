@@ -37,6 +37,7 @@ class GhosttySurfaceView: NSView, NSTextInputClient {
   var onTitleChanged: ((String) -> Void)?
   var onDirectoryChanged: ((URL) -> Void)?
   var onCommandEntered: (() -> Void)?
+  var onCommandSubmitted: ((String) -> Void)?
   var onCommandFinished: (() -> Void)?
   var onClosed: (() -> Void)?
   var onTerminalActivity: (() -> Void)?
@@ -50,6 +51,7 @@ class GhosttySurfaceView: NSView, NSTextInputClient {
   private var activityDetectionWorkItem: DispatchWorkItem?
   private let activityDetectionGate = ActivityDetectionGate()
   private var lastUserInputAt: Date = .distantPast
+  private var commandCaptureBuffer = TerminalCommandCaptureBuffer()
 
   private let activityDetectionDelay: TimeInterval = 0.12
   private let userInputSuppressionInterval: TimeInterval = 0.4
@@ -443,7 +445,10 @@ class GhosttySurfaceView: NSView, NSTextInputClient {
       _ = sendKeyAction(action, event: event, text: event.ghosttyCharacters)
     }
 
+    let insertedTexts = keyTextAccumulator ?? []
     keyTextAccumulator = nil
+
+    trackCommandCapture(for: event, insertedTexts: insertedTexts)
 
     if shouldCountCommandEntry(for: event) {
       onCommandEntered?()
@@ -542,6 +547,12 @@ class GhosttySurfaceView: NSView, NSTextInputClient {
       if chars == "v" {
         noteUserInput()
 
+        // Best-effort paste capture. Newlines are not treated as submits since
+        // bracketed paste or shell multi-line editing may handle them differently.
+        if let pastedText = NSPasteboard.general.string(forType: .string) {
+          trackCommandCaptureText(pastedText, submitOnNewline: false)
+        }
+
         /// Paste from clipboard via ghostty binding action.
         let action = "paste_from_clipboard"
         _ = ghostty_surface_binding_action(surface, action, UInt(action.count))
@@ -592,6 +603,103 @@ class GhosttySurfaceView: NSView, NSTextInputClient {
 
     let disallowed: NSEvent.ModifierFlags = [.command, .control, .option]
     return event.modifierFlags.intersection(disallowed).isEmpty
+  }
+
+  private func shouldClearCommandCapture(for event: NSEvent) -> Bool {
+    let modifiers = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+
+    guard modifiers == .control,
+          let characters = event.charactersIgnoringModifiers?.lowercased()
+    else {
+      return false
+    }
+
+    return characters == "c" || characters == "u"
+  }
+
+  private func shouldDeleteLastWordFromCommandCapture(for event: NSEvent) -> Bool {
+    let modifiers = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+
+    guard modifiers == .control,
+          let characters = event.charactersIgnoringModifiers?.lowercased()
+    else {
+      return false
+    }
+
+    return characters == "w"
+  }
+
+  private func handleDeleteKeyForCommandCapture(_ event: NSEvent) -> Bool {
+    guard event.keyCode == 51 || event.keyCode == 117 else {
+      return false
+    }
+
+    let modifiers = event.modifierFlags
+      .intersection(.deviceIndependentFlagsMask)
+      .subtracting([.capsLock, .function, .numericPad, .shift])
+
+    // Forward delete (keyCode 117). The capture buffer has no cursor position,
+    // so forward delete can't be meaningfully replicated. Consume and skip.
+    if event.keyCode == 117 {
+      return true
+    }
+
+    if modifiers == .command {
+      commandCaptureBuffer.clear()
+      return true
+    }
+
+    if modifiers == .option {
+      commandCaptureBuffer.deleteLastWord()
+      return true
+    }
+
+    if modifiers.isEmpty {
+      commandCaptureBuffer.deleteBackward()
+      return true
+    }
+
+    // Remaining modifier+delete combos (e.g., Ctrl+Delete) can't be tracked
+    // without cursor awareness. Consume to avoid appending stale characters.
+    return true
+  }
+
+  private func trackCommandCapture(for event: NSEvent, insertedTexts: [String]) {
+    if shouldCountCommandEntry(for: event) {
+      if let commandLine = commandCaptureBuffer.submit() {
+        emitSubmittedCommands([commandLine])
+      }
+
+      return
+    }
+
+    if shouldClearCommandCapture(for: event) {
+      commandCaptureBuffer.clear()
+      return
+    }
+
+    if shouldDeleteLastWordFromCommandCapture(for: event) {
+      commandCaptureBuffer.deleteLastWord()
+      return
+    }
+
+    if handleDeleteKeyForCommandCapture(event) {
+      return
+    }
+
+    for text in insertedTexts {
+      emitSubmittedCommands(commandCaptureBuffer.append(text))
+    }
+  }
+
+  private func trackCommandCaptureText(_ text: String, submitOnNewline: Bool = true) {
+    emitSubmittedCommands(commandCaptureBuffer.append(text, submitOnNewline: submitOnNewline))
+  }
+
+  private func emitSubmittedCommands(_ commandLines: [String]) {
+    for commandLine in commandLines {
+      onCommandSubmitted?(commandLine)
+    }
   }
 
   static func shellEscape(_ argument: String) -> String {
@@ -828,6 +936,7 @@ class GhosttySurfaceView: NSView, NSTextInputClient {
     }
 
     noteUserInput()
+    trackCommandCaptureText(str, submitOnNewline: false)
 
     str.withCString { ptr in
       ghostty_surface_text(surface, ptr, UInt(str.utf8.count))
@@ -926,16 +1035,14 @@ class GhosttySurfaceView: NSView, NSTextInputClient {
 
 extension GhosttySurfaceView: InjectableSurface {
   func injectText(_ text: String) -> Bool {
-    guard let surface else {
+    guard surface != nil else {
       return false
     }
 
     noteUserInput()
+    trackCommandCaptureText(text)
 
-    return text.withCString { ptr in
-      ghostty_surface_text(surface, ptr, UInt(text.utf8.count))
-      return true
-    }
+    return writeTextToSurface(text)
   }
 
   func injectCommand(_ command: String, submit: CommandSubmitMode) -> Bool {
@@ -959,21 +1066,30 @@ extension GhosttySurfaceView: InjectableSurface {
       return false
     }
 
+    noteUserInput()
+    trackCommandCaptureText(text, submitOnNewline: false)
+
     switch mode {
     case .bracketed:
       // Send bracketed paste escape sequences directly to the PTY,
       // avoiding any system clipboard manipulation.
       let bracketedText = "\u{1b}[200~" + text + "\u{1b}[201~"
-      return injectText(bracketedText)
+      return writeTextToSurface(bracketedText)
 
     case .plain:
-      return injectText(text)
+      return writeTextToSurface(text)
     }
   }
 
   func injectControl(_ signal: ControlSignal) -> Bool {
     guard let surface else {
       return false
+    }
+
+    noteUserInput()
+
+    if signal == .ctrlC {
+      commandCaptureBuffer.clear()
     }
 
     var cchar = CChar(bitPattern: signal.asciiValue)
@@ -1000,6 +1116,17 @@ extension GhosttySurfaceView: InjectableSurface {
     _ = ghostty_surface_key(surface, keyEvent)
 
     return true
+  }
+
+  private func writeTextToSurface(_ text: String) -> Bool {
+    guard let surface else {
+      return false
+    }
+
+    return text.withCString { ptr in
+      ghostty_surface_text(surface, ptr, UInt(text.utf8.count))
+      return true
+    }
   }
 }
 

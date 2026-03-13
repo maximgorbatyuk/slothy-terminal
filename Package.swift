@@ -57,6 +57,7 @@ let package = Package(
         "Models/GitStats.swift",
         "Models/GitTab.swift",
         "Models/Tab.swift",
+        "Models/TerminalCommandCaptureBuffer.swift",
         "Models/AppConfig.swift",
         "Models/SettingsSection.swift",
         "Models/Workspace.swift",
