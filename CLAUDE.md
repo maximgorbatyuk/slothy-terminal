@@ -84,7 +84,7 @@ User Action → AppState.createGitTab() → Tab(mode: .git)
 ### Key Components
 
 - **AppState** (`App/AppState.swift`) - @Observable global state: tabs, active tab, sidebar, modals
-- **Tab** (`Models/Tab.swift`) - Session model supporting `.terminal`, `.chat`, and `.git` modes
+- **Tab** (`Models/Tab.swift`) - Session model supporting `.terminal`, `.chat`, and `.git` modes; plain terminal tabs show last submitted command in tab label via `commandLabel(from:)` (nonisolated pure parser)
 - **GhosttyApp** (`Terminal/GhosttyApp.swift`) - Process-wide singleton managing the libghostty app instance and runtime callbacks
 - **GhosttySurfaceView** (`Terminal/GhosttySurfaceView.swift`) - NSView bridge to libghostty terminal surface; handles PTY, rendering, and input
 - **AIAgent protocol** (`Agents/AIAgent.swift`) - Defines agent interface; implementations: ClaudeAgent, OpenCodeAgent, TerminalAgent
@@ -96,6 +96,7 @@ User Action → AppState.createGitTab() → Tab(mode: .git)
 - **ClaudeCLITransport** (`Chat/Transport/ClaudeCLITransport.swift`) - Claude stream-json process transport
 - **OpenCodeCLITransport** (`Chat/OpenCode/OpenCodeCLITransport.swift`) - OpenCode JSON event process transport
 - **ChatSessionStore** (`Chat/Storage/ChatSessionStore.swift`) - Snapshot persistence and restore for chat sessions
+- **TerminalCommandCaptureBuffer** (`Models/TerminalCommandCaptureBuffer.swift`) - Best-effort keystroke shadow buffer for approximating the current terminal command line (used for tab labels)
 - **Workspace** (`Models/Workspace.swift`) - Groups tabs under a named project directory
 - **ScriptScanner** (`Services/PythonScriptScanner.swift`) - Scans for `.py` and `.sh` scripts in project root (shallow) and `scripts/` folder (recursive)
 - **GitService** (`Services/GitService.swift`) - Async git operations (modified files, branch info)
@@ -121,7 +122,7 @@ SlothyTerminal/
 │   ├── Transport/   # ChatTransport protocol + ClaudeCLITransport
 │   └── Views/       # Chat UI (messages, markdown, tools, composer)
 ├── Injection/       # Terminal input injection (models, orchestrator, registry)
-├── Models/          # Tab, Workspace, AppConfig, AgentType, UsageStats, GitStats, GitTab
+├── Models/          # Tab, Workspace, AppConfig, AgentType, UsageStats, GitStats, GitTab, TerminalCommandCaptureBuffer
 ├── Services/        # ConfigManager, GitService, GitStatsService, GraphLaneCalculator, StatsParser, etc.
 ├── Telegram/        # Telegram bot (API, relay, runtime, models)
 ├── Terminal/        # GhosttyApp singleton + GhosttySurfaceView
@@ -148,6 +149,7 @@ Workspaces are first-class tab containers. Each workspace maps to a project dire
 - `AppState.closeTab(id:)` selects the next tab from the **same workspace**, not globally.
 - `AppState.switchWorkspace(id:)` aligns the active tab to the target workspace (first tab, or nil if empty).
 - Empty workspaces show `EmptyTerminalView`.
+- **Empty workspace retargeting**: When the active workspace has no tabs and a new tab targets a different directory, `resolvedActiveWorkspaceID(for:)` retargets the workspace to the new directory. If another workspace already exists for that directory, the empty workspace is removed and the existing one is activated.
 
 ## Core Architecture Notes
 
@@ -173,7 +175,7 @@ Key rules:
 - `guard` clauses must be multi-line with blank line after
 - Multi-condition `if` blocks: opening brace on own line
 - `case` blocks followed by blank line
-- Use `///` for documentation comments, `//` only for MARK/TODO directives
+- Use `///` for documentation comments, `//` for inline explanatory comments and MARK/TODO directives
 - Use `@Observable` (not ObservableObject) for shared state
 - Use `async/await` and `.task` modifier for async work; avoid Combine
 - Don't create ViewModels for every view or add unnecessary abstractions
