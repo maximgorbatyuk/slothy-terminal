@@ -10,9 +10,97 @@ private struct MakeCommitSelection: Hashable, Identifiable {
 }
 
 private struct MakeCommitConfirmation: Identifiable {
+  enum ActionKind {
+    case discardTracked
+    case discardStaged
+    case deleteUntracked
+  }
+
   let id = UUID()
-  let title: String
-  let message: String
+  let action: ActionKind
+  let change: GitScopedChange
+
+  var title: String {
+    switch action {
+    case .discardTracked:
+      return "Discard Changes"
+
+    case .discardStaged:
+      return "Discard All Changes"
+
+    case .deleteUntracked:
+      return "Delete File"
+    }
+  }
+
+  var message: String {
+    switch action {
+    case .discardTracked:
+      return "Discard unstaged changes for \(change.displayPath)?"
+
+    case .discardStaged:
+      return "Discard staged and working tree changes for \(change.displayPath) and reset it to HEAD?"
+
+    case .deleteUntracked:
+      return "Delete the untracked file \(change.displayPath) from disk?"
+    }
+  }
+
+  var confirmTitle: String {
+    switch action {
+    case .discardTracked:
+      return "Discard Changes"
+
+    case .discardStaged:
+      return "Discard All Changes"
+
+    case .deleteUntracked:
+      return "Delete File"
+    }
+  }
+}
+
+private struct NewBranchSheet: View {
+  @Binding var branchName: String
+  let isSubmitting: Bool
+  let onCreate: () async -> Bool
+
+  @Environment(\.dismiss) private var dismiss
+
+  var body: some View {
+    VStack(alignment: .leading, spacing: 16) {
+      Text("Create and Switch Branch")
+        .font(.system(size: 16, weight: .semibold))
+
+      TextField("Branch name", text: $branchName)
+        .textFieldStyle(.roundedBorder)
+
+      HStack {
+        Spacer()
+
+        Button("Cancel") {
+          dismiss()
+        }
+
+        Button("Create Branch") {
+          Task {
+            let didCreate = await onCreate()
+
+            if didCreate {
+              dismiss()
+            }
+          }
+        }
+        .buttonStyle(.borderedProminent)
+        .disabled(
+          isSubmitting ||
+            !GitWorkingTreeService.shared.isValidBranchName(branchName)
+        )
+      }
+    }
+    .padding(20)
+    .frame(width: 360)
+  }
 }
 
 /// Shell for the Git Make Commit tab.
@@ -26,10 +114,13 @@ struct MakeCommitView: View {
   @State private var repositoryName: String
   @State private var commitMessage = ""
   @State private var newBranchName = ""
+  @State private var isAmendingLastCommit = false
   @State private var lastOperation: String?
   @State private var isLoadingSnapshot = false
   @State private var isLoadingDiff = false
+  @State private var isLoadingAmendMessage = false
   @State private var isRunningMutation = false
+  @State private var isShowingNewBranchSheet = false
   @State private var pendingConfirmation: MakeCommitConfirmation?
 
   init(workingDirectory: URL) {
@@ -52,6 +143,24 @@ struct MakeCommitView: View {
     .task(id: selectedChange) {
       await loadSelectedDiff()
     }
+    .onChange(of: isAmendingLastCommit) { _, isEnabled in
+      guard isEnabled else {
+        return
+      }
+
+      Task {
+        await preloadLastCommitMessage()
+      }
+    }
+    .sheet(isPresented: $isShowingNewBranchSheet) {
+      NewBranchSheet(
+        branchName: $newBranchName,
+        isSubmitting: isBusy,
+        onCreate: {
+          await createBranch()
+        }
+      )
+    }
     .confirmationDialog(
       pendingConfirmation?.title ?? "",
       isPresented: Binding(
@@ -63,7 +172,18 @@ struct MakeCommitView: View {
         }
       )
     ) {
-      Button("Dismiss", role: .cancel) {
+      if let pendingConfirmation {
+        Button(pendingConfirmation.confirmTitle, role: .destructive) {
+          let confirmation = pendingConfirmation
+          self.pendingConfirmation = nil
+
+          Task {
+            await performConfirmation(confirmation)
+          }
+        }
+      }
+
+      Button("Cancel", role: .cancel) {
         pendingConfirmation = nil
       }
     } message: {
@@ -113,27 +233,23 @@ struct MakeCommitView: View {
       } label: {
         Label("Refresh", systemImage: "arrow.clockwise")
       }
-      .disabled(isLoadingSnapshot || isRunningMutation)
+      .disabled(isBusy)
 
       Button {
-        pendingConfirmation = MakeCommitConfirmation(
-          title: "New Branch",
-          message: "Branch creation UI will be wired in the next step."
-        )
+        isShowingNewBranchSheet = true
       } label: {
         Label("New Branch", systemImage: "point.topleft.down.curvedto.point.bottomright.up")
       }
-      .disabled(isLoadingSnapshot || isRunningMutation)
+      .disabled(isBusy)
 
       Button {
-        pendingConfirmation = MakeCommitConfirmation(
-          title: "Push",
-          message: "Push behavior will be wired in the next step."
-        )
+        Task {
+          await pushCurrentBranch()
+        }
       } label: {
         Label("Push", systemImage: "arrow.up.circle")
       }
-      .disabled(isLoadingSnapshot || isRunningMutation)
+      .disabled(isBusy)
     }
     .padding(.horizontal, 16)
     .padding(.vertical, 12)
@@ -292,7 +408,35 @@ struct MakeCommitView: View {
       }
       .buttonStyle(.bordered)
       .controlSize(.small)
-      .disabled(isLoadingSnapshot || isRunningMutation)
+      .disabled(isBusy)
+    }
+    .contextMenu {
+      switch section {
+      case .staged:
+        Button("Discard All Changes…", role: .destructive) {
+          pendingConfirmation = MakeCommitConfirmation(
+            action: .discardStaged,
+            change: change
+          )
+        }
+
+      case .unstaged:
+        if change.isUntracked {
+          Button("Delete File…", role: .destructive) {
+            pendingConfirmation = MakeCommitConfirmation(
+              action: .deleteUntracked,
+              change: change
+            )
+          }
+        } else {
+          Button("Discard Changes…", role: .destructive) {
+            pendingConfirmation = MakeCommitConfirmation(
+              action: .discardTracked,
+              change: change
+            )
+          }
+        }
+      }
     }
   }
 
@@ -414,11 +558,15 @@ struct MakeCommitView: View {
           .font(.system(size: 12, weight: .semibold))
 
         Spacer()
+      }
 
-        TextField("New branch name", text: $newBranchName)
-          .textFieldStyle(.roundedBorder)
-          .frame(width: 220)
-          .disabled(isLoadingSnapshot || isRunningMutation)
+      if snapshot.hasStagedChangesOutsideScope {
+        Label(
+          "Commit is blocked because staged changes exist outside this scoped directory.",
+          systemImage: "exclamationmark.triangle.fill"
+        )
+        .font(.system(size: 11))
+        .foregroundStyle(.orange)
       }
 
       TextEditor(text: $commitMessage)
@@ -428,19 +576,33 @@ struct MakeCommitView: View {
         .padding(6)
         .background(appCardColor)
         .clipShape(.rect(cornerRadius: 10))
+        .disabled(isBusy)
 
       HStack {
-        Text("Commit and amend actions will be wired in the next task.")
+        Toggle("Amend last commit", isOn: $isAmendingLastCommit)
           .font(.system(size: 11))
-          .foregroundStyle(.secondary)
+          .disabled(isBusy)
 
         Spacer()
 
-        Button("Commit") {}
-          .disabled(true)
+        Button(isAmendingLastCommit ? "Amend Commit" : "Commit") {
+          Task {
+            await commitChanges()
+          }
+        }
+        .buttonStyle(.borderedProminent)
+        .disabled(!canSubmitCommit)
       }
     }
     .padding(16)
+  }
+
+  private var isBusy: Bool {
+    isLoadingSnapshot || isLoadingAmendMessage || isRunningMutation
+  }
+
+  private var canSubmitCommit: Bool {
+    snapshot.canCommit(message: commitMessage) && !isBusy
   }
 
   @MainActor
@@ -560,6 +722,165 @@ struct MakeCommitView: View {
       statusMessage: section == .staged
         ? "Unstaged \(change.displayPath)."
         : "Staged \(change.displayPath)."
+    )
+  }
+
+  @MainActor
+  private func preloadLastCommitMessage() async {
+    isLoadingAmendMessage = true
+
+    defer {
+      isLoadingAmendMessage = false
+    }
+
+    guard let message = await GitWorkingTreeService.shared.getLastCommitMessage(
+      in: workingDirectory
+    ) else {
+      isAmendingLastCommit = false
+      lastOperation = "Unable to load the last commit message."
+      return
+    }
+
+    commitMessage = message
+    lastOperation = "Loaded the last commit message."
+  }
+
+  @MainActor
+  private func commitChanges() async {
+    guard canSubmitCommit else {
+      return
+    }
+
+    isRunningMutation = true
+
+    defer {
+      isRunningMutation = false
+    }
+
+    let wasAmending = isAmendingLastCommit
+    let result = await GitWorkingTreeService.shared.commit(
+      message: commitMessage,
+      amend: wasAmending,
+      in: workingDirectory
+    )
+
+    guard result.isSuccess else {
+      lastOperation = result.stderr.isEmpty ? "Git command failed." : result.stderr
+      return
+    }
+
+    if !wasAmending {
+      commitMessage = ""
+    }
+
+    isAmendingLastCommit = false
+    await refreshSnapshot(
+      statusMessage: wasAmending
+        ? "Amended the last commit."
+        : "Created a new commit."
+    )
+  }
+
+  @MainActor
+  private func pushCurrentBranch() async {
+    isRunningMutation = true
+
+    defer {
+      isRunningMutation = false
+    }
+
+    let result = await GitWorkingTreeService.shared.push(
+      in: workingDirectory
+    )
+
+    guard result.isSuccess else {
+      lastOperation = result.stderr.isEmpty ? "Git command failed." : result.stderr
+      return
+    }
+
+    await refreshSnapshot(
+      statusMessage: "Pushed the current branch."
+    )
+  }
+
+  @MainActor
+  private func createBranch() async -> Bool {
+    guard GitWorkingTreeService.shared.isValidBranchName(newBranchName) else {
+      lastOperation = "Branch name must not be blank."
+      return false
+    }
+
+    isRunningMutation = true
+
+    defer {
+      isRunningMutation = false
+    }
+
+    let trimmedBranchName = newBranchName.trimmingCharacters(in: .whitespacesAndNewlines)
+    let result = await GitWorkingTreeService.shared.createAndSwitchBranch(
+      named: trimmedBranchName,
+      in: workingDirectory
+    )
+
+    guard result.isSuccess else {
+      lastOperation = result.stderr.isEmpty ? "Git command failed." : result.stderr
+      return false
+    }
+
+    newBranchName = ""
+    await refreshSnapshot(
+      statusMessage: "Created and switched to \(trimmedBranchName)."
+    )
+    return true
+  }
+
+  @MainActor
+  private func performConfirmation(_ confirmation: MakeCommitConfirmation) async {
+    isRunningMutation = true
+
+    defer {
+      isRunningMutation = false
+    }
+
+    let result: GitProcessResult
+    let preferredSection: GitChangeSection
+    let successMessage: String
+
+    switch confirmation.action {
+    case .discardTracked:
+      preferredSection = .unstaged
+      successMessage = "Discarded changes for \(confirmation.change.displayPath)."
+      result = await GitWorkingTreeService.shared.discardTrackedChanges(
+        path: confirmation.change.repoRelativePath,
+        in: workingDirectory
+      )
+
+    case .discardStaged:
+      preferredSection = .staged
+      successMessage = "Discarded all changes for \(confirmation.change.displayPath)."
+      result = await GitWorkingTreeService.shared.discardStagedChanges(
+        path: confirmation.change.repoRelativePath,
+        in: workingDirectory
+      )
+
+    case .deleteUntracked:
+      preferredSection = .unstaged
+      successMessage = "Deleted \(confirmation.change.displayPath)."
+      result = await GitWorkingTreeService.shared.deleteUntrackedFile(
+        path: confirmation.change.repoRelativePath,
+        in: workingDirectory
+      )
+    }
+
+    guard result.isSuccess else {
+      lastOperation = result.stderr.isEmpty ? "Git command failed." : result.stderr
+      return
+    }
+
+    await refreshSnapshot(
+      preferredPath: confirmation.change.repoRelativePath,
+      preferredSection: preferredSection,
+      statusMessage: successMessage
     )
   }
 

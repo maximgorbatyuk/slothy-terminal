@@ -25,6 +25,10 @@ final class GitWorkingTreeService {
     return ["push"]
   }
 
+  func isValidBranchName(_ branchName: String) -> Bool {
+    !branchName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+  }
+
   func getLastCommitMessage(in directory: URL) async -> String? {
     let repositoryRoot = await repositoryRoot(for: directory)
     let result = await GitProcessRunner.runResult(
@@ -77,7 +81,42 @@ final class GitWorkingTreeService {
     named branchName: String,
     in directory: URL
   ) async -> GitProcessResult {
-    await runMutation(["switch", "-c", branchName], in: directory)
+    guard isValidBranchName(branchName) else {
+      return .failure(stderr: "Branch name must not be blank.")
+    }
+
+    return await runMutation(["switch", "-c", branchName], in: directory)
+  }
+
+  func commit(
+    message: String,
+    amend: Bool,
+    in directory: URL
+  ) async -> GitProcessResult {
+    let arguments = amend
+      ? ["commit", "--amend", "-m", message]
+      : ["commit", "-m", message]
+
+    return await runMutation(arguments, in: directory)
+  }
+
+  func deleteUntrackedFile(
+    path: String,
+    in directory: URL
+  ) async -> GitProcessResult {
+    let repositoryRoot = await repositoryRoot(for: directory)
+    let fileURL = repositoryRoot.appendingPathComponent(path)
+
+    do {
+      try FileManager.default.removeItem(at: fileURL)
+      return GitProcessResult(
+        stdout: "",
+        stderr: "",
+        terminationStatus: 0
+      )
+    } catch {
+      return .failure(stderr: error.localizedDescription)
+    }
   }
 
   func loadSnapshot(in directory: URL) async -> GitWorkingTreeSnapshot {

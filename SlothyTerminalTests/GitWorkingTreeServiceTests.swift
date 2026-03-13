@@ -69,4 +69,20 @@ struct GitWorkingTreeServiceTests {
 
     #expect(arguments == ["push"])
   }
+
+  @Test("Commit is blocked when staged changes exist outside scope")
+  func commitBlockedOutsideScope() {
+    let snapshot = GitWorkingTreeSnapshot(
+      changes: [],
+      hasStagedChangesOutsideScope: true
+    )
+
+    #expect(snapshot.canCommit(message: "Ship it") == false)
+  }
+
+  @Test("Branch names must not be blank")
+  func blankBranchNameIsInvalid() {
+    #expect(GitWorkingTreeService.shared.isValidBranchName("") == false)
+    #expect(GitWorkingTreeService.shared.isValidBranchName("   ") == false)
+  }
 }

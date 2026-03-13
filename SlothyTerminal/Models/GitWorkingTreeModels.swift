@@ -116,4 +116,18 @@ struct GitWorkingTreeSnapshot: Equatable {
   var unstagedChanges: [GitScopedChange] {
     changes.filter { $0.hasUnstagedEntry }
   }
+
+  func canCommit(message: String) -> Bool {
+    let trimmedMessage = message.trimmingCharacters(in: .whitespacesAndNewlines)
+
+    guard !trimmedMessage.isEmpty else {
+      return false
+    }
+
+    guard hasStagedChangesInScope else {
+      return false
+    }
+
+    return !hasStagedChangesOutsideScope
+  }
 }
