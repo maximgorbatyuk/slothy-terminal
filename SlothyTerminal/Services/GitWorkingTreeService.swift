@@ -6,6 +6,75 @@ final class GitWorkingTreeService {
 
   private init() {}
 
+  func pushArguments(
+    currentBranch: String,
+    upstreamBranch: String?
+  ) -> [String] {
+    guard
+      let upstreamBranch,
+      !upstreamBranch.isEmpty
+    else {
+      return ["push", "--set-upstream", "origin", currentBranch]
+    }
+
+    return ["push"]
+  }
+
+  func getLastCommitMessage(in directory: URL) async -> String? {
+    let repositoryRoot = await repositoryRoot(for: directory)
+    let result = await GitProcessRunner.runResult(
+      ["log", "-1", "--pretty=%B"],
+      in: repositoryRoot
+    )
+
+    guard result.isSuccess, !result.stdout.isEmpty else {
+      return nil
+    }
+
+    return result.stdout
+  }
+
+  func stageFile(path: String, in directory: URL) async -> GitProcessResult {
+    await runMutation(["add", "--", path], in: directory)
+  }
+
+  func unstageFile(path: String, in directory: URL) async -> GitProcessResult {
+    await runMutation(["restore", "--staged", "--", path], in: directory)
+  }
+
+  func discardTrackedChanges(path: String, in directory: URL) async -> GitProcessResult {
+    await runMutation(["restore", "--", path], in: directory)
+  }
+
+  func discardStagedChanges(path: String, in directory: URL) async -> GitProcessResult {
+    await runMutation(
+      ["restore", "--staged", "--worktree", "--source=HEAD", "--", path],
+      in: directory
+    )
+  }
+
+  func push(in directory: URL) async -> GitProcessResult {
+    let repositoryRoot = await repositoryRoot(for: directory)
+    guard let currentBranch = await currentBranch(in: repositoryRoot) else {
+      return .failure(stderr: "Unable to determine the current branch.")
+    }
+
+    let upstreamBranch = await currentUpstreamBranch(in: repositoryRoot)
+    let arguments = pushArguments(
+      currentBranch: currentBranch,
+      upstreamBranch: upstreamBranch
+    )
+
+    return await GitProcessRunner.runResult(arguments, in: repositoryRoot)
+  }
+
+  func createAndSwitchBranch(
+    named branchName: String,
+    in directory: URL
+  ) async -> GitProcessResult {
+    await runMutation(["switch", "-c", branchName], in: directory)
+  }
+
   func parseStatusOutput(
     _ output: String,
     scopePath: String? = nil
@@ -106,5 +175,44 @@ final class GitWorkingTreeService {
     }
 
     return String(path.dropFirst(prefix.count))
+  }
+
+  private func repositoryRoot(for directory: URL) async -> URL {
+    guard let path = await GitProcessRunner.run(
+      ["rev-parse", "--show-toplevel"],
+      in: directory
+    ) else {
+      return directory
+    }
+
+    return URL(fileURLWithPath: path)
+  }
+
+  private func currentBranch(in directory: URL) async -> String? {
+    let branch = await GitProcessRunner.run(
+      ["rev-parse", "--abbrev-ref", "HEAD"],
+      in: directory
+    )
+
+    guard branch != "HEAD" else {
+      return nil
+    }
+
+    return branch
+  }
+
+  private func currentUpstreamBranch(in directory: URL) async -> String? {
+    await GitProcessRunner.run(
+      ["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}"],
+      in: directory
+    )
+  }
+
+  private func runMutation(
+    _ arguments: [String],
+    in directory: URL
+  ) async -> GitProcessResult {
+    let repositoryRoot = await repositoryRoot(for: directory)
+    return await GitProcessRunner.runResult(arguments, in: repositoryRoot)
   }
 }

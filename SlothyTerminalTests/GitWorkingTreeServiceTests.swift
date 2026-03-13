@@ -49,4 +49,24 @@ struct GitWorkingTreeServiceTests {
     #expect(snapshot.changes[0].repoRelativePath == "Sources/App.swift")
     #expect(snapshot.hasStagedChangesOutsideScope)
   }
+
+  @Test("Push uses set-upstream when no upstream exists")
+  func pushArgumentsWithoutUpstream() {
+    let arguments = GitWorkingTreeService.shared.pushArguments(
+      currentBranch: "feature/make-commit",
+      upstreamBranch: nil
+    )
+
+    #expect(arguments == ["push", "--set-upstream", "origin", "feature/make-commit"])
+  }
+
+  @Test("Push uses plain push when upstream exists")
+  func pushArgumentsWithUpstream() {
+    let arguments = GitWorkingTreeService.shared.pushArguments(
+      currentBranch: "feature/make-commit",
+      upstreamBranch: "origin/feature/make-commit"
+    )
+
+    #expect(arguments == ["push"])
+  }
 }
