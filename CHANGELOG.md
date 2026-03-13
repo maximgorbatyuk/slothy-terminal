@@ -2,6 +2,30 @@
 
 All notable changes to SlothyTerminal will be documented in this file.
 
+## [2026.2.10] - 2026-03-13
+
+_Analysis range: `11a2df3..6cd5112` (1 commit, 12 files changed, 728 insertions, 9 deletions)._
+
+### Added
+- **Terminal tab command labels** — plain terminal tabs now show the last submitted command in the tab title (e.g., "npm | cli" instead of "Terminal | cli").
+  - Added `TerminalCommandCaptureBuffer` — a best-effort keystroke shadow buffer that tracks typed input, backspace, Ctrl+C/U/W clear, and paste to approximate the current command line.
+  - Added `Tab.commandLabel(from:)` — a shell-aware command parser that tokenizes quoted strings, skips environment assignments (`FOO=1`), wrapper commands (`sudo`, `env`, `command`) with their options, and normalizes absolute paths to base names.
+  - Added `onCommandSubmitted` callback wired from `GhosttySurfaceView` through `TerminalView` to `Tab.updateLastSubmittedCommandLabel(from:)`.
+  - AI agent tabs (Claude, OpenCode) are unaffected and keep their static labels.
+- **Empty workspace retargeting** — creating a tab in a new directory while the active workspace has no tabs retargets the workspace to the new directory instead of leaving it stale.
+  - If another workspace already exists for the target directory, the empty workspace is removed and the existing one is activated.
+  - Added `resolvedActiveWorkspaceID(for:)` and `retargetWorkspace(id:to:)` private helpers in `AppState`.
+
+### Changed
+- `GhosttySurfaceView` now tracks command capture state across keyboard input, paste (Cmd+V), text injection, and control signals (Ctrl+C clears the buffer).
+- `GhosttySurfaceView.injectText` refactored to use shared `writeTextToSurface` helper, avoiding duplicated `ghostty_surface_text` calls.
+- `Tab.commandLabel(from:)` and its static helpers are `nonisolated`, allowing off-MainActor usage for pure parsing.
+
+### Tests
+- Added `TabLabelTests` (9 tests) covering default labels, command reflection, AI tab immunity, parser tokenization, path normalization, env-var skipping, wrapper command handling, and quoted paths.
+- Added `TerminalCommandCaptureBufferTests` (5 tests) covering newline submit, paste without auto-submit, backspace, clear, and word deletion.
+- Added workspace retargeting tests in `AppStateWorkspaceTests` (6 tests) covering retarget on terminal/chat/git tab creation, reuse of existing workspace, orphan cleanup, and non-empty workspace preservation.
+
 ## [2026.2.9] - 2026-03-11
 
 _Analysis range: `54b9879d44fcb545b2810b6387aa054b377ffc90..d32d81d` (7 commits, 43 files changed, 3995 insertions, 764 deletions)._

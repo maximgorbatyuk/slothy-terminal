@@ -5,9 +5,6 @@ on:
     branches:
       - develop
       - main
-  push:
-    branches:
-      - develop
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -37,8 +34,7 @@ jobs:
   lint:
     name: Swift Format Check
     runs-on: macos-14
-    # Skip lint for PRs from develop to main (already checked on develop)
-    if: github.base_ref != 'main'
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
