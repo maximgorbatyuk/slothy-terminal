@@ -15,6 +15,16 @@ enum GitStatusColumn: Character {
   init?(statusCharacter: Character) {
     self.init(rawValue: statusCharacter)
   }
+
+  var badge: String {
+    switch self {
+    case .unmodified:
+      return ""
+
+    default:
+      return String(rawValue)
+    }
+  }
 }
 
 /// Visible sections in the Make Commit change list.
@@ -45,6 +55,38 @@ struct GitScopedChange: Identifiable, Equatable {
   var isUntracked: Bool {
     indexStatus == .untracked || workTreeStatus == .untracked
   }
+
+  var filename: String {
+    (repoRelativePath as NSString).lastPathComponent
+  }
+
+  var secondaryDisplayPath: String? {
+    guard displayPath != filename else {
+      return nil
+    }
+
+    return displayPath
+  }
+
+  func hasEntry(in section: GitChangeSection) -> Bool {
+    switch section {
+    case .staged:
+      return hasStagedEntry
+
+    case .unstaged:
+      return hasUnstagedEntry
+    }
+  }
+
+  func status(in section: GitChangeSection) -> GitStatusColumn {
+    switch section {
+    case .staged:
+      return indexStatus
+
+    case .unstaged:
+      return workTreeStatus
+    }
+  }
 }
 
 /// Parsed git working tree state for a scoped directory.
@@ -65,5 +107,13 @@ struct GitWorkingTreeSnapshot: Equatable {
 
   var hasStagedChangesInScope: Bool {
     changes.contains { $0.hasStagedEntry }
+  }
+
+  var stagedChanges: [GitScopedChange] {
+    changes.filter { $0.hasStagedEntry }
+  }
+
+  var unstagedChanges: [GitScopedChange] {
+    changes.filter { $0.hasUnstagedEntry }
   }
 }

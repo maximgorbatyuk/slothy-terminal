@@ -80,12 +80,45 @@ final class GitWorkingTreeService {
     await runMutation(["switch", "-c", branchName], in: directory)
   }
 
+  func loadSnapshot(in directory: URL) async -> GitWorkingTreeSnapshot {
+    let repositoryRoot = await repositoryRoot(for: directory)
+    let scopePath = scopePath(
+      for: directory,
+      repositoryRoot: repositoryRoot
+    )
+    let result = await GitProcessRunner.runResult(
+      ["status", "--porcelain=v1", "--untracked-files=all"],
+      in: repositoryRoot
+    )
+
+    guard result.isSuccess else {
+      return GitWorkingTreeSnapshot(
+        changes: [],
+        scopePath: scopePath
+      )
+    }
+
+    return parseStatusOutput(
+      result.stdout,
+      scopePath: scopePath
+    )
+  }
+
   func parseUnifiedDiff(_ output: String) -> [GitDiffRow] {
     var rows: [GitDiffRow] = []
     var oldLineNumber: Int?
     var newLineNumber: Int?
     var deletionBuffer: [BufferedDiffLine] = []
     var additionBuffer: [BufferedDiffLine] = []
+    var rowID = 0
+
+    func makeRowID() -> String {
+      defer {
+        rowID += 1
+      }
+
+      return "diff-row-\(rowID)"
+    }
 
     func flushBuffers() {
       let pairedCount = max(deletionBuffer.count, additionBuffer.count)
@@ -102,6 +135,7 @@ final class GitWorkingTreeService {
         case let (.some(deletion), .some(addition)):
           rows.append(
             GitDiffRow(
+              id: makeRowID(),
               oldLineNumber: deletion.lineNumber,
               newLineNumber: addition.lineNumber,
               leftText: deletion.text,
@@ -113,6 +147,7 @@ final class GitWorkingTreeService {
         case let (.some(deletion), .none):
           rows.append(
             GitDiffRow(
+              id: makeRowID(),
               oldLineNumber: deletion.lineNumber,
               newLineNumber: nil,
               leftText: deletion.text,
@@ -124,6 +159,7 @@ final class GitWorkingTreeService {
         case let (.none, .some(addition)):
           rows.append(
             GitDiffRow(
+              id: makeRowID(),
               oldLineNumber: nil,
               newLineNumber: addition.lineNumber,
               leftText: "",
@@ -163,6 +199,7 @@ final class GitWorkingTreeService {
         flushBuffers()
         rows.append(
           GitDiffRow(
+            id: makeRowID(),
             oldLineNumber: oldLineNumber,
             newLineNumber: newLineNumber,
             leftText: String(line.dropFirst()),
@@ -353,6 +390,25 @@ final class GitWorkingTreeService {
     }
 
     return URL(fileURLWithPath: path)
+  }
+
+  private func scopePath(
+    for directory: URL,
+    repositoryRoot: URL
+  ) -> String? {
+    let repositoryPath = repositoryRoot.standardizedFileURL.path
+    let directoryPath = directory.standardizedFileURL.path
+
+    guard directoryPath != repositoryPath else {
+      return nil
+    }
+
+    let prefix = "\(repositoryPath)/"
+    guard directoryPath.hasPrefix(prefix) else {
+      return nil
+    }
+
+    return String(directoryPath.dropFirst(prefix.count))
   }
 
   private func currentBranch(in directory: URL) async -> String? {

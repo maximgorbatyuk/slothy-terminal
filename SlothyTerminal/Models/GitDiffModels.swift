@@ -7,7 +7,8 @@ enum GitDiffRowKind: String, Equatable {
   case modification
 }
 
-struct GitDiffRow: Equatable {
+struct GitDiffRow: Equatable, Identifiable {
+  let id: String
   let oldLineNumber: Int?
   let newLineNumber: Int?
   let leftText: String
@@ -25,5 +26,9 @@ struct GitDiffDocument: Equatable {
   ) {
     self.rows = rows
     self.isBinary = isBinary
+  }
+
+  var isEmpty: Bool {
+    rows.isEmpty && !isBinary
   }
 }
