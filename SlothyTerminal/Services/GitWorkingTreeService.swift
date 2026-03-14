@@ -25,8 +25,39 @@ final class GitWorkingTreeService {
     return ["push"]
   }
 
+  /// Validates a branch name against common git ref-format rules.
   func isValidBranchName(_ branchName: String) -> Bool {
-    !branchName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    let trimmed = branchName.trimmingCharacters(in: .whitespacesAndNewlines)
+
+    guard !trimmed.isEmpty else {
+      return false
+    }
+
+    let invalidSubstrings = ["..", " ", "~", "^", ":", "?", "*", "[", "\\", "@{", "//"]
+    for invalid in invalidSubstrings {
+      guard !trimmed.contains(invalid) else {
+        return false
+      }
+    }
+
+    guard !trimmed.hasPrefix("/"),
+          !trimmed.hasSuffix("/"),
+          !trimmed.hasSuffix("."),
+          !trimmed.hasSuffix(".lock"),
+          trimmed != "@"
+    else {
+      return false
+    }
+
+    let hasControlCharacters = trimmed.unicodeScalars.contains {
+      CharacterSet.controlCharacters.contains($0)
+    }
+
+    guard !hasControlCharacters else {
+      return false
+    }
+
+    return true
   }
 
   func getLastCommitMessage(in directory: URL) async -> String? {
@@ -41,6 +72,21 @@ final class GitWorkingTreeService {
     }
 
     return result.stdout
+  }
+
+  func getHeadHash(in directory: URL) async -> String? {
+    let repositoryRoot = await repositoryRoot(for: directory)
+    return await GitProcessRunner.run(
+      ["rev-parse", "HEAD"],
+      in: repositoryRoot
+    )
+  }
+
+  /// Performs `git reset --soft` to the given target.
+  ///
+  /// Callers must ensure `target` is a safe ref (commit hash or `HEAD~N`).
+  func softReset(to target: String, in directory: URL) async -> GitProcessResult {
+    await runMutation(["reset", "--soft", target], in: directory)
   }
 
   func stageFile(path: String, in directory: URL) async -> GitProcessResult {
@@ -310,10 +356,10 @@ final class GitWorkingTreeService {
 
     switch section {
     case .staged:
-      arguments = ["diff", "--cached", "--", change.repoRelativePath]
+      arguments = ["diff", "-U10000", "--cached", "--", change.repoRelativePath]
 
     case .unstaged:
-      arguments = ["diff", "--", change.repoRelativePath]
+      arguments = ["diff", "-U10000", "--", change.repoRelativePath]
     }
 
     let result = await GitProcessRunner.runResult(arguments, in: repositoryRoot)

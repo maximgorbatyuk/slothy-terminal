@@ -59,6 +59,7 @@ let package = Package(
         "Models/GitWorkingTreeModels.swift",
         "Models/MakeCommitComposerState.swift",
         "Models/GitStats.swift",
+        "Models/CommitFileChange.swift",
         "Models/GitTab.swift",
         "Models/Tab.swift",
         "Models/TerminalCommandCaptureBuffer.swift",

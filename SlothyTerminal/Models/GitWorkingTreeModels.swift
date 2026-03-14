@@ -49,7 +49,7 @@ struct GitScopedChange: Identifiable, Equatable {
   }
 
   var hasUnstagedEntry: Bool {
-    workTreeStatus != .unmodified || workTreeStatus == .untracked
+    workTreeStatus != .unmodified
   }
 
   var isUntracked: Bool {

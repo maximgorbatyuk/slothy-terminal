@@ -100,4 +100,34 @@ struct GitWorkingTreeServiceTests {
     #expect(GitWorkingTreeService.shared.isValidBranchName("") == false)
     #expect(GitWorkingTreeService.shared.isValidBranchName("   ") == false)
   }
+
+  @Test("Branch names reject invalid git ref characters")
+  func invalidBranchNameCharacters() {
+    let service = GitWorkingTreeService.shared
+    #expect(service.isValidBranchName("feature..bar") == false)
+    #expect(service.isValidBranchName("my branch") == false)
+    #expect(service.isValidBranchName("feat~1") == false)
+    #expect(service.isValidBranchName("feat^2") == false)
+    #expect(service.isValidBranchName("feat:bar") == false)
+    #expect(service.isValidBranchName("feat?bar") == false)
+    #expect(service.isValidBranchName("feat*bar") == false)
+    #expect(service.isValidBranchName("feat[0]") == false)
+    #expect(service.isValidBranchName("feat\\bar") == false)
+    #expect(service.isValidBranchName("feat@{bar") == false)
+    #expect(service.isValidBranchName("/leading") == false)
+    #expect(service.isValidBranchName("trailing/") == false)
+    #expect(service.isValidBranchName("ends.") == false)
+    #expect(service.isValidBranchName("ends.lock") == false)
+    #expect(service.isValidBranchName("a//b") == false)
+    #expect(service.isValidBranchName("@") == false)
+  }
+
+  @Test("Branch names accept valid patterns")
+  func validBranchNames() {
+    let service = GitWorkingTreeService.shared
+    #expect(service.isValidBranchName("feature/make-commit") == true)
+    #expect(service.isValidBranchName("fix-123") == true)
+    #expect(service.isValidBranchName("release/2.0") == true)
+    #expect(service.isValidBranchName("my.feature") == true)
+  }
 }
