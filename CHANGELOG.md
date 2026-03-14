@@ -2,6 +2,45 @@
 
 All notable changes to SlothyTerminal will be documented in this file.
 
+## [2026.2.11] - 2026-03-14
+
+_Analysis range: `8d0aaee..b8903b4` (13 commits, 24 files changed, 3747 insertions, 125 deletions)._
+
+### Added
+- **Make Commit sub-tab** — full Git staging and commit interface inside the Git client tab.
+  - Hierarchical sidebar with staged and unstaged file sections, collapsible folder tree, and file status badges (M/A/D/R/?).
+  - Side-by-side diff viewer with line numbers, color-coded additions/deletions/modifications, and horizontal scrolling for long lines.
+  - Commit message composer with live character count (warns at 72+), amend mode (soft-resets HEAD~1 and restores the previous message), and commit/amend button.
+  - Double-click a file to stage or unstage it; double-click a folder to stage/unstage all descendant files in a single batch git operation.
+  - Right-click context menu with Stage/Unstage, Discard Changes, and Delete Untracked File actions (destructive actions require confirmation dialog).
+  - New Branch sheet with branch name validation (rejects `..`, spaces, `~^:?*[\`, control chars, leading/trailing dots and slashes).
+  - Push current branch button in the toolbar.
+  - Fallback diff loading: when `git diff` returns empty for a valid text file, loads content via `git show :path` (staged) or direct file read (unstaged).
+- **Revision graph diff viewer** — selecting a commit in the revision graph now shows a side-by-side diff pane with the same rendering as the Make Commit tab.
+- **CloseButton shared component** — reusable close button with circular gray hover highlight, used in tab bar and workspace sidebar for consistent close affordance.
+- **Git working tree service** (`GitWorkingTreeService`) — async service for staging, unstaging, committing, pushing, branch creation, soft reset, discard, delete, diff loading, and snapshot loading via `git status --porcelain=v1`.
+- **Git working tree models** — `GitScopedChange`, `GitWorkingTreeSnapshot`, `GitChangeSection`, `GitStatusColumn`, `GitDiffDocument`, `GitDiffRow`, `MakeCommitComposerState`, and supporting types.
+
+### Changed
+- `GitProcessRunner` expanded with additional helper methods for working tree mutations (stage, unstage, reset, checkout, branch, push).
+- `GitStatsService` expanded with commit diff retrieval for the revision graph viewer.
+- `RevisionGraphView` refactored with full-width diff pane fix using `GeometryReader` + `.frame(minWidth:)` to prevent content from collapsing inside `ScrollView([.vertical, .horizontal])`.
+- Tab bar and workspace sidebar close buttons now use the shared `CloseButton` component with hover highlight.
+- `GitTab` enum updated: `.commit` sub-tab is no longer a stub.
+
+### Fixed
+- **Diff viewer width collapse** — `ScrollView([.vertical, .horizontal])` content no longer shrinks to intrinsic width in both the revision graph and make commit diff panes.
+- **"No textual diff available" for valid files** — added fallback diff loading when `git diff` returns empty output for staged or modified text files.
+- **`hasUnstagedEntry` redundant predicate** — removed logically redundant `|| workTreeStatus == .untracked` condition in `GitScopedChange`.
+- **Amend toggle race condition** — rapid toggling of amend mode no longer interleaves `enterAmendMode`/`exitAmendMode` calls (guarded by `isRunningMutation`).
+- **Diff context size** — changed from `-U99999` to bounded `-U10000` to limit diff output for very large files.
+- **Sidebar file list performance** — switched from eager `VStack` to `LazyVStack` so only visible rows are rendered.
+
+### Tests
+- Added `GitDiffParserTests` (5 tests) covering side-by-side diff row generation from unified diff output.
+- Added `GitWorkingTreeServiceTests` (20 tests) covering branch name validation, status line parsing, and snapshot construction.
+- Added `MakeCommitComposerStateTests` (7 tests) covering single-line input normalization and commit message formatting.
+
 ## [2026.2.10] - 2026-03-13
 
 _Analysis range: `11a2df3..6cd5112` (1 commit, 12 files changed, 728 insertions, 9 deletions)._

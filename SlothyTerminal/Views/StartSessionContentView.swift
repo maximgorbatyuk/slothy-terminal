@@ -496,6 +496,7 @@ struct StartSessionContentView: View {
     }
     .buttonStyle(.borderedProminent)
     .controlSize(.large)
+    .keyboardShortcut(.defaultAction)
     .disabled(!canStart)
   }
 

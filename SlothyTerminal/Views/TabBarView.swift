@@ -268,14 +268,9 @@ struct TabItemView: View {
         .lineLimit(1)
 
       /// Close button.
-      Button {
+      CloseButton {
         appState.closeTab(id: tab.id)
-      } label: {
-        Image(systemName: "xmark")
-          .font(.system(size: 9, weight: .medium))
-          .foregroundColor(.gray)
       }
-      .buttonStyle(.plain)
       .opacity(isActive ? 1 : 0.5)
     }
     .padding(.horizontal, 12)

@@ -176,15 +176,9 @@ private struct WorkspaceRowView: View {
 
         Spacer()
 
-        Button {
+        CloseButton {
           onClose()
-        } label: {
-          Image(systemName: "xmark")
-            .font(.system(size: 10, weight: .semibold))
-            .frame(width: 20, height: 20)
         }
-        .buttonStyle(.plain)
-        .foregroundColor(.secondary)
         .help(tabCount == 0 ? "Remove workspace" : "Close tabs before removing workspace")
       }
 

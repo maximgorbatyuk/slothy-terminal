@@ -84,6 +84,56 @@ final class GitStatsService {
     return parseCommitGraphOutput(output)
   }
 
+  // MARK: - Commit Inspection
+
+  /// Returns changed files for a specific commit, diffing against its first parent.
+  func getCommitChangedFiles(
+    hash: String,
+    firstParentHash: String?,
+    in directory: URL
+  ) async -> [CommitFileChange] {
+    let arguments: [String]
+    if let parent = firstParentHash {
+      arguments = ["diff", "--name-status", parent, hash]
+    } else {
+      arguments = ["diff-tree", "--root", "--no-commit-id", "-r", "--name-status", hash]
+    }
+
+    guard let output = await runGit(arguments, in: directory) else {
+      return []
+    }
+
+    return parseCommitChangedFiles(output)
+  }
+
+  /// Returns the diff for a specific file in a specific commit.
+  func getCommitFileDiff(
+    hash: String,
+    firstParentHash: String?,
+    path: String,
+    in directory: URL
+  ) async -> GitDiffDocument {
+    let arguments: [String]
+    if let parent = firstParentHash {
+      arguments = ["diff", parent, hash, "--", path]
+    } else {
+      arguments = ["diff-tree", "--root", "-p", "--no-commit-id", hash, "--", path]
+    }
+
+    let result = await GitProcessRunner.runResult(arguments, in: directory)
+
+    guard result.isSuccess else {
+      return GitDiffDocument()
+    }
+
+    return GitWorkingTreeService.shared.parseDiffOutput(result.stdout)
+  }
+
+  /// Returns the full commit message body for a specific commit.
+  func getCommitBody(hash: String, in directory: URL) async -> String? {
+    await runGit(["log", "-1", "--format=%B", hash], in: directory)
+  }
+
   // MARK: - Parsing (internal for testing)
 
   /// Parses `git shortlog -sne --all` output into `[AuthorStats]`.
@@ -256,6 +306,44 @@ final class GitStatsService {
     }
 
     return commits
+  }
+
+  /// Parses `git diff --name-status` output into `[CommitFileChange]`.
+  /// Each line: `M\tpath` or `R100\told\tnew`.
+  func parseCommitChangedFiles(_ output: String) -> [CommitFileChange] {
+    var changes: [CommitFileChange] = []
+
+    for line in output.split(separator: "\n", omittingEmptySubsequences: true) {
+      let parts = line.split(separator: "\t", maxSplits: 2).map(String.init)
+
+      guard parts.count >= 2 else {
+        continue
+      }
+
+      let statusString = parts[0].trimmingCharacters(in: .whitespaces)
+
+      guard let firstChar = statusString.first else {
+        continue
+      }
+
+      // Rename/copy status includes similarity score (e.g. R100, C095).
+      // Use only the first character to match CommitFileStatus raw values.
+      guard let status = CommitFileStatus(rawValue: String(firstChar)) else {
+        continue
+      }
+
+      // For renames/copies, use the new path (parts[2]); otherwise use parts[1].
+      let path: String
+      if (firstChar == "R" || firstChar == "C"), parts.count >= 3 {
+        path = parts[2]
+      } else {
+        path = parts[1]
+      }
+
+      changes.append(CommitFileChange(path: path, status: status))
+    }
+
+    return changes
   }
 
   /// Parses a full ISO-ish date string (e.g. "2025-06-15 14:23:45 +0200") with time preserved.
