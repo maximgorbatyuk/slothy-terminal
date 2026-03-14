@@ -105,7 +105,7 @@ struct MakeCommitSidebarView: View {
         let flat = flattenedTree(from: tree)
 
         ScrollView {
-          VStack(spacing: 0) {
+          LazyVStack(spacing: 0) {
             ForEach(flat) { node in
               if node.isFolder {
                 folderRow(node, section: section)
