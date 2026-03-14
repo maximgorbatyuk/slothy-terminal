@@ -463,11 +463,14 @@ struct RevisionGraphView: View {
           .foregroundColor(.secondary)
           .frame(maxWidth: .infinity, maxHeight: .infinity)
       } else {
-        ScrollView([.vertical, .horizontal]) {
-          LazyVStack(spacing: 0) {
-            ForEach(diffDocument.rows) { row in
-              commitDiffRow(row)
+        GeometryReader { diffGeometry in
+          ScrollView([.vertical, .horizontal]) {
+            LazyVStack(spacing: 0) {
+              ForEach(diffDocument.rows) { row in
+                commitDiffRow(row)
+              }
             }
+            .frame(minWidth: diffGeometry.size.width)
           }
         }
       }

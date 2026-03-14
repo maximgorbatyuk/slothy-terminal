@@ -170,6 +170,9 @@ struct MakeCommitView: View {
             },
             onToggleStage: { change, section in
               Task { await toggleStage(for: change, section: section) }
+            },
+            onToggleStageBatch: { changes, section in
+              Task { await toggleStageBatch(for: changes, section: section) }
             }
           )
           .frame(width: geometry.size.width * 0.34)
@@ -195,7 +198,6 @@ struct MakeCommitView: View {
                 Task { await commitChanges() }
               }
             )
-            .frame(height: max(geometry.size.height * 0.22, 150))
           }
         }
       }
@@ -500,6 +502,54 @@ struct MakeCommitView: View {
       statusMessage: section == .staged
         ? "Unstaged \(change.displayPath)."
         : "Staged \(change.displayPath)."
+    )
+  }
+
+  @MainActor
+  private func toggleStageBatch(
+    for changes: [GitScopedChange],
+    section: GitChangeSection
+  ) async {
+    guard !changes.isEmpty else {
+      return
+    }
+
+    isRunningMutation = true
+
+    defer {
+      isRunningMutation = false
+    }
+
+    let paths = changes.map(\.repoRelativePath)
+    let result: GitProcessResult
+
+    switch section {
+    case .staged:
+      result = await GitWorkingTreeService.shared.unstageFiles(
+        paths: paths,
+        in: workingDirectory
+      )
+
+    case .unstaged:
+      result = await GitWorkingTreeService.shared.stageFiles(
+        paths: paths,
+        in: workingDirectory
+      )
+    }
+
+    guard result.isSuccess else {
+      lastOperation = result.stderr.isEmpty ? "Git command failed." : result.stderr
+      return
+    }
+
+    let label = changes.count == 1
+      ? changes[0].displayPath
+      : "\(changes.count) files"
+
+    await refreshSnapshot(
+      statusMessage: section == .staged
+        ? "Unstaged \(label)."
+        : "Staged \(label)."
     )
   }
 

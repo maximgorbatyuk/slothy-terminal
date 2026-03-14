@@ -11,6 +11,21 @@ private struct MakeCommitTreeNode: Identifiable {
   let status: GitStatusColumn?
   let change: GitScopedChange?
   let children: [MakeCommitTreeNode]
+
+  /// Collects all file changes from this node and all descendants.
+  var allDescendantChanges: [GitScopedChange] {
+    var result: [GitScopedChange] = []
+
+    if let change {
+      result.append(change)
+    }
+
+    for child in children {
+      result.append(contentsOf: child.allDescendantChanges)
+    }
+
+    return result
+  }
 }
 
 // MARK: - MakeCommitSidebarView
@@ -26,6 +41,7 @@ struct MakeCommitSidebarView: View {
   let onStageSelected: () -> Void
   let onUnstageSelected: () -> Void
   let onToggleStage: (GitScopedChange, GitChangeSection) -> Void
+  let onToggleStageBatch: ([GitScopedChange], GitChangeSection) -> Void
 
   var body: some View {
     VStack(spacing: 0) {
@@ -92,7 +108,7 @@ struct MakeCommitSidebarView: View {
           VStack(spacing: 0) {
             ForEach(flat) { node in
               if node.isFolder {
-                folderRow(node)
+                folderRow(node, section: section)
               } else {
                 fileRow(node, section: section)
               }
@@ -107,40 +123,54 @@ struct MakeCommitSidebarView: View {
 
   // MARK: - Rows
 
-  private func folderRow(_ node: MakeCommitTreeNode) -> some View {
-    Button {
+  private func folderRow(
+    _ node: MakeCommitTreeNode,
+    section: GitChangeSection
+  ) -> some View {
+    HStack(spacing: 4) {
+      Image(
+        systemName: collapsedFolders.contains(node.id)
+          ? "chevron.right"
+          : "chevron.down"
+      )
+      .font(.system(size: 8, weight: .semibold))
+      .foregroundStyle(.secondary)
+      .frame(width: 10)
+
+      Image(systemName: "folder.fill")
+        .font(.system(size: 11))
+        .foregroundStyle(.blue)
+
+      Text(node.name)
+        .font(.system(size: 12))
+        .lineLimit(1)
+
+      Spacer()
+    }
+    .padding(.leading, CGFloat(node.depth) * 16 + 8)
+    .padding(.trailing, 8)
+    .frame(height: 30)
+    .contentShape(Rectangle())
+    .onTapGesture(count: 2) {
+      guard !isBusy else {
+        return
+      }
+
+      let changes = node.allDescendantChanges
+
+      guard !changes.isEmpty else {
+        return
+      }
+
+      onToggleStageBatch(changes, section)
+    }
+    .onTapGesture(count: 1) {
       if collapsedFolders.contains(node.id) {
         collapsedFolders.remove(node.id)
       } else {
         collapsedFolders.insert(node.id)
       }
-    } label: {
-      HStack(spacing: 4) {
-        Image(
-          systemName: collapsedFolders.contains(node.id)
-            ? "chevron.right"
-            : "chevron.down"
-        )
-        .font(.system(size: 8, weight: .semibold))
-        .foregroundStyle(.secondary)
-        .frame(width: 10)
-
-        Image(systemName: "folder.fill")
-          .font(.system(size: 11))
-          .foregroundStyle(.blue)
-
-        Text(node.name)
-          .font(.system(size: 12))
-          .lineLimit(1)
-
-        Spacer()
-      }
-      .padding(.leading, CGFloat(node.depth) * 16 + 8)
-      .padding(.trailing, 8)
-      .frame(height: 30)
-      .contentShape(Rectangle())
     }
-    .buttonStyle(.plain)
   }
 
   private func fileRow(
@@ -158,44 +188,49 @@ struct MakeCommitSidebarView: View {
       )
     }()
 
-    return Button {
+    return HStack(spacing: 4) {
+      Image(systemName: "doc.text")
+        .font(.system(size: 11))
+        .foregroundStyle(isSelected ? .white : .secondary)
+
+      Text(node.name)
+        .font(.system(size: 12))
+        .foregroundStyle(isSelected ? .white : .primary)
+        .lineLimit(1)
+
+      Spacer(minLength: 4)
+
+      if let status = node.status {
+        Text(status.badge)
+          .font(.system(size: 9, weight: .bold, design: .monospaced))
+          .foregroundStyle(
+            isSelected ? .white.opacity(0.8) : statusColor(status)
+          )
+      }
+    }
+    .padding(.leading, CGFloat(node.depth) * 16 + 8)
+    .padding(.trailing, 8)
+    .frame(height: 30)
+    .background {
+      if isSelected {
+        RoundedRectangle(cornerRadius: 5)
+          .fill(Color.accentColor)
+          .padding(.horizontal, 4)
+      }
+    }
+    .contentShape(Rectangle())
+    .onTapGesture(count: 2) {
+      guard !isBusy, let change = node.change else {
+        return
+      }
+
+      onToggleStage(change, section)
+    }
+    .onTapGesture(count: 1) {
       if let change = node.change {
         select(change: change, section: section)
       }
-    } label: {
-      HStack(spacing: 4) {
-        Image(systemName: "doc.text")
-          .font(.system(size: 11))
-          .foregroundStyle(isSelected ? .white : .secondary)
-
-        Text(node.name)
-          .font(.system(size: 12))
-          .foregroundStyle(isSelected ? .white : .primary)
-          .lineLimit(1)
-
-        Spacer(minLength: 4)
-
-        if let status = node.status {
-          Text(status.badge)
-            .font(.system(size: 9, weight: .bold, design: .monospaced))
-            .foregroundStyle(
-              isSelected ? .white.opacity(0.8) : statusColor(status)
-            )
-        }
-      }
-      .padding(.leading, CGFloat(node.depth) * 16 + 8)
-      .padding(.trailing, 8)
-      .frame(height: 30)
-      .background {
-        if isSelected {
-          RoundedRectangle(cornerRadius: 5)
-            .fill(Color.accentColor)
-            .padding(.horizontal, 4)
-        }
-      }
-      .contentShape(Rectangle())
     }
-    .buttonStyle(.plain)
     .contextMenu {
       if let change = node.change {
         fileContextMenu(for: change, section: section)

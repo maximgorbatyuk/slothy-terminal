@@ -93,8 +93,16 @@ final class GitWorkingTreeService {
     await runMutation(["add", "--", path], in: directory)
   }
 
+  func stageFiles(paths: [String], in directory: URL) async -> GitProcessResult {
+    await runMutation(["add", "--"] + paths, in: directory)
+  }
+
   func unstageFile(path: String, in directory: URL) async -> GitProcessResult {
     await runMutation(["restore", "--staged", "--", path], in: directory)
+  }
+
+  func unstageFiles(paths: [String], in directory: URL) async -> GitProcessResult {
+    await runMutation(["restore", "--staged", "--"] + paths, in: directory)
   }
 
   func discardTrackedChanges(path: String, in directory: URL) async -> GitProcessResult {
@@ -368,7 +376,17 @@ final class GitWorkingTreeService {
       return GitDiffDocument()
     }
 
-    return parseDiffOutput(result.stdout)
+    let document = parseDiffOutput(result.stdout)
+
+    if document.isEmpty {
+      return await loadFallbackDiff(
+        path: change.repoRelativePath,
+        section: section,
+        in: repositoryRoot
+      )
+    }
+
+    return document
   }
 
   func makeUntrackedDiffDocument(from fileContents: String) -> GitDiffDocument {
@@ -558,6 +576,44 @@ final class GitWorkingTreeService {
   ) async -> GitProcessResult {
     let repositoryRoot = await repositoryRoot(for: directory)
     return await GitProcessRunner.runResult(arguments, in: repositoryRoot)
+  }
+
+  /// Fallback when `git diff` produces an empty document for a non-binary file.
+  /// Loads the file content directly so the user sees something meaningful.
+  private func loadFallbackDiff(
+    path: String,
+    section: GitChangeSection,
+    in repositoryRoot: URL
+  ) async -> GitDiffDocument {
+    let contents: String?
+
+    switch section {
+    case .staged:
+      let result = await GitProcessRunner.runResult(
+        ["show", ":\(path)"],
+        in: repositoryRoot
+      )
+      contents = result.isSuccess ? result.stdout : nil
+
+    case .unstaged:
+      let fileURL = repositoryRoot.appendingPathComponent(path)
+
+      guard let data = try? Data(contentsOf: fileURL) else {
+        return GitDiffDocument()
+      }
+
+      guard let text = String(data: data, encoding: .utf8) else {
+        return GitDiffDocument(isBinary: true)
+      }
+
+      contents = text
+    }
+
+    guard let contents, !contents.isEmpty else {
+      return GitDiffDocument()
+    }
+
+    return makeUntrackedDiffDocument(from: contents)
   }
 
   private func loadUntrackedDiff(
