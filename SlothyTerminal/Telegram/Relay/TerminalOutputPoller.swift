@@ -90,13 +90,18 @@ class TerminalOutputPoller {
         continue
       }
 
-      let stripped = ANSIStripper.strip(text)
-      let currentLines = stripped.split(
-        separator: "\n",
-        omittingEmptySubsequences: false
-      ).map(String.init)
+      let prevLines = previousLines
+      let (stripped, currentLines, newContent) = await Task.detached {
+        let stripped = ANSIStripper.strip(text)
+        let currentLines = stripped.split(
+          separator: "\n",
+          omittingEmptySubsequences: false
+        ).map(String.init)
+        let newContent = ViewportDiffer.diffLines(previous: prevLines, current: currentLines)
+        return (stripped, currentLines, newContent)
+      }.value
 
-      let newContent = diffLines(previous: previousLines, current: currentLines)
+      _ = stripped
       previousLines = currentLines
 
       if !newContent.isEmpty {

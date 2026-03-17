@@ -1220,24 +1220,37 @@ extension GhosttySurfaceView {
       return
     }
 
-    let snapshot = ANSIStripper.strip(text)
+    let previousSnapshot = lastViewportSnapshot
+    let isCurrentlyActive = isTabActive
+    let suppressionInterval = userInputSuppressionInterval
+    let lastInput = lastUserInputAt
 
-    guard snapshot != lastViewportSnapshot else {
-      return
+    DispatchQueue.global(qos: .utility).async { [weak self] in
+      let snapshot = ANSIStripper.strip(text)
+
+      guard snapshot != previousSnapshot else {
+        return
+      }
+
+      DispatchQueue.main.async {
+        guard let self else {
+          return
+        }
+
+        self.lastViewportSnapshot = snapshot
+        self.onTerminalActivity?()
+
+        guard !isCurrentlyActive else {
+          return
+        }
+
+        guard Date().timeIntervalSince(lastInput) > suppressionInterval else {
+          return
+        }
+
+        self.onBackgroundActivity?()
+      }
     }
-
-    lastViewportSnapshot = snapshot
-    onTerminalActivity?()
-
-    guard !isTabActive else {
-      return
-    }
-
-    guard Date().timeIntervalSince(lastUserInputAt) > userInputSuppressionInterval else {
-      return
-    }
-
-    onBackgroundActivity?()
   }
 
   private func refreshViewportSnapshot() {
@@ -1245,7 +1258,13 @@ extension GhosttySurfaceView {
       return
     }
 
-    lastViewportSnapshot = ANSIStripper.strip(text)
+    DispatchQueue.global(qos: .utility).async { [weak self] in
+      let stripped = ANSIStripper.strip(text)
+
+      DispatchQueue.main.async {
+        self?.lastViewportSnapshot = stripped
+      }
+    }
   }
 }
 

@@ -17,6 +17,9 @@ struct ChatMessageListView: View {
   var currentToolName: String?
   var retryAction: (() -> Void)?
 
+  /// Throttle streaming auto-scroll to avoid per-character animation overhead.
+  @State private var lastAutoScrollDate = Date.distantPast
+
   var body: some View {
     ScrollViewReader { proxy in
       ScrollView {
@@ -44,14 +47,17 @@ struct ChatMessageListView: View {
         }
       }
       .onChange(of: conversation.messages.count) {
-        withAnimation(.easeOut(duration: 0.2)) {
-          proxy.scrollTo("bottom", anchor: .bottom)
-        }
+        proxy.scrollTo("bottom", anchor: .bottom)
       }
       .onChange(of: lastMessageText) {
-        withAnimation(.easeOut(duration: 0.1)) {
-          proxy.scrollTo("bottom", anchor: .bottom)
+        let now = Date()
+
+        guard now.timeIntervalSince(lastAutoScrollDate) > 0.1 else {
+          return
         }
+
+        lastAutoScrollDate = now
+        proxy.scrollTo("bottom", anchor: .bottom)
       }
     }
   }
