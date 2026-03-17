@@ -12,6 +12,10 @@ struct StartSessionContentView: View {
   @Environment(AppState.self) private var appState
 
   let presentation: StartSessionPresentation
+
+  /// When true, the created tab is placed into a split view instead of opening normally.
+  let splitDestination: Bool
+
   let onStart: () -> Void
 
   private let recentFoldersManager = RecentFoldersManager.shared
@@ -22,6 +26,9 @@ struct StartSessionContentView: View {
   @State private var selectedPromptID: UUID?
   @State private var showFolderSelector = false
 
+  /// Claude-specific startup options.
+  @State private var claudeSkipPermissions: Bool
+
   /// OpenCode-specific startup options.
   @State private var openCodeMode: ChatMode
   @State private var openCodeModel: ChatModelSelection?
@@ -30,13 +37,16 @@ struct StartSessionContentView: View {
 
   init(
     presentation: StartSessionPresentation,
+    splitDestination: Bool = false,
     onStart: @escaping () -> Void = {}
   ) {
     self.presentation = presentation
+    self.splitDestination = splitDestination
     self.onStart = onStart
 
     let config = ConfigManager.shared.config
     _selectedLaunchType = State(initialValue: config.lastUsedLaunchType ?? .claudeChat)
+    _claudeSkipPermissions = State(initialValue: config.claudeSkipPermissions)
     _openCodeMode = State(initialValue: config.lastUsedOpenCodeMode ?? .build)
     _openCodeModel = State(initialValue: config.lastUsedOpenCodeModel)
   }
@@ -138,6 +148,15 @@ struct StartSessionContentView: View {
 
           sectionDivider
 
+          if selectedLaunchType == .claude {
+            claudeOptionsSection
+              .padding(.horizontal, horizontalPadding)
+              .padding(.top, presentation == .modal ? 16 : 0)
+              .padding(.bottom, presentation == .modal ? 12 : 0)
+
+            sectionDivider
+          }
+
           if selectedLaunchType == .opencode {
             openCodeOptionsSection
               .padding(.horizontal, horizontalPadding)
@@ -184,6 +203,9 @@ struct StartSessionContentView: View {
       }.value
 
       openCodeModelOptions = models
+    }
+    .onChange(of: claudeSkipPermissions) { _, newValue in
+      configManager.config.claudeSkipPermissions = newValue
     }
     .onChange(of: openCodeMode) { _, newValue in
       configManager.config.lastUsedOpenCodeMode = newValue
@@ -289,98 +311,110 @@ struct StartSessionContentView: View {
   // MARK: - Launch Type Picker
 
   private var launchTypePicker: some View {
-    VStack(alignment: .leading, spacing: 12) {
+    VStack(alignment: .leading, spacing: 10) {
       Text("LAUNCH TYPE")
         .font(.system(size: 10, weight: .semibold))
         .foregroundColor(.secondary)
 
-      Menu {
+      VStack(spacing: 6) {
         ForEach(LaunchType.allCases) { launchType in
-          let available = launchTypeAvailability(launchType)
-
-          Button {
-            selectedLaunchType = launchType
-            configManager.config.lastUsedLaunchType = launchType
-          } label: {
-            HStack(spacing: 10) {
-              Image(systemName: launchType.iconName)
-                .font(.system(size: 14, weight: .semibold))
-                .frame(width: 18)
-
-              VStack(alignment: .leading, spacing: 2) {
-                Text(launchType.displayName)
-                  .font(.system(size: 12, weight: .semibold))
-
-                Text(launchType.subtitle)
-                  .font(.system(size: 10))
-                  .foregroundColor(.secondary)
-                  .lineLimit(1)
-              }
-
-              if !available {
-                Text(unavailabilityHint(for: launchType))
-                  .font(.system(size: 10, weight: .medium))
-                  .foregroundColor(.orange)
-              }
-            }
-          }
-          .disabled(!available)
+          launchTypeCard(launchType)
         }
-      } label: {
-        VStack(alignment: .leading, spacing: 10) {
-          HStack(alignment: .top, spacing: 10) {
-            Image(systemName: selectedLaunchType.iconName)
-              .font(.system(size: 20, weight: .semibold))
-              .foregroundColor(launchTypeAccentColor(selectedLaunchType))
-              .frame(width: 28, height: 28)
-
-            VStack(alignment: .leading, spacing: 3) {
-              Text(selectedLaunchType.displayName)
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundColor(.primary)
-                .multilineTextAlignment(.leading)
-
-              Text(selectedLaunchType.subtitle)
-                .font(.system(size: 11))
-                .foregroundColor(.secondary)
-                .lineLimit(2)
-                .multilineTextAlignment(.leading)
-            }
-
-            Spacer(minLength: 0)
-
-            Image(systemName: "chevron.up.chevron.down")
-              .font(.system(size: 10, weight: .semibold))
-              .foregroundColor(.secondary)
-          }
-
-          if !isLaunchTypeAvailable {
-            HStack(spacing: 4) {
-              Image(systemName: "exclamationmark.triangle.fill")
-                .font(.system(size: 10))
-                .foregroundColor(.orange)
-
-              Text(unavailabilityHint(for: selectedLaunchType))
-                .font(.system(size: 10, weight: .medium))
-                .foregroundColor(.orange)
-            }
-            .padding(.horizontal, 8)
-            .padding(.vertical, 4)
-            .background(Color.orange.opacity(0.1))
-            .cornerRadius(6)
-          }
-        }
-        .padding(14)
-        .frame(maxWidth: .infinity, minHeight: 88, alignment: .leading)
-        .background(appBackgroundColor)
-        .overlay(
-          RoundedRectangle(cornerRadius: 10)
-            .stroke(launchTypeAccentColor(selectedLaunchType).opacity(0.35), lineWidth: 1)
-        )
-        .cornerRadius(10)
       }
-      .menuStyle(.borderlessButton)
-      .fixedSize(horizontal: false, vertical: true)
+    }
+  }
+
+  private func launchTypeCard(_ launchType: LaunchType) -> some View {
+    let isSelected = selectedLaunchType == launchType
+    let available = launchTypeAvailability(launchType)
+    let accent = launchTypeAccentColor(launchType)
+
+    return Button {
+      guard available else {
+        return
+      }
+
+      selectedLaunchType = launchType
+      configManager.config.lastUsedLaunchType = launchType
+    } label: {
+      HStack(spacing: 12) {
+        Image(systemName: launchType.iconName)
+          .font(.system(size: 16, weight: .semibold))
+          .foregroundColor(isSelected ? accent : .secondary)
+          .frame(width: 32, height: 32)
+          .background(
+            RoundedRectangle(cornerRadius: 8)
+              .fill(isSelected ? accent.opacity(0.12) : Color.primary.opacity(0.04))
+          )
+
+        VStack(alignment: .leading, spacing: 2) {
+          Text(launchType.displayName)
+            .font(.system(size: 13, weight: .semibold))
+            .foregroundColor(available ? .primary : .secondary)
+
+          Text(launchType.subtitle)
+            .font(.system(size: 11))
+            .foregroundColor(.secondary)
+            .lineLimit(1)
+        }
+
+        Spacer(minLength: 0)
+
+        if !available {
+          HStack(spacing: 3) {
+            Image(systemName: "exclamationmark.triangle.fill")
+              .font(.system(size: 9))
+
+            Text(unavailabilityHint(for: launchType))
+              .font(.system(size: 10, weight: .medium))
+          }
+          .foregroundColor(.orange)
+          .padding(.horizontal, 6)
+          .padding(.vertical, 3)
+          .background(Color.orange.opacity(0.1))
+          .cornerRadius(4)
+        } else if isSelected {
+          Image(systemName: "checkmark.circle.fill")
+            .font(.system(size: 16))
+            .foregroundColor(accent)
+        }
+      }
+      .padding(.horizontal, 12)
+      .padding(.vertical, 10)
+      .frame(maxWidth: .infinity, alignment: .leading)
+      .background(appBackgroundColor)
+      .overlay(
+        RoundedRectangle(cornerRadius: 10)
+          .stroke(
+            isSelected ? accent.opacity(0.5) : Color.primary.opacity(0.08),
+            lineWidth: isSelected ? 1.5 : 1
+          )
+      )
+      .cornerRadius(10)
+      .opacity(available ? 1 : 0.55)
+    }
+    .buttonStyle(.plain)
+  }
+
+  // MARK: - Claude Options
+
+  private var claudeOptionsSection: some View {
+    VStack(alignment: .leading, spacing: 12) {
+      Text("CLAUDE OPTIONS")
+        .font(.system(size: 10, weight: .semibold))
+        .foregroundColor(.secondary)
+
+      Toggle(isOn: $claudeSkipPermissions) {
+        HStack(spacing: 6) {
+          Text("Skip permissions")
+            .font(.system(size: 12))
+
+          Text("(--dangerously-skip-permissions)")
+            .font(.system(size: 10, weight: .medium, design: .monospaced))
+            .foregroundColor(.orange)
+        }
+      }
+      .toggleStyle(.checkbox)
     }
   }
 
@@ -510,43 +544,34 @@ struct StartSessionContentView: View {
 
     let prompt = selectedPrompt
 
+    if splitDestination {
+      handleStartInSplit(directory: directory, prompt: prompt)
+    } else {
+      handleStartNormal(directory: directory, prompt: prompt)
+    }
+
+    onStart()
+  }
+
+  private func handleStartNormal(directory: URL, prompt: SavedPrompt?) {
     switch selectedLaunchType {
     case .terminal:
       appState.createTab(agent: .terminal, directory: directory, initialPrompt: prompt)
 
     case .claude:
-      appState.createTab(agent: .claude, directory: directory, initialPrompt: prompt)
-
-    case .opencode:
-      var args: [String] = []
-
-      if let model = openCodeModel {
-        args += ["--model", model.cliModelString]
-      }
-
-      if openCodeMode == .plan {
-        args += ["--agent", "plan"]
-      }
-
-      if let promptText = prompt?.promptText.trimmingCharacters(in: .whitespacesAndNewlines),
-         !promptText.isEmpty
-      {
-        args += ["--prompt", promptText]
-      }
-
-      configManager.config.lastUsedOpenCodeMode = openCodeMode
-      configManager.config.lastUsedOpenCodeModel = openCodeModel
-
-      if args.isEmpty {
-        appState.createTab(agent: .opencode, directory: directory, initialPrompt: prompt)
-      } else {
+      if claudeSkipPermissions {
         appState.createTab(
-          agent: .opencode,
+          agent: .claude,
           directory: directory,
           initialPrompt: prompt,
-          launchArgumentsOverride: args
+          launchArgumentsOverride: ["--dangerously-skip-permissions"]
         )
+      } else {
+        appState.createTab(agent: .claude, directory: directory, initialPrompt: prompt)
       }
+
+    case .opencode:
+      handleStartOpenCode(directory: directory, prompt: prompt, inSplit: false)
 
     case .claudeChat:
       appState.createChatTab(agent: .claude, directory: directory, initialPrompt: prompt?.promptText)
@@ -557,8 +582,82 @@ struct StartSessionContentView: View {
     case .gitClient:
       appState.createGitTab(directory: directory)
     }
+  }
 
-    onStart()
+  private func handleStartInSplit(directory: URL, prompt: SavedPrompt?) {
+    switch selectedLaunchType {
+    case .terminal:
+      appState.createTabInSplit(agent: .terminal, directory: directory, initialPrompt: prompt)
+
+    case .claude:
+      if claudeSkipPermissions {
+        appState.createTabInSplit(
+          agent: .claude,
+          directory: directory,
+          initialPrompt: prompt,
+          launchArgumentsOverride: ["--dangerously-skip-permissions"]
+        )
+      } else {
+        appState.createTabInSplit(agent: .claude, directory: directory, initialPrompt: prompt)
+      }
+
+    case .opencode:
+      handleStartOpenCode(directory: directory, prompt: prompt, inSplit: true)
+
+    case .claudeChat:
+      appState.createChatTabInSplit(agent: .claude, directory: directory, initialPrompt: prompt?.promptText)
+
+    case .opencodeChat:
+      appState.createChatTabInSplit(agent: .opencode, directory: directory, initialPrompt: prompt?.promptText)
+
+    case .gitClient:
+      appState.createGitTabInSplit(directory: directory)
+    }
+  }
+
+  private func handleStartOpenCode(directory: URL, prompt: SavedPrompt?, inSplit: Bool) {
+    var args: [String] = []
+
+    if let model = openCodeModel {
+      args += ["--model", model.cliModelString]
+    }
+
+    if openCodeMode == .plan {
+      args += ["--agent", "plan"]
+    }
+
+    if let promptText = prompt?.promptText.trimmingCharacters(in: .whitespacesAndNewlines),
+       !promptText.isEmpty
+    {
+      args += ["--prompt", promptText]
+    }
+
+    configManager.config.lastUsedOpenCodeMode = openCodeMode
+    configManager.config.lastUsedOpenCodeModel = openCodeModel
+
+    if inSplit {
+      if args.isEmpty {
+        appState.createTabInSplit(agent: .opencode, directory: directory, initialPrompt: prompt)
+      } else {
+        appState.createTabInSplit(
+          agent: .opencode,
+          directory: directory,
+          initialPrompt: prompt,
+          launchArgumentsOverride: args
+        )
+      }
+    } else {
+      if args.isEmpty {
+        appState.createTab(agent: .opencode, directory: directory, initialPrompt: prompt)
+      } else {
+        appState.createTab(
+          agent: .opencode,
+          directory: directory,
+          initialPrompt: prompt,
+          launchArgumentsOverride: args
+        )
+      }
+    }
   }
 
   // MARK: - Availability

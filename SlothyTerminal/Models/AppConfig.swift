@@ -30,6 +30,9 @@ struct AppConfig: Codable, Equatable {
   /// Last used launch type on the startup page, restored across sessions.
   var lastUsedLaunchType: LaunchType?
 
+  /// Whether to launch Claude CLI with --dangerously-skip-permissions.
+  var claudeSkipPermissions: Bool = false
+
   // MARK: - Agent Paths
 
   /// Custom path to Claude CLI (nil uses auto-detection).
@@ -180,6 +183,7 @@ struct AppConfig: Codable, Equatable {
     defaultAgent = (try? c.decode(AgentType.self, forKey: .defaultAgent)) ?? d.defaultAgent
     maxRecentFolders = (try? c.decode(Int.self, forKey: .maxRecentFolders)) ?? d.maxRecentFolders
     lastUsedLaunchType = try? c.decode(LaunchType.self, forKey: .lastUsedLaunchType)
+    claudeSkipPermissions = (try? c.decode(Bool.self, forKey: .claudeSkipPermissions)) ?? d.claudeSkipPermissions
 
     claudePath = try? c.decode(String.self, forKey: .claudePath)
     opencodePath = try? c.decode(String.self, forKey: .opencodePath)

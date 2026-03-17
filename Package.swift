@@ -66,6 +66,7 @@ let package = Package(
         "Models/AppConfig.swift",
         "Models/SettingsSection.swift",
         "Models/Workspace.swift",
+        "Models/WorkspaceSplitState.swift",
         "App/AppState.swift",
         "Agents/AIAgent.swift",
         "Agents/ClaudeAgent.swift",

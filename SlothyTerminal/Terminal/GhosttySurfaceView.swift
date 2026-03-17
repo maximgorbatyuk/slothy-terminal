@@ -42,6 +42,7 @@ class GhosttySurfaceView: NSView, NSTextInputClient {
   var onClosed: (() -> Void)?
   var onTerminalActivity: (() -> Void)?
   var onBackgroundActivity: (() -> Void)?
+  var onMouseDown: (() -> Void)?
 
   /// Set on each GHOSTTY_ACTION_RENDER, cleared by poller after reading.
   private(set) var hasNewRenderSinceLastRead = false
@@ -771,6 +772,8 @@ class GhosttySurfaceView: NSView, NSTextInputClient {
     guard let surface else {
       return
     }
+
+    onMouseDown?()
 
     if window?.firstResponder !== self {
       window?.makeFirstResponder(self)

@@ -56,6 +56,12 @@ struct SlothyTerminalApp: App {
         }
         .keyboardShortcut("t", modifiers: .command)
 
+        Button("New Session in Split View...") {
+          appState.showStartupPageForSplit()
+        }
+        .keyboardShortcut("t", modifiers: [.command, .option])
+        .disabled(appState.activeTab == nil)
+
         Divider()
 
         Button("New Terminal Tab") {

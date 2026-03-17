@@ -257,30 +257,77 @@ struct TabItemView: View {
     tab.agentType?.accentColor ?? .secondary
   }
 
-  var body: some View {
-    HStack(spacing: 6) {
-      tabLeadingIcon
+  /// Whether this tab is currently visible in the active split.
+  private var isInSplit: Bool {
+    appState.isTabVisibleInSplit(tab.id)
+  }
 
-      /// Tab title.
-      Text(label)
-        .font(.system(size: 12))
-        .foregroundColor(isActive ? .primary : .gray)
-        .lineLimit(1)
-
-      /// Close button.
-      CloseButton {
-        appState.closeTab(id: tab.id)
-      }
-      .opacity(isActive ? 1 : 0.5)
+  /// Split-member tabs get a highlighted background even when not focused.
+  private var tabBackground: Color {
+    if isActive {
+      return appCardColor
     }
-    .padding(.horizontal, 12)
+
+    if isInSplit {
+      return appCardColor.opacity(0.5)
+    }
+
+    return Color.clear
+  }
+
+  var body: some View {
+    HStack(spacing: 0) {
+      // Accent left stripe for split-member tabs.
+      if isInSplit {
+        RoundedRectangle(cornerRadius: 1)
+          .fill(isActive ? Color.accentColor : Color.accentColor.opacity(0.4))
+          .frame(width: 2)
+          .padding(.vertical, 6)
+          .padding(.trailing, 4)
+      }
+
+      HStack(spacing: 6) {
+        tabLeadingIcon
+
+        /// Tab title.
+        Text(label)
+          .font(.system(size: 12))
+          .foregroundColor(isActive || isInSplit ? .primary : .gray)
+          .lineLimit(1)
+
+        /// Close button.
+        CloseButton {
+          appState.closeTab(id: tab.id)
+        }
+        .opacity(isActive ? 1 : 0.5)
+      }
+    }
+    .padding(.horizontal, isInSplit ? 8 : 12)
     .padding(.vertical, 8)
     .frame(width: width)
-    .background(isActive ? appCardColor : Color.clear)
+    .background(tabBackground)
     .cornerRadius(6)
     .contentShape(Rectangle())
     .onTapGesture {
       appState.switchToTab(id: tab.id)
+    }
+    .contextMenu {
+      Button("Open in Split View") {
+        appState.openInSplitView(tabID: tab.id)
+      }
+      .disabled(appState.activeTabID == nil || appState.activeTabID == tab.id)
+
+      if isInSplit {
+        Button("Move to Tab") {
+          appState.detachFromSplit(tabID: tab.id)
+        }
+      }
+
+      Divider()
+
+      Button("Close Tab") {
+        appState.closeTab(id: tab.id)
+      }
     }
   }
 
@@ -289,7 +336,19 @@ struct TabItemView: View {
     ZStack(alignment: .topTrailing) {
       Group {
         if tab.isExecuting {
-          ExecutingIndicator(color: isActive ? tabAccentColor : .gray)
+          ExecutingIndicator(color: isActive || isInSplit ? tabAccentColor : .gray)
+        } else if isInSplit {
+          // Split-member tabs show a split icon overlaid on the agent icon.
+          ZStack {
+            Image(systemName: tabIconName)
+              .foregroundColor(tabAccentColor)
+              .font(.system(size: 12))
+
+            Image(systemName: "rectangle.split.2x1.fill")
+              .foregroundColor(.accentColor)
+              .font(.system(size: 6))
+              .offset(x: 4, y: 4)
+          }
         } else {
           Image(systemName: tabIconName)
             .foregroundColor(isActive ? tabAccentColor : .gray)
