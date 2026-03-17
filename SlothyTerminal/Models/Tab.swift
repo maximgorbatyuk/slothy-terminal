@@ -398,6 +398,10 @@ class Tab: Identifiable {
   /// Marks the terminal tab as busy.
   /// Driven by Ghostty command lifecycle events.
   func markTerminalBusy() {
+    guard !isTerminalBusy else {
+      return
+    }
+
     isTerminalBusy = true
   }
 
@@ -438,6 +442,11 @@ class Tab: Identifiable {
   func markTerminalIdle() {
     terminalActivityResetTask?.cancel()
     terminalActivityResetTask = nil
+
+    guard isTerminalBusy else {
+      return
+    }
+
     isTerminalBusy = false
   }
 

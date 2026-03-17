@@ -197,8 +197,17 @@ struct AutomationSidebarView: View {
       path = "./\(path)"
     }
 
+    let injectedText: String
+    switch script.kind {
+    case .python:
+      injectedText = "python3 \(path)"
+
+    case .shell:
+      injectedText = path
+    }
+
     let request = InjectionRequest(
-      payload: .text(path),
+      payload: .text(injectedText),
       target: .activeTab,
       origin: .ui
     )

@@ -423,9 +423,20 @@ class ChatState {
 
     do {
       try process.run()
-      process.waitUntilExit()
     } catch {
       Logger.chat.warning("OpenCode metadata export failed to start: \(error.localizedDescription)")
+      return nil
+    }
+
+    let done = DispatchSemaphore(value: 0)
+    DispatchQueue.global().async {
+      process.waitUntilExit()
+      done.signal()
+    }
+
+    if done.wait(timeout: .now() + 5) == .timedOut {
+      process.terminate()
+      Logger.chat.warning("OpenCode metadata export timed out after 5s")
       return nil
     }
 

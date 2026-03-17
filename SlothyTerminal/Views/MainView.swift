@@ -67,7 +67,7 @@ struct MainView: View {
     .onChange(of: appState.activeTabID) {
       updateWindowTitle()
     }
-    .onChange(of: appState.visibleTabs.count) {
+    .onChange(of: appState.activeWorkspaceID) {
       updateWindowTitle()
     }
   }
@@ -228,6 +228,9 @@ struct ModalRouter: View {
     switch modal {
     case .startupPage:
       StartupPageView()
+
+    case .startupPageSplit:
+      StartupPageView(splitDestination: true)
 
     case .folderSelector(let agent):
       FolderSelectorModal(agent: agent) { selectedDirectory, selectedPrompt in

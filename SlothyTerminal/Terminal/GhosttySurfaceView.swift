@@ -42,6 +42,7 @@ class GhosttySurfaceView: NSView, NSTextInputClient {
   var onClosed: (() -> Void)?
   var onTerminalActivity: (() -> Void)?
   var onBackgroundActivity: (() -> Void)?
+  var onMouseDown: (() -> Void)?
 
   /// Set on each GHOSTTY_ACTION_RENDER, cleared by poller after reading.
   private(set) var hasNewRenderSinceLastRead = false
@@ -772,6 +773,8 @@ class GhosttySurfaceView: NSView, NSTextInputClient {
       return
     }
 
+    onMouseDown?()
+
     if window?.firstResponder !== self {
       window?.makeFirstResponder(self)
     }
@@ -1217,24 +1220,37 @@ extension GhosttySurfaceView {
       return
     }
 
-    let snapshot = ANSIStripper.strip(text)
+    let previousSnapshot = lastViewportSnapshot
+    let isCurrentlyActive = isTabActive
+    let suppressionInterval = userInputSuppressionInterval
+    let lastInput = lastUserInputAt
 
-    guard snapshot != lastViewportSnapshot else {
-      return
+    DispatchQueue.global(qos: .utility).async { [weak self] in
+      let snapshot = ANSIStripper.strip(text)
+
+      guard snapshot != previousSnapshot else {
+        return
+      }
+
+      DispatchQueue.main.async {
+        guard let self else {
+          return
+        }
+
+        self.lastViewportSnapshot = snapshot
+        self.onTerminalActivity?()
+
+        guard !isCurrentlyActive else {
+          return
+        }
+
+        guard Date().timeIntervalSince(lastInput) > suppressionInterval else {
+          return
+        }
+
+        self.onBackgroundActivity?()
+      }
     }
-
-    lastViewportSnapshot = snapshot
-    onTerminalActivity?()
-
-    guard !isTabActive else {
-      return
-    }
-
-    guard Date().timeIntervalSince(lastUserInputAt) > userInputSuppressionInterval else {
-      return
-    }
-
-    onBackgroundActivity?()
   }
 
   private func refreshViewportSnapshot() {
@@ -1242,7 +1258,13 @@ extension GhosttySurfaceView {
       return
     }
 
-    lastViewportSnapshot = ANSIStripper.strip(text)
+    DispatchQueue.global(qos: .utility).async { [weak self] in
+      let stripped = ANSIStripper.strip(text)
+
+      DispatchQueue.main.async {
+        self?.lastViewportSnapshot = stripped
+      }
+    }
   }
 }
 

@@ -15,6 +15,9 @@ class ChatSessionStore {
   private var saveTimer: Timer?
   private let saveDebounceInterval: TimeInterval = 1.0
 
+  /// Serial queue for background disk writes.
+  private let writeQueue = DispatchQueue(label: "com.slothyterminal.chatstore.write", qos: .utility)
+
   /// Pending snapshot to be saved on next debounce tick.
   private var pendingSnapshot: ChatSessionSnapshot?
 
@@ -65,13 +68,20 @@ class ChatSessionStore {
     }
   }
 
-  /// Writes any pending snapshot to disk immediately.
+  /// Writes any pending snapshot to disk immediately (synchronously).
   ///
   /// Call this during app termination to ensure the final state is persisted.
   func saveImmediately() {
     saveTimer?.invalidate()
     saveTimer = nil
-    flushPendingSnapshot()
+
+    guard let snapshot = pendingSnapshot else {
+      return
+    }
+
+    pendingSnapshot = nil
+    writeSnapshot(snapshot)
+    updateIndex(for: snapshot)
   }
 
   /// Loads the most recent session snapshot for a working directory.
@@ -133,8 +143,10 @@ class ChatSessionStore {
     }
 
     pendingSnapshot = nil
-    writeSnapshot(snapshot)
-    updateIndex(for: snapshot)
+    writeQueue.async { [self] in
+      writeSnapshot(snapshot)
+      updateIndex(for: snapshot)
+    }
   }
 
   private func writeSnapshot(_ snapshot: ChatSessionSnapshot) {

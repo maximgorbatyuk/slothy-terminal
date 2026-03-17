@@ -38,6 +38,9 @@ struct GhosttyTerminalViewRepresentable: NSViewRepresentable {
   /// Callback when background terminal output is detected.
   var onBackgroundActivity: (() -> Void)?
 
+  /// Callback when the user clicks inside the terminal surface.
+  var onMouseDown: (() -> Void)?
+
   func makeNSView(context: Context) -> GhosttySurfaceView {
     let surfaceView = GhosttySurfaceView()
     context.coordinator.surfaceView = surfaceView
@@ -54,6 +57,7 @@ struct GhosttyTerminalViewRepresentable: NSViewRepresentable {
     surfaceView.onClosed = onClosed
     surfaceView.onTerminalActivity = onTerminalActivity
     surfaceView.onBackgroundActivity = onBackgroundActivity
+    surfaceView.onMouseDown = onMouseDown
 
     let launchEnvironment = makeLaunchEnvironment(
       workingDirectory: workingDirectory,
@@ -201,6 +205,9 @@ struct StandaloneTerminalView: View {
   /// Callback when background terminal output is detected.
   var onBackgroundActivity: (() -> Void)? = nil
 
+  /// Callback when the user clicks inside the terminal surface.
+  var onMouseDown: (() -> Void)? = nil
+
   var body: some View {
     GhosttyTerminalViewRepresentable(
       workingDirectory: workingDirectory,
@@ -216,7 +223,8 @@ struct StandaloneTerminalView: View {
       onCommandFinished: onCommandFinished,
       onClosed: onClosed,
       onTerminalActivity: onTerminalActivity,
-      onBackgroundActivity: onBackgroundActivity
+      onBackgroundActivity: onBackgroundActivity,
+      onMouseDown: onMouseDown
     )
   }
 }

@@ -11,6 +11,7 @@ enum CloseWorkspaceResult: Equatable {
 /// The type of modal currently being displayed.
 enum ModalType: Identifiable {
   case startupPage
+  case startupPageSplit
   case folderSelector(AgentType)
 
   case settings
@@ -19,6 +20,8 @@ enum ModalType: Identifiable {
     switch self {
     case .startupPage:
       return "startupPage"
+    case .startupPageSplit:
+      return "startupPageSplit"
     case .folderSelector(let agent):
       return "folderSelector-\(agent.rawValue)"
     case .settings:
@@ -213,6 +216,14 @@ class AppState {
       return
     }
 
+    // Save focus and deactivate tabs in the outgoing workspace
+    // BEFORE changing activeWorkspaceID, so deactivateCurrentSplitTabs()
+    // can still read the outgoing workspace's split state.
+    if let outgoingID = activeWorkspaceID, let focusedID = activeTabID {
+      updateWorkspace(id: outgoingID) { $0.lastFocusedTabID = focusedID }
+      deactivateCurrentSplitTabs()
+    }
+
     activeWorkspaceID = id
 
     // If current active tab already belongs to this workspace, keep it.
@@ -220,8 +231,14 @@ class AppState {
       return
     }
 
-    // Switch to first tab in the workspace, or nil if empty.
-    if let firstTab = tabs.first(where: { $0.workspaceID == id }) {
+    // Restore last focused tab, or fall back to first tab.
+    let workspace = workspaces.first { $0.id == id }
+
+    if let lastFocused = workspace?.lastFocusedTabID,
+       tabs.contains(where: { $0.id == lastFocused && $0.workspaceID == id })
+    {
+      switchToTab(id: lastFocused)
+    } else if let firstTab = tabs.first(where: { $0.workspaceID == id }) {
       switchToTab(id: firstTab.id)
     } else {
       if let current = activeTab {
@@ -398,7 +415,7 @@ class AppState {
       return
     }
 
-    if activeTabID == id || tab.mode == .git {
+    if activeTabID == id || tab.mode == .git || isTabVisibleInSplit(id) {
       performCloseTab(id: id)
     } else {
       tabPendingClose = id
@@ -435,6 +452,9 @@ class AppState {
     // Terminate chat process if active.
     closedTab.chatState?.terminateProcess()
 
+    // Heal split if the closed tab was part of one.
+    healSplitAfterRemoval(tabID: id, workspaceID: closedTab.workspaceID)
+
     tabs.remove(at: index)
 
     // If we closed the active tab, switch to another one in the same workspace.
@@ -450,18 +470,74 @@ class AppState {
   }
 
   /// Switches to the tab with the specified ID.
+  /// When a split is active: if the tab is already visible in the split, just move focus;
+  /// if the tab is not in the split, replace the currently focused pane with it.
   func switchToTab(id: UUID) {
-    // Deactivate current tab.
-    if let currentTab = activeTab {
-      currentTab.isActive = false
+    guard let newTab = tabs.first(where: { $0.id == id }) else {
+      return
+    }
+
+    // Deactivate current tab (and its split partner if any).
+    deactivateCurrentSplitTabs()
+
+    // Split-aware selection: if this workspace has a split...
+    if let wsIndex = workspaces.firstIndex(where: { $0.id == newTab.workspaceID }),
+       let split = workspaces[wsIndex].splitState
+    {
+      if split.contains(id) {
+        // Tab is already visible in split — just move focus.
+      } else if let focusedID = activeTabID, split.contains(focusedID) {
+        // Replace the focused pane with the new tab.
+        if let updated = split.replacing(focusedID, with: id) {
+          workspaces[wsIndex].splitState = updated
+        }
+      }
     }
 
     // Activate new tab.
     activeTabID = id
-    if let newTab = activeTab {
-      newTab.isActive = true
-      newTab.clearBackgroundActivity()
+    newTab.isActive = true
+    newTab.clearBackgroundActivity()
+
+    // Mark both split-visible tabs as active to suppress background-activity indicators.
+    activateSplitPartner(of: id)
+
+    // Track last focused tab in the workspace.
+    if let wsID = activeWorkspaceID {
+      updateWorkspace(id: wsID) { $0.lastFocusedTabID = id }
     }
+  }
+
+  /// Deactivates the current active tab and its split partner.
+  private func deactivateCurrentSplitTabs() {
+    guard let currentTab = activeTab else {
+      return
+    }
+
+    currentTab.isActive = false
+
+    // Also deactivate the split partner if one exists.
+    if let split = activeSplitState,
+       let partnerID = split.otherTab(than: currentTab.id),
+       let partner = tabs.first(where: { $0.id == partnerID })
+    {
+      partner.isActive = false
+    }
+  }
+
+  /// Marks the split partner of the given tab as active (visible).
+  private func activateSplitPartner(of tabID: UUID) {
+    guard let wsID = activeWorkspaceID,
+          let workspace = workspaces.first(where: { $0.id == wsID }),
+          let split = workspace.splitState,
+          let partnerID = split.otherTab(than: tabID),
+          let partner = tabs.first(where: { $0.id == partnerID })
+    else {
+      return
+    }
+
+    partner.isActive = true
+    partner.clearBackgroundActivity()
   }
 
   /// Moves a tab before another tab within the same workspace.
@@ -628,6 +704,250 @@ class AppState {
       tab.chatState?.terminateProcess()
     }
     telegramRuntime?.stop()
+  }
+}
+
+// MARK: - Split View
+
+extension AppState {
+  /// The split state of the currently active workspace, if any.
+  var activeSplitState: WorkspaceSplitState? {
+    guard let activeWorkspaceID else {
+      return nil
+    }
+
+    return workspaces.first { $0.id == activeWorkspaceID }?.splitState
+  }
+
+  /// Whether the active workspace is currently in split-view mode.
+  var isSplitActive: Bool {
+    activeSplitState != nil
+  }
+
+  /// Whether the given tab is currently visible in the active split.
+  func isTabVisibleInSplit(_ tabID: UUID) -> Bool {
+    activeSplitState?.contains(tabID) ?? false
+  }
+
+  /// Creates or updates a split in the active workspace.
+  /// Pairs the current focused tab with the given second tab ID.
+  /// Both tabs must belong to the active workspace.
+  func createSplit(with secondTabID: UUID) {
+    guard let focusedID = activeTabID,
+          focusedID != secondTabID,
+          let focusedTab = tabs.first(where: { $0.id == focusedID }),
+          let secondTab = tabs.first(where: { $0.id == secondTabID }),
+          focusedTab.workspaceID == secondTab.workspaceID,
+          let wsID = activeWorkspaceID,
+          focusedTab.workspaceID == wsID
+    else {
+      return
+    }
+
+    let split = WorkspaceSplitState(leftTabID: focusedID, rightTabID: secondTabID)
+    updateWorkspace(id: wsID) { $0.splitState = split }
+  }
+
+  /// Creates a new tab and places it into the split alongside the focused tab.
+  /// If no split exists, creates one. If a split already exists, replaces the focused pane.
+  func createTabInSplit(
+    agent: AgentType,
+    directory: URL,
+    initialPrompt: SavedPrompt? = nil,
+    launchArgumentsOverride: [String]? = nil
+  ) {
+    guard let focusedID = activeTabID else {
+      createTab(agent: agent, directory: directory, initialPrompt: initialPrompt, launchArgumentsOverride: launchArgumentsOverride)
+      return
+    }
+
+    let workspaceID = resolveWorkspaceID(for: directory)
+    let tab = Tab(
+      workspaceID: workspaceID,
+      agentType: agent,
+      workingDirectory: directory,
+      initialPrompt: initialPrompt,
+      launchArgumentsOverride: launchArgumentsOverride
+    )
+    insertTabAdjacentTo(focusedID, newTab: tab)
+    wireSplit(focusedTabID: focusedID, newTabID: tab.id, workspaceID: workspaceID)
+    switchToTab(id: tab.id)
+  }
+
+  /// Creates a new chat tab and places it into the split.
+  func createChatTabInSplit(
+    agent: AgentType = .claude,
+    directory: URL,
+    initialPrompt: String? = nil
+  ) {
+    guard let focusedID = activeTabID else {
+      createChatTab(agent: agent, directory: directory, initialPrompt: initialPrompt)
+      return
+    }
+
+    let workspaceID = resolveWorkspaceID(for: directory)
+    let tab = Tab(
+      workspaceID: workspaceID,
+      agentType: agent,
+      workingDirectory: directory,
+      mode: .chat
+    )
+    insertTabAdjacentTo(focusedID, newTab: tab)
+    wireSplit(focusedTabID: focusedID, newTabID: tab.id, workspaceID: workspaceID)
+    switchToTab(id: tab.id)
+
+    if let prompt = initialPrompt, !prompt.isEmpty {
+      tab.chatState?.sendMessage(prompt)
+    }
+  }
+
+  /// Creates a new git tab and places it into the split.
+  func createGitTabInSplit(directory: URL) {
+    guard let focusedID = activeTabID else {
+      createGitTab(directory: directory)
+      return
+    }
+
+    let workspaceID = resolveWorkspaceID(for: directory)
+    let tab = Tab(
+      workspaceID: workspaceID,
+      workingDirectory: directory,
+      mode: .git
+    )
+    insertTabAdjacentTo(focusedID, newTab: tab)
+    wireSplit(focusedTabID: focusedID, newTabID: tab.id, workspaceID: workspaceID)
+    switchToTab(id: tab.id)
+  }
+
+  /// Inserts a new tab right after the given anchor tab in the tabs array.
+  /// Falls back to append if the anchor is not found.
+  private func insertTabAdjacentTo(_ anchorID: UUID, newTab: Tab) {
+    if let anchorIndex = tabs.firstIndex(where: { $0.id == anchorID }) {
+      tabs.insert(newTab, at: anchorIndex + 1)
+    } else {
+      tabs.append(newTab)
+    }
+  }
+
+  /// Wires a new tab into the split alongside the focused tab.
+  /// Creates a new split if none exists, or replaces the focused pane in an existing split.
+  private func wireSplit(focusedTabID: UUID, newTabID: UUID, workspaceID: UUID) {
+    guard let wsIndex = workspaces.firstIndex(where: { $0.id == workspaceID }) else {
+      return
+    }
+
+    if let existing = workspaces[wsIndex].splitState {
+      if let updated = existing.replacing(focusedTabID, with: newTabID) {
+        workspaces[wsIndex].splitState = updated
+      }
+    } else {
+      workspaces[wsIndex].splitState = WorkspaceSplitState(
+        leftTabID: focusedTabID,
+        rightTabID: newTabID
+      )
+    }
+  }
+
+  /// Opens an existing tab in split view alongside the current focused tab.
+  /// If a split already exists, replaces the focused pane with the given tab.
+  func openInSplitView(tabID: UUID) {
+    guard let focusedID = activeTabID,
+          focusedID != tabID
+    else {
+      return
+    }
+
+    createSplit(with: tabID)
+  }
+
+  /// Detaches a tab from the split, collapsing back to single-tab mode.
+  /// The tab stays alive as a normal workspace tab. Focus stays on the active tab.
+  func detachFromSplit(tabID: UUID) {
+    guard let wsID = activeWorkspaceID,
+          let wsIndex = workspaces.firstIndex(where: { $0.id == wsID }),
+          let split = workspaces[wsIndex].splitState,
+          split.contains(tabID)
+    else {
+      return
+    }
+
+    // Deactivate the split partner before collapsing.
+    if let partnerID = split.otherTab(than: tabID),
+       let partner = tabs.first(where: { $0.id == partnerID })
+    {
+      partner.isActive = false
+    }
+
+    // Collapse the split. Focus stays on the current activeTabID.
+    workspaces[wsIndex].splitState = nil
+
+    // Ensure the active tab is properly activated in single mode.
+    if let currentID = activeTabID {
+      switchToTab(id: currentID)
+    }
+  }
+
+  /// Closes a split pane: closes the tab and heals the split.
+  func closeSplitPane(tabID: UUID) {
+    closeTab(id: tabID)
+  }
+
+  /// Shows the startup page in split-destination mode.
+  func showStartupPageForSplit() {
+    guard activeTabID != nil else {
+      // No focused tab — use normal creation.
+      showStartupPage()
+      return
+    }
+
+    activeModal = .startupPageSplit
+  }
+
+  /// Removes a tab from the split state and collapses if needed.
+  /// Called before the tab is actually removed from the tabs array.
+  private func healSplitAfterRemoval(tabID: UUID, workspaceID: UUID) {
+    guard let wsIndex = workspaces.firstIndex(where: { $0.id == workspaceID }),
+          let split = workspaces[wsIndex].splitState,
+          split.contains(tabID)
+    else {
+      return
+    }
+
+    // Collapse the split — the remaining tab becomes the sole visible tab.
+    workspaces[wsIndex].splitState = nil
+
+    // If the remaining tab exists, make sure focus goes to it.
+    if let remainingID = split.remaining(after: tabID),
+       tabs.contains(where: { $0.id == remainingID })
+    {
+      if activeTabID == tabID {
+        switchToTab(id: remainingID)
+      }
+    }
+  }
+
+  /// Validates split state integrity. Clears invalid splits where a tab no longer exists.
+  func validateSplitStates() {
+    let allTabIDs = Set(tabs.map(\.id))
+
+    for index in workspaces.indices {
+      guard let split = workspaces[index].splitState else {
+        continue
+      }
+
+      if !allTabIDs.contains(split.leftTabID) || !allTabIDs.contains(split.rightTabID) {
+        workspaces[index].splitState = nil
+      }
+    }
+  }
+
+  /// Mutates the workspace at the given ID.
+  private func updateWorkspace(id: UUID, _ mutation: (inout Workspace) -> Void) {
+    guard let index = workspaces.firstIndex(where: { $0.id == id }) else {
+      return
+    }
+
+    mutation(&workspaces[index])
   }
 }
 

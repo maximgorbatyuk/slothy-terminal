@@ -1,22 +1,86 @@
 import SwiftUI
 
 /// Container view that displays the active tab's terminal or an empty state.
-/// All terminal views are kept alive to preserve sessions when switching tabs.
+/// All terminal views are kept alive in a single ZStack to preserve PTY sessions
+/// when switching tabs or toggling split mode. Split chrome is overlaid on top.
 struct TerminalContainerView: View {
   @Environment(AppState.self) private var appState
 
   var body: some View {
-    ZStack {
-      if appState.visibleTabs.isEmpty {
-        EmptyTerminalView()
-      }
+    if appState.visibleTabs.isEmpty {
+      EmptyTerminalView()
+    } else if let split = appState.activeSplitState {
+      splitLayout(split)
+    } else {
+      singleLayout
+    }
+  }
 
-      /// Render all terminal views but only show the active one.
-      /// This keeps sessions alive when switching between tabs and workspaces.
+  // MARK: - Single Tab Layout
+
+  /// Renders all tabs in a ZStack; only the active tab is visible.
+  /// Tabs are never destroyed when switching — their PTY sessions stay alive.
+  private var singleLayout: some View {
+    ZStack {
       ForEach(appState.tabs) { tab in
-        ActiveTerminalView(tab: tab, isActive: tab.id == appState.activeTabID)
-          .opacity(tab.id == appState.activeTabID ? 1 : 0)
-          .allowsHitTesting(tab.id == appState.activeTabID)
+        let isVisible = tab.id == appState.activeTabID
+
+        ActiveTerminalView(tab: tab, isActive: isVisible)
+          .opacity(isVisible ? 1 : 0)
+          .allowsHitTesting(isVisible)
+      }
+    }
+  }
+
+  // MARK: - Split Layout
+
+  /// Renders all tabs in a single ZStack (preserving identity/lifetime),
+  /// using GeometryReader to position the two split-visible tabs side by side.
+  /// Non-split tabs are hidden but kept alive.
+  private func splitLayout(_ split: WorkspaceSplitState) -> some View {
+    GeometryReader { geo in
+      let paneWidth = (geo.size.width - 1) / 2
+      let paneHeight = geo.size.height
+
+      ZStack(alignment: .topLeading) {
+        // All tabs rendered — only split members visible.
+        ForEach(appState.tabs) { tab in
+          let isLeftPane = tab.id == split.leftTabID
+          let isRightPane = tab.id == split.rightTabID
+          let isVisibleInSplit = isLeftPane || isRightPane
+          let isFocused = tab.id == appState.activeTabID
+
+          ActiveTerminalView(
+            tab: tab,
+            isActive: isFocused,
+            onPaneFocused: isVisibleInSplit ? {
+              if !isFocused {
+                appState.switchToTab(id: tab.id)
+              }
+            } : nil
+          )
+          .frame(width: isVisibleInSplit ? paneWidth : 0, height: paneHeight)
+          .offset(x: isRightPane ? paneWidth + 1 : 0)
+          .opacity(isVisibleInSplit ? 1 : 0)
+          .allowsHitTesting(isVisibleInSplit)
+        }
+
+        // Vertical divider between panes.
+        Rectangle()
+          .fill(Color.primary.opacity(0.15))
+          .frame(width: 1, height: paneHeight)
+          .offset(x: paneWidth)
+          .allowsHitTesting(false)
+
+        // Thin accent top border on the focused pane.
+        Rectangle()
+          .fill(Color.accentColor)
+          .frame(
+            width: paneWidth,
+            height: 2
+          )
+          .offset(x: appState.activeTabID == split.rightTabID ? paneWidth + 1 : 0)
+          .allowsHitTesting(false)
       }
     }
   }
@@ -26,6 +90,11 @@ struct TerminalContainerView: View {
 struct ActiveTerminalView: View {
   let tab: Tab
   let isActive: Bool
+
+  /// Called when the user interacts with this pane (click/mouse-down).
+  /// Used by split view to update AppState focus.
+  var onPaneFocused: (() -> Void)? = nil
+
   @State private var isReady: Bool = false
   @State private var agentUnavailableError: String?
 
@@ -35,8 +104,12 @@ struct ActiveTerminalView: View {
 
       if tab.mode == .git {
         GitClientView(workingDirectory: tab.workingDirectory)
+          .contentShape(Rectangle())
+          .onTapGesture { onPaneFocused?() }
       } else if tab.mode == .chat, let chatState = tab.chatState {
         ChatView(chatState: chatState)
+          .contentShape(Rectangle())
+          .onTapGesture { onPaneFocused?() }
       } else if let error = agentUnavailableError {
         AgentUnavailableView(agentName: tab.agent?.displayName ?? "Unknown", error: error)
           .environment(\.colorScheme, .dark)
@@ -69,6 +142,9 @@ struct ActiveTerminalView: View {
           },
           onBackgroundActivity: {
             tab.markBackgroundActivity()
+          },
+          onMouseDown: {
+            onPaneFocused?()
           }
         )
         .environment(\.colorScheme, .dark)

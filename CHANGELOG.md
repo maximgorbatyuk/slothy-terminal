@@ -2,6 +2,21 @@
 
 All notable changes to SlothyTerminal will be documented in this file.
 
+## [2026.2.12] - 2026-03-17
+
+_Analysis range: `dc5de5c..82068d2` (1 commit, 8 source files changed, 367 insertions, 35 deletions)._
+
+### Changed
+- **ANSI stripping moved off main thread** — `GhosttySurfaceView.handleViewportChange()` and `refreshViewportSnapshot()` now dispatch `ANSIStripper.strip()` to a background `DispatchQueue.global(qos: .utility)` and bounce results back to main, eliminating main-thread stalls during heavy terminal output.
+- **Chat session disk writes moved to background queue** — `ChatSessionStore` debounced snapshot flushes now execute on a dedicated serial `DispatchQueue(label:..., qos: .utility)`. `saveImmediately()` (app-termination path) remains synchronous to guarantee data persistence.
+- **Chat auto-scroll throttled to 10 Hz** — `ChatMessageListView` now gates streaming auto-scroll updates with a 0.1s minimum interval via `lastAutoScrollDate` state, and removes `withAnimation` wrappers from scroll calls to reduce per-character animation overhead.
+- **Telegram output poller ANSI stripping offloaded** — `TerminalOutputPoller` now runs `ANSIStripper.strip()` and `ViewportDiffer.diffLines()` inside `Task.detached`, keeping the polling actor's cooperative thread pool free.
+- **Window title observer corrected** — `MainView` now triggers `updateWindowTitle()` on `activeWorkspaceID` changes instead of `visibleTabs.count`, ensuring the title updates correctly on workspace switches.
+
+### Fixed
+- **OpenCode metadata export hang** — `ChatState.reconcileMetadata()` now wraps `process.waitUntilExit()` in a 5-second `DispatchSemaphore` timeout; previously the call could block indefinitely if the `opencode export` process stalled.
+- **Redundant `@Observable` notifications on terminal state** — `Tab.markTerminalBusy()` and `markTerminalIdle()` now guard against setting the same value, avoiding unnecessary view invalidations when the terminal is already in the target state.
+
 ## [2026.2.11] - 2026-03-14
 
 _Analysis range: `8d0aaee..b8903b4` (13 commits, 24 files changed, 3747 insertions, 125 deletions)._

@@ -4,6 +4,9 @@ import SwiftUI
 struct StartupPageView: View {
   @Environment(\.dismiss) private var dismiss
 
+  /// When true, the new session opens in split view.
+  var splitDestination: Bool = false
+
   var body: some View {
     VStack(spacing: 0) {
       header
@@ -12,6 +15,7 @@ struct StartupPageView: View {
 
       StartSessionContentView(
         presentation: .modal,
+        splitDestination: splitDestination,
         onStart: {
           dismiss()
         }
@@ -24,7 +28,7 @@ struct StartupPageView: View {
 
   private var header: some View {
     HStack {
-      Text("Start New Session")
+      Text(splitDestination ? "New Session in Split View" : "Start New Session")
         .font(.headline)
 
       Spacer()
