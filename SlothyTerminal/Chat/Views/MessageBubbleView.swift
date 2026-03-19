@@ -257,8 +257,6 @@ struct StreamingIndicatorView: View {
 
   @State private var dotCount = 0
 
-  private let timer = Timer.publish(every: 0.4, on: .main, in: .common).autoconnect()
-
   var body: some View {
     HStack(spacing: 6) {
       if let toolName,
@@ -280,8 +278,14 @@ struct StreamingIndicatorView: View {
         }
       }
     }
-    .onReceive(timer) { _ in
-      dotCount = (dotCount + 1) % 3
+    .onChange(of: toolName) {
+      dotCount = 0
+    }
+    .task {
+      while !Task.isCancelled {
+        try? await Task.sleep(for: .milliseconds(400))
+        dotCount = (dotCount + 1) % 3
+      }
     }
   }
 

@@ -60,10 +60,6 @@ struct EmptySidebarView: View {
 /// Sidebar view for plain terminal tabs.
 struct TerminalSidebarView: View {
   let tab: Tab
-  @State private var currentTime = Date()
-
-  /// Timer to update duration every second.
-  private let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
   var body: some View {
     VStack(spacing: 16) {
@@ -79,23 +75,6 @@ struct TerminalSidebarView: View {
       /// Project docs.
       ProjectDocsView(workingDirectory: tab.workingDirectory)
     }
-    .onReceive(timer) { _ in
-      currentTime = Date()
-    }
-  }
-
-  /// Formatted duration that updates with the timer.
-  private var formattedDuration: String {
-    let totalSeconds = Int(currentTime.timeIntervalSince(tab.usageStats.startTime))
-    let hours = totalSeconds / 3600
-    let minutes = (totalSeconds % 3600) / 60
-    let seconds = totalSeconds % 60
-
-    if hours > 0 {
-      return String(format: "%dh %02dm %02ds", hours, minutes, seconds)
-    } else {
-      return String(format: "%dm %02ds", minutes, seconds)
-    }
   }
 }
 
@@ -103,9 +82,6 @@ struct TerminalSidebarView: View {
 struct AgentStatsView: View {
   let tab: Tab
   @State private var currentTime = Date()
-
-  /// Timer to update duration every second.
-  private let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
   var body: some View {
     VStack(alignment: .leading, spacing: 16) {
@@ -120,9 +96,6 @@ struct AgentStatsView: View {
 
       /// Project docs.
       ProjectDocsView(workingDirectory: tab.workingDirectory)
-    }
-    .onReceive(timer) { _ in
-      currentTime = Date()
     }
   }
 
@@ -734,45 +707,48 @@ struct ChatSidebarView: View {
   let chatState: ChatState
   @State private var currentTime = Date()
 
-  private let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
-
   var body: some View {
-    VStack(alignment: .leading, spacing: 16) {
-      /// Working directory.
-      WorkingDirectoryCard(path: tab.workingDirectory)
+    TimelineView(.periodic(from: .now, by: 1)) { context in
+      let _ = updateCurrentTime(context.date)
 
-      /// Open in external app button.
-      OpenInAppButton(directory: tab.workingDirectory)
+      VStack(alignment: .leading, spacing: 16) {
+        /// Working directory.
+        WorkingDirectoryCard(path: tab.workingDirectory)
 
-      /// Directory tree.
-      DirectoryTreeView(rootDirectory: tab.workingDirectory)
+        /// Open in external app button.
+        OpenInAppButton(directory: tab.workingDirectory)
 
-      /// Project docs.
-      ProjectDocsView(workingDirectory: tab.workingDirectory)
+        /// Directory tree.
+        DirectoryTreeView(rootDirectory: tab.workingDirectory)
 
-      /// Chat stats section.
-      StatsSection(title: "Chat Info") {
-        StatRow(label: "Messages", value: "\(chatState.conversation.messages.count)")
-        StatRow(label: "Duration", value: formattedDuration)
-      }
+        /// Project docs.
+        ProjectDocsView(workingDirectory: tab.workingDirectory)
 
-      /// Token usage section.
-      StatsSection(title: "Token Usage") {
-        StatRow(
-          label: "Input",
-          value: formatNumber(chatState.conversation.totalInputTokens),
-          isHighlighted: chatState.conversation.totalInputTokens > 0
-        )
-        StatRow(
-          label: "Output",
-          value: formatNumber(chatState.conversation.totalOutputTokens),
-          isHighlighted: chatState.conversation.totalOutputTokens > 0
-        )
+        /// Chat stats section.
+        StatsSection(title: "Chat Info") {
+          StatRow(label: "Messages", value: "\(chatState.conversation.messages.count)")
+          StatRow(label: "Duration", value: formattedDuration)
+        }
+
+        /// Token usage section.
+        StatsSection(title: "Token Usage") {
+          StatRow(
+            label: "Input",
+            value: formatNumber(chatState.conversation.totalInputTokens),
+            isHighlighted: chatState.conversation.totalInputTokens > 0
+          )
+          StatRow(
+            label: "Output",
+            value: formatNumber(chatState.conversation.totalOutputTokens),
+            isHighlighted: chatState.conversation.totalOutputTokens > 0
+          )
+        }
       }
     }
-    .onReceive(timer) { _ in
-      currentTime = Date()
-    }
+  }
+
+  private func updateCurrentTime(_ date: Date) {
+    currentTime = date
   }
 
   private var formattedDuration: String {

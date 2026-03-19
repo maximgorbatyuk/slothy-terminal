@@ -47,6 +47,13 @@ struct ChatMessageListView: View {
         }
       }
       .onChange(of: conversation.messages.count) {
+        let now = Date()
+
+        guard now.timeIntervalSince(lastAutoScrollDate) > 0.1 else {
+          return
+        }
+
+        lastAutoScrollDate = now
         proxy.scrollTo("bottom", anchor: .bottom)
       }
       .onChange(of: lastMessageText) {

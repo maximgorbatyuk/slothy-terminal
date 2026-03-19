@@ -385,6 +385,7 @@ struct NewTabButton: View {
 }
 
 /// Small dot shown when an inactive terminal tab has unseen output.
+/// Animation only runs while the indicator is on screen.
 struct BackgroundActivityIndicator: View {
   @State private var isPulsing = false
 
@@ -405,11 +406,15 @@ struct BackgroundActivityIndicator: View {
       .onAppear {
         isPulsing = true
       }
+      .onDisappear {
+        isPulsing = false
+      }
       .help("New terminal activity")
   }
 }
 
 /// Pulsing circle indicator shown on tabs during active execution.
+/// Animation only runs while the indicator is on screen.
 struct ExecutingIndicator: View {
   let color: Color
   @State private var isPulsing = false
@@ -427,6 +432,9 @@ struct ExecutingIndicator: View {
       )
       .onAppear {
         isPulsing = true
+      }
+      .onDisappear {
+        isPulsing = false
       }
   }
 }

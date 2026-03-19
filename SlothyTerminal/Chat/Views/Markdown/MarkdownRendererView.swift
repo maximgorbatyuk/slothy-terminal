@@ -6,19 +6,35 @@ struct MarkdownRendererView: View {
   let text: String
   let isStreaming: Bool
 
+  @State private var cachedBlocks: [MarkdownBlock] = []
+  @State private var cachedText: String = ""
+
   var body: some View {
     if isStreaming {
       InlineMarkdownView(text: text)
     } else {
       VStack(alignment: .leading, spacing: 8) {
-        let blocks = MarkdownBlockParser.parse(text)
-
-        ForEach(Array(blocks.enumerated()), id: \.offset) { _, block in
+        ForEach(Array(cachedBlocks.enumerated()), id: \.offset) { _, block in
           blockView(for: block)
         }
       }
       .frame(maxWidth: .infinity, alignment: .leading)
+      .onAppear {
+        reparse()
+      }
+      .onChange(of: text) {
+        reparse()
+      }
     }
+  }
+
+  private func reparse() {
+    guard text != cachedText else {
+      return
+    }
+
+    cachedText = text
+    cachedBlocks = MarkdownBlockParser.parse(text)
   }
 
   @ViewBuilder

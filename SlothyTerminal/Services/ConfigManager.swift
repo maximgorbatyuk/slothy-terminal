@@ -80,16 +80,57 @@ class ConfigManager {
     }
   }
 
-  /// Saves configuration to disk.
+  /// Serial queue for background config writes.
+  private static let saveQueue = DispatchQueue(label: "com.slothyterminal.config-save")
+
+  /// Saves configuration to disk synchronously.
+  /// Drains any pending background writes first to avoid races.
+  /// Use only during app termination.
+  func saveImmediately() {
+    saveTimer?.invalidate()
+    saveTimer = nil
+
+    /// Drain any in-flight background save to avoid a race.
+    Self.saveQueue.sync {}
+
+    performSave()
+  }
+
+  /// Saves configuration to disk on a background queue.
   func save() {
     saveTimer?.invalidate()
     saveTimer = nil
 
+    let configCopy = config
+    let url = configFileURL
+
+    Self.saveQueue.async {
+      let fileManager = FileManager.default
+      let folder = url.deletingLastPathComponent()
+
+      do {
+        if !fileManager.fileExists(atPath: folder.path) {
+          try fileManager.createDirectory(at: folder, withIntermediateDirectories: true)
+        }
+
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        let data = try encoder.encode(configCopy)
+        try data.write(to: url, options: .atomic)
+      } catch {
+        print("Failed to save config: \(error)")
+      }
+    }
+
+    hasUnsavedChanges = false
+  }
+
+  /// Synchronous save for app termination paths.
+  private func performSave() {
     let fileManager = FileManager.default
     let folder = configFileURL.deletingLastPathComponent()
 
     do {
-      /// Create directory if needed.
       if !fileManager.fileExists(atPath: folder.path) {
         try fileManager.createDirectory(at: folder, withIntermediateDirectories: true)
       }

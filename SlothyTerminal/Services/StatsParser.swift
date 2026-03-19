@@ -18,6 +18,42 @@ struct UsageUpdate {
 class StatsParser {
   static let shared = StatsParser()
 
+  // MARK: - Cached Regexes
+
+  private static let ansiRegex = try! NSRegularExpression(
+    pattern: "\\x1B\\[[0-9;]*[a-zA-Z]|\\x1B\\][^\\x07]*\\x07", options: []
+  )
+  private static let claudeCodeTokensKRegex = try! NSRegularExpression(
+    pattern: ">(\\d+\\.?\\d*)k?\\s*<(\\d+\\.?\\d*)k?", options: []
+  )
+  private static let slashTokensRegex = try! NSRegularExpression(
+    pattern: "(\\d+\\.?\\d*k?)\\s*/\\s*(\\d+\\.?\\d*k?)", options: []
+  )
+  private static let costRegex = try! NSRegularExpression(
+    pattern: "\\$([\\d.]+)", options: []
+  )
+  private static let tokensInOutRegex = try! NSRegularExpression(
+    pattern: "[Tt]okens?:\\s*(\\d[\\d,]*)\\s*in\\s*/\\s*(\\d[\\d,]*)\\s*out", options: []
+  )
+  private static let contextWindowRegex = try! NSRegularExpression(
+    pattern: "[Cc]ontext(?:\\s+[Ww]indow)?:\\s*(\\d[\\d,]*)\\s*/\\s*(\\d[\\d,]*)", options: []
+  )
+  private static let jsonTokenRegex = try! NSRegularExpression(
+    pattern: "\\{[^{}]*\"tokens?\"[^{}]*\\}", options: []
+  )
+  private static let totalTokensRegex = try! NSRegularExpression(
+    pattern: "(?:[Tt]otal\\s+)?[Tt]okens?:?\\s*(\\d[\\d,]*)", options: []
+  )
+  private static let inputTokensRegex = try! NSRegularExpression(
+    pattern: "[Ii]nput(?:\\s+[Tt]okens?)?:?\\s*(\\d[\\d,]*)", options: []
+  )
+  private static let outputTokensRegex = try! NSRegularExpression(
+    pattern: "[Oo]utput(?:\\s+[Tt]okens?)?:?\\s*(\\d[\\d,]*)", options: []
+  )
+  private static let messageCountRegex = try! NSRegularExpression(
+    pattern: "[Mm]essages?(?:\\s+[Cc]ount)?:\\s*(\\d+)", options: []
+  )
+
   private init() {}
 
   /// Parses output from Claude CLI to extract usage information.
@@ -43,19 +79,19 @@ class StatsParser {
     }
 
     /// Pattern: "Total tokens: 1234" or just "1234 tokens"
-    if let total = matchPattern(cleanText, pattern: "(?:[Tt]otal\\s+)?[Tt]okens?:?\\s*(\\d[\\d,]*)") {
+    if let total = matchCachedPattern(cleanText, regex: Self.totalTokensRegex) {
       update.totalTokens = parseNumber(total)
       hasUpdates = true
     }
 
     /// Pattern: "Input: 1234 tokens" or "Input tokens: 1234" or ">1234"
-    if let input = matchPattern(cleanText, pattern: "[Ii]nput(?:\\s+[Tt]okens?)?:?\\s*(\\d[\\d,]*)") {
+    if let input = matchCachedPattern(cleanText, regex: Self.inputTokensRegex) {
       update.tokensIn = parseNumber(input)
       hasUpdates = true
     }
 
     /// Pattern: "Output: 567 tokens" or "Output tokens: 567" or "<567"
-    if let output = matchPattern(cleanText, pattern: "[Oo]utput(?:\\s+[Tt]okens?)?:?\\s*(\\d[\\d,]*)") {
+    if let output = matchCachedPattern(cleanText, regex: Self.outputTokensRegex) {
       update.tokensOut = parseNumber(output)
       hasUpdates = true
     }
@@ -90,7 +126,7 @@ class StatsParser {
     }
 
     /// Pattern: "Messages: 24" or "Message count: 24"
-    if let messages = matchPattern(cleanText, pattern: "[Mm]essages?(?:\\s+[Cc]ount)?:\\s*(\\d+)") {
+    if let messages = matchCachedPattern(cleanText, regex: Self.messageCountRegex) {
       update.messageCount = Int(messages)
       hasUpdates = true
     }
@@ -108,34 +144,25 @@ class StatsParser {
 
   /// Strips ANSI escape codes from text.
   private func stripAnsiCodes(_ text: String) -> String {
-    let pattern = "\\x1B\\[[0-9;]*[a-zA-Z]|\\x1B\\][^\\x07]*\\x07"
-    guard let regex = try? NSRegularExpression(pattern: pattern, options: []) else {
-      return text
-    }
-
     let range = NSRange(text.startIndex..., in: text)
-    return regex.stringByReplacingMatches(in: text, options: [], range: range, withTemplate: "")
+    return Self.ansiRegex.stringByReplacingMatches(in: text, options: [], range: range, withTemplate: "")
   }
 
   /// Matches Claude Code status bar token format: ">1234 <567" or ">12.3k <4.5k"
   private func matchClaudeCodeTokens(_ text: String) -> (Int, Int)? {
+    let range = NSRange(text.startIndex..., in: text)
+
     /// Try format with k suffix: ">12.3k <4.5k"
-    let kPattern = ">(\\d+\\.?\\d*)k?\\s*<(\\d+\\.?\\d*)k?"
-    if let regex = try? NSRegularExpression(pattern: kPattern, options: []) {
-      let range = NSRange(text.startIndex..., in: text)
-      if let match = regex.firstMatch(in: text, options: [], range: range),
-         match.numberOfRanges >= 3,
-         let inRange = Range(match.range(at: 1), in: text),
-         let outRange = Range(match.range(at: 2), in: text)
-      {
-        let inStr = String(text[inRange])
-        let outStr = String(text[outRange])
+    if let match = Self.claudeCodeTokensKRegex.firstMatch(in: text, options: [], range: range),
+       match.numberOfRanges >= 3,
+       let inRange = Range(match.range(at: 1), in: text),
+       let outRange = Range(match.range(at: 2), in: text)
+    {
+      let inStr = String(text[inRange])
+      let outStr = String(text[outRange])
 
-        /// Check if original text had 'k' suffix
-        guard let fullMatchRange = Range(match.range, in: text) else {
-          return nil
-        }
-
+      /// Check if original text had 'k' suffix
+      if let fullMatchRange = Range(match.range, in: text) {
         let fullMatch = String(text[fullMatchRange])
         let inHasK = fullMatch.contains(">\(inStr)k")
         let outHasK = fullMatch.contains("<\(outStr)k")
@@ -148,35 +175,14 @@ class StatsParser {
       }
     }
 
-    /// Try simple number format: ">1234 <567"
-    let simplePattern = ">(\\d[\\d,]*)\\s*<(\\d[\\d,]*)"
-    guard let regex = try? NSRegularExpression(pattern: simplePattern, options: []) else {
-      return nil
-    }
-
-    let range = NSRange(text.startIndex..., in: text)
-    guard let match = regex.firstMatch(in: text, options: [], range: range),
-          match.numberOfRanges >= 3,
-          let inRange = Range(match.range(at: 1), in: text),
-          let outRange = Range(match.range(at: 2), in: text),
-          let inTokens = parseNumber(String(text[inRange])),
-          let outTokens = parseNumber(String(text[outRange]))
-    else {
-      return nil
-    }
-
-    return (inTokens, outTokens)
+    return nil
   }
 
   /// Matches slash-separated tokens: "12.3k/4.5k" or "1234 / 567"
   private func matchSlashTokens(_ text: String) -> (Int, Int)? {
-    let pattern = "(\\d+\\.?\\d*k?)\\s*/\\s*(\\d+\\.?\\d*k?)"
-    guard let regex = try? NSRegularExpression(pattern: pattern, options: []) else {
-      return nil
-    }
-
     let range = NSRange(text.startIndex..., in: text)
-    guard let match = regex.firstMatch(in: text, options: [], range: range),
+
+    guard let match = Self.slashTokensRegex.firstMatch(in: text, options: [], range: range),
           match.numberOfRanges >= 3,
           let inRange = Range(match.range(at: 1), in: text),
           let outRange = Range(match.range(at: 2), in: text)
@@ -198,13 +204,9 @@ class StatsParser {
 
   /// Matches cost patterns: "$0.0123" or "$0.05"
   private func matchCost(_ text: String) -> Double? {
-    let pattern = "\\$([\\d.]+)"
-    guard let regex = try? NSRegularExpression(pattern: pattern, options: []) else {
-      return nil
-    }
-
     let range = NSRange(text.startIndex..., in: text)
-    guard let match = regex.firstMatch(in: text, options: [], range: range),
+
+    guard let match = Self.costRegex.firstMatch(in: text, options: [], range: range),
           match.numberOfRanges >= 2,
           let costRange = Range(match.range(at: 1), in: text)
     else {
@@ -258,16 +260,9 @@ class StatsParser {
 
   /// Attempts to parse JSON status updates from the output.
   private func parseJSONStatus(_ text: String) -> UsageUpdate? {
-    /// Look for JSON objects in the text.
-    guard let jsonPattern = try? NSRegularExpression(
-      pattern: "\\{[^{}]*\"tokens?\"[^{}]*\\}",
-      options: []
-    ) else {
-      return nil
-    }
-
     let range = NSRange(text.startIndex..., in: text)
-    guard let match = jsonPattern.firstMatch(in: text, options: [], range: range) else {
+
+    guard let match = Self.jsonTokenRegex.firstMatch(in: text, options: [], range: range) else {
       return nil
     }
 
@@ -319,13 +314,10 @@ class StatsParser {
     return nil
   }
 
-  /// Matches a single capture group pattern.
-  private func matchPattern(_ text: String, pattern: String) -> String? {
-    guard let regex = try? NSRegularExpression(pattern: pattern, options: []) else {
-      return nil
-    }
-
+  /// Matches a single capture group using a pre-compiled regex.
+  private func matchCachedPattern(_ text: String, regex: NSRegularExpression) -> String? {
     let range = NSRange(text.startIndex..., in: text)
+
     guard let match = regex.firstMatch(in: text, options: [], range: range),
           match.numberOfRanges >= 2,
           let captureRange = Range(match.range(at: 1), in: text)
@@ -338,13 +330,9 @@ class StatsParser {
 
   /// Matches "Tokens: X in / Y out" pattern.
   private func matchTokensInOut(_ text: String) -> (Int, Int)? {
-    let pattern = "[Tt]okens?:\\s*(\\d[\\d,]*)\\s*in\\s*/\\s*(\\d[\\d,]*)\\s*out"
-    guard let regex = try? NSRegularExpression(pattern: pattern, options: []) else {
-      return nil
-    }
-
     let range = NSRange(text.startIndex..., in: text)
-    guard let match = regex.firstMatch(in: text, options: [], range: range),
+
+    guard let match = Self.tokensInOutRegex.firstMatch(in: text, options: [], range: range),
           match.numberOfRanges >= 3,
           let inRange = Range(match.range(at: 1), in: text),
           let outRange = Range(match.range(at: 2), in: text),
@@ -359,13 +347,9 @@ class StatsParser {
 
   /// Matches "Context: X / Y" pattern.
   private func matchContextWindow(_ text: String) -> (Int, Int)? {
-    let pattern = "[Cc]ontext(?:\\s+[Ww]indow)?:\\s*(\\d[\\d,]*)\\s*/\\s*(\\d[\\d,]*)"
-    guard let regex = try? NSRegularExpression(pattern: pattern, options: []) else {
-      return nil
-    }
-
     let range = NSRange(text.startIndex..., in: text)
-    guard let match = regex.firstMatch(in: text, options: [], range: range),
+
+    guard let match = Self.contextWindowRegex.firstMatch(in: text, options: [], range: range),
           match.numberOfRanges >= 3,
           let usedRange = Range(match.range(at: 1), in: text),
           let limitRange = Range(match.range(at: 2), in: text),

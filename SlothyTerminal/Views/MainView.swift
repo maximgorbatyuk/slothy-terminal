@@ -7,6 +7,7 @@ struct MainView: View {
   private var configManager = ConfigManager.shared
   @State private var sidebarDragStartWidth: CGFloat?
   @State private var isSidebarResizing = false
+  @State private var containerWidth: CGFloat = 800
 
   private let minSidebarWidth: CGFloat = 200
   private let maxSidebarWidth: CGFloat = 500
@@ -24,32 +25,38 @@ struct MainView: View {
         .padding(.horizontal, 8)
         .padding(.top, 8)
 
-      GeometryReader { proxy in
-        HStack(spacing: 0) {
-          /// Sidebar on the left.
-          if appState.isSidebarVisible && sidebarPosition == .left {
-            SidebarContainerView()
-              .frame(width: appState.sidebarWidth)
-              .padding(.vertical, 8)
-              .padding(.leading, 8)
+      HStack(spacing: 0) {
+        /// Sidebar on the left.
+        if appState.isSidebarVisible && sidebarPosition == .left {
+          SidebarContainerView()
+            .frame(width: appState.sidebarWidth)
+            .padding(.vertical, 8)
+            .padding(.leading, 8)
 
-            sidebarResizeHandle(totalWidth: proxy.size.width)
-          }
+          sidebarResizeHandle(totalWidth: containerWidth)
+        }
 
-          /// Terminal container takes remaining space.
-          TerminalContainerView()
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .padding(8)
+        /// Terminal container takes remaining space.
+        TerminalContainerView()
+          .frame(maxWidth: .infinity, maxHeight: .infinity)
+          .padding(8)
 
-          /// Sidebar on the right.
-          if appState.isSidebarVisible && sidebarPosition == .right {
-            sidebarResizeHandle(totalWidth: proxy.size.width)
+        /// Sidebar on the right.
+        if appState.isSidebarVisible && sidebarPosition == .right {
+          sidebarResizeHandle(totalWidth: containerWidth)
 
-            SidebarContainerView()
-              .frame(width: appState.sidebarWidth)
-              .padding(.vertical, 8)
-              .padding(.trailing, 8)
-          }
+          SidebarContainerView()
+            .frame(width: appState.sidebarWidth)
+            .padding(.vertical, 8)
+            .padding(.trailing, 8)
+        }
+      }
+      .background {
+        GeometryReader { proxy in
+          Color.clear
+            .onChange(of: proxy.size.width, initial: true) { _, newWidth in
+              containerWidth = newWidth
+            }
         }
       }
 
