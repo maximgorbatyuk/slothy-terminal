@@ -52,6 +52,7 @@ let package = Package(
         "Services/GitWorkingTreeService.swift",
         "Services/GitStatsService.swift",
         "Services/GraphLaneCalculator.swift",
+        "Services/ANSIStripper.swift",
         "Models/UsageStats.swift",
         "Models/AgentType.swift",
         "Models/GitDiffModels.swift",
@@ -96,21 +97,6 @@ let package = Package(
         "Chat/OpenCode/OpenCodeEventMapper.swift",
         "Chat/OpenCode/OpenCodeCLITransport.swift",
         "Chat/State/ChatState.swift",
-
-        /// Telegram Bot — Models, API, Runtime.
-        "Telegram/Models/TelegramModels.swift",
-        "Telegram/Models/TelegramAPIModels.swift",
-        "Telegram/Models/TelegramTimelineMessage.swift",
-        "Telegram/Models/TelegramCommand.swift",
-        "Telegram/API/TelegramBotAPIClient.swift",
-        "Telegram/API/TelegramMessageChunker.swift",
-        "Telegram/Runtime/TelegramBotRuntime.swift",
-        "Telegram/Runtime/TelegramCommandHandler.swift",
-
-        /// Telegram Relay — Session model, output poller, ANSI stripping.
-        "Telegram/Relay/TelegramRelaySession.swift",
-        "Telegram/Relay/TerminalOutputPoller.swift",
-        "Telegram/Relay/ANSIStripper.swift",
 
         /// Injection — Models, Registry, Orchestrator.
         "Injection/Models/InjectionPayload.swift",

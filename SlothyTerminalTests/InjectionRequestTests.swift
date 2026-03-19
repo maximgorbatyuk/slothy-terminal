@@ -93,7 +93,7 @@ final class InjectionRequestTests: XCTestCase {
     let request = InjectionRequest(
       payload: .control(.ctrlC),
       target: .activeTab,
-      origin: .telegram
+      origin: .automation
     )
 
     let data = try JSONEncoder().encode(request)

@@ -25,9 +25,6 @@ struct SettingsView: View {
         case .agents:
           AgentsSettingsTab()
 
-        case .telegram:
-          TelegramSettingsTab()
-
         case .appearance:
           AppearanceSettingsTab()
 

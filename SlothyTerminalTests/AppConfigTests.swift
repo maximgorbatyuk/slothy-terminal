@@ -30,11 +30,6 @@ struct AppConfigTests {
         "chatShowTokenMetadata": false,
         "lastUsedOpenCodeAskModeEnabled": true,
         "shortcuts": {},
-        "telegramExecutionAgent": "Claude",
-        "telegramAutoStartOnOpen": false,
-        "telegramDefaultListenMode": "execute",
-        "telegramOpenDirectoryTabMode": "chat",
-        "telegramOpenDirectoryAgent": "Claude",
         "sidebarTab": "explorer"
       }
       """

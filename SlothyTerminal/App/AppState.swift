@@ -80,7 +80,6 @@ class AppState {
   }
   var activeModal: ModalType?
   private(set) var injectionOrchestrator: InjectionOrchestrator?
-  var telegramRuntime: TelegramBotRuntime?
 
   /// Section to navigate to when the native Settings window opens.
   var pendingSettingsSection: SettingsSection?
@@ -386,27 +385,6 @@ class AppState {
     switchToTab(id: tab.id)
   }
 
-  /// Starts the Telegram bot as a sidebar service.
-  func startTelegramBot(directory: URL, startImmediately: Bool = false) {
-    guard telegramRuntime == nil else {
-      return
-    }
-
-    let runtime = TelegramBotRuntime(workingDirectory: directory)
-    runtime.delegate = self
-    telegramRuntime = runtime
-
-    if startImmediately || configManager.config.telegramAutoStartOnOpen {
-      runtime.start()
-    }
-  }
-
-  /// Stops and removes the Telegram bot runtime.
-  func stopTelegramBot() {
-    telegramRuntime?.stop()
-    telegramRuntime = nil
-  }
-
   /// Closes the tab with the specified ID.
   /// Active tabs and stateless git tabs close immediately.
   /// Inactive terminal/chat tabs prompt for confirmation first.
@@ -703,7 +681,6 @@ class AppState {
       // terminateProcess() calls store.saveImmediately() internally.
       tab.chatState?.terminateProcess()
     }
-    telegramRuntime?.stop()
   }
 }
 
@@ -993,126 +970,3 @@ extension AppState: InjectionTabProvider {
   }
 }
 
-// MARK: - TelegramBotDelegate
-
-extension AppState: TelegramBotDelegate {
-  func telegramBotRequestReport() -> String {
-    if tabs.isEmpty {
-      return "No tabs open."
-    }
-
-    var lines = ["Open tabs (\(tabs.count)):"]
-    for (index, tab) in tabs.enumerated() {
-      let marker = tab.id == activeTabID ? " [active]" : ""
-      let status = tabStatusForTelegramReport(tab)
-      let directory = compactTelegramPath(tab.workingDirectory)
-      lines.append("\(index + 1)) \(tab.tabName) (\(status)) \(directory)\(marker)")
-    }
-
-    if let activeTab {
-      lines.append("Selected directory: \(compactTelegramPath(activeTab.workingDirectory))")
-    }
-
-    return lines.joined(separator: "\n")
-  }
-
-  func telegramBotOpenTab(mode: TabMode, agent: AgentType, directory: URL) {
-    switch mode {
-    case .chat:
-      createChatTab(agent: agent, directory: directory)
-
-    case .git:
-      createGitTab(directory: directory)
-
-    case .terminal:
-      createTab(agent: agent, directory: directory)
-    }
-  }
-
-  func telegramBotListRelayableTabs() -> [TelegramRelayTabInfo] {
-    let registeredIds = Set(TerminalSurfaceRegistry.shared.registeredTabIds())
-    return tabs
-      .filter { $0.mode == .terminal && $0.agentType != nil && registeredIds.contains($0.id) }
-      .compactMap { tab in
-        guard let agentType = tab.agentType else {
-          return nil
-        }
-
-        return TelegramRelayTabInfo(
-          id: tab.id,
-          name: tab.tabName,
-          agentType: agentType,
-          directory: tab.workingDirectory,
-          isActive: tab.id == activeTabID
-        )
-      }
-  }
-
-  func telegramBotActiveInjectableAITab() -> TelegramRelayTabInfo? {
-    guard let tab = activeTab,
-          tab.mode == .terminal,
-          let agentType = tab.agentType,
-          (agentType == .claude || agentType == .opencode)
-    else {
-      return nil
-    }
-
-    let registeredIds = Set(TerminalSurfaceRegistry.shared.registeredTabIds())
-
-    guard registeredIds.contains(tab.id) else {
-      return nil
-    }
-
-    return TelegramRelayTabInfo(
-      id: tab.id,
-      name: tab.tabName,
-      agentType: agentType,
-      directory: tab.workingDirectory,
-      isActive: true
-    )
-  }
-
-  func telegramBotInject(_ request: InjectionRequest) -> InjectionRequest? {
-    inject(request)
-  }
-
-  func telegramBotStartupStatement(workingDirectory: URL) async -> String {
-    let repoRoot = await GitService.shared.getRepositoryRoot(for: workingDirectory)
-
-    let openTabCount = tabs.count
-
-    return TelegramStartupStatement.compose(
-      repositoryPath: repoRoot?.path,
-      workingDirectoryPath: workingDirectory.path,
-      openTabCount: openTabCount
-    )
-  }
-
-  private func compactTelegramPath(_ directory: URL) -> String {
-    let fullPath = directory.path
-    let homeDirectory = FileManager.default.homeDirectoryForCurrentUser.path
-
-    if fullPath.hasPrefix(homeDirectory) {
-      return "~" + fullPath.dropFirst(homeDirectory.count)
-    }
-
-    return fullPath
-  }
-
-  private func tabStatusForTelegramReport(_ tab: Tab) -> String {
-    switch tab.mode {
-    case .chat:
-      if let chatState = tab.chatState {
-        return chatState.sessionState.isProcessingTurn ? "processing" : "idle"
-      }
-
-      return "idle"
-
-    case .terminal:
-      return "interactive"
-
-    case .git:
-      return "git"
-    }
-  }
-}

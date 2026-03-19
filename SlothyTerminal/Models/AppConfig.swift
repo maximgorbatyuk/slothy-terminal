@@ -115,39 +115,6 @@ struct AppConfig: Codable, Equatable {
   /// Custom keyboard shortcuts.
   var shortcuts: [String: String] = [:]
 
-  // MARK: - Telegram Settings
-
-  /// Bot token for the Telegram Bot API.
-  var telegramBotToken: String?
-
-  /// User ID allowed to interact with the bot.
-  var telegramAllowedUserID: Int64?
-
-  /// Which agent to use for prompt execution.
-  var telegramExecutionAgent: AgentType = .claude
-
-  /// Whether the bot auto-starts when the Telegram sidebar is opened.
-  var telegramAutoStartOnOpen: Bool = false
-
-  /// Deprecated — bot always runs in execute mode now.
-  /// Kept for backward-compatible JSON decoding of existing configs.
-  var telegramDefaultListenMode: TelegramBotMode = .execute
-
-  /// Optional prefix prepended to bot replies.
-  var telegramReplyPrefix: String?
-
-  /// Root directory path for /open-directory command.
-  var telegramRootDirectoryPath: String?
-
-  /// Predefined subfolder appended to root directory for /open-directory.
-  var telegramPredefinedOpenSubpath: String?
-
-  /// Tab mode for tabs opened via /open-directory.
-  var telegramOpenDirectoryTabMode: TabMode = .chat
-
-  /// Agent type for tabs opened via /open-directory.
-  var telegramOpenDirectoryAgent: AgentType = .claude
-
   // MARK: - Window State
 
   /// Saved window state for restoration.
@@ -208,17 +175,6 @@ struct AppConfig: Codable, Equatable {
     lastUsedOpenCodeAskModeEnabled = (try? c.decode(Bool.self, forKey: .lastUsedOpenCodeAskModeEnabled)) ?? d.lastUsedOpenCodeAskModeEnabled
 
     shortcuts = (try? c.decode([String: String].self, forKey: .shortcuts)) ?? d.shortcuts
-
-    telegramBotToken = try? c.decode(String.self, forKey: .telegramBotToken)
-    telegramAllowedUserID = try? c.decode(Int64.self, forKey: .telegramAllowedUserID)
-    telegramExecutionAgent = (try? c.decode(AgentType.self, forKey: .telegramExecutionAgent)) ?? d.telegramExecutionAgent
-    telegramAutoStartOnOpen = (try? c.decode(Bool.self, forKey: .telegramAutoStartOnOpen)) ?? d.telegramAutoStartOnOpen
-    telegramDefaultListenMode = (try? c.decode(TelegramBotMode.self, forKey: .telegramDefaultListenMode)) ?? d.telegramDefaultListenMode
-    telegramReplyPrefix = try? c.decode(String.self, forKey: .telegramReplyPrefix)
-    telegramRootDirectoryPath = try? c.decode(String.self, forKey: .telegramRootDirectoryPath)
-    telegramPredefinedOpenSubpath = try? c.decode(String.self, forKey: .telegramPredefinedOpenSubpath)
-    telegramOpenDirectoryTabMode = (try? c.decode(TabMode.self, forKey: .telegramOpenDirectoryTabMode)) ?? d.telegramOpenDirectoryTabMode
-    telegramOpenDirectoryAgent = (try? c.decode(AgentType.self, forKey: .telegramOpenDirectoryAgent)) ?? d.telegramOpenDirectoryAgent
 
     windowState = try? c.decode(WindowState.self, forKey: .windowState)
   }
@@ -369,7 +325,6 @@ enum SidebarTab: String, Codable, CaseIterable, Identifiable {
   case gitChanges
   case prompts
   case automation
-  case telegram
 
   var id: String { rawValue }
 
@@ -386,9 +341,6 @@ enum SidebarTab: String, Codable, CaseIterable, Identifiable {
 
     case .prompts:
       return "text.bubble"
-
-    case .telegram:
-      return "paperplane"
 
     case .automation:
       return "gearshape.2"
@@ -408,9 +360,6 @@ enum SidebarTab: String, Codable, CaseIterable, Identifiable {
 
     case .prompts:
       return "Prompts"
-
-    case .telegram:
-      return "Telegram Bot"
 
     case .automation:
       return "Automation"
