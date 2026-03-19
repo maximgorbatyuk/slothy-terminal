@@ -72,6 +72,24 @@ body {
   overflow-x: hidden;
 }
 
+.skip-link {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  padding: 8px 12px;
+  background: var(--bg-secondary);
+  color: var(--accent-primary);
+  border-radius: 6px;
+  text-decoration: none;
+  transform: translateY(-200%);
+  transition: transform var(--transition-fast);
+  z-index: 200;
+}
+
+.skip-link:focus-visible {
+  transform: translateY(0);
+}
+
 /* Page Load Animation */
 @keyframes fadeInUp {
   from {
@@ -341,6 +359,12 @@ body {
   color: var(--text-secondary);
   margin-bottom: 40px;
   line-height: 1.7;
+}
+
+.inline-link {
+  color: var(--accent-primary);
+  text-decoration: underline;
+  text-underline-offset: 2px;
 }
 
 .hero-actions {

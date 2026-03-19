@@ -6,7 +6,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Slothy Terminal — Take it slow, ship it fast</title>
   <meta name="description"
-    content="A native macOS terminal for AI coding assistants. GPU-accelerated via libghostty, with workspaces, automation sidebars, prompts, and tabbed sessions for Claude CLI and OpenCode.">
+    content="Slothy Terminal is a native GPU‑accelerated macOS terminal for AI coding assistants with workspaces, automation sidebars, prompts, and native chat sessions for Claude CLI and OpenCode.">
+  <link rel="canonical" href="https://mgorbatyuk.dev/slothy-terminal/">
   <meta name="theme-color" content="#0F172A">
 
   <!-- Open Graph -->
@@ -30,6 +31,7 @@
 </head>
 
 <body>
+  <a href="#main" class="skip-link">Skip to main content</a>
   <!-- Dots pattern background -->
   <div class="dots-bg"></div>
 
@@ -44,7 +46,7 @@
         <a href="#features">Features</a>
         <a href="#screenshot">Preview</a>
         <a href="#install">Install</a>
-        <a href="https://github.com/maximgorbatyuk/slothy-terminal" target="_blank" rel="noopener" class="nav-github">
+        <a href="https://github.com/maximgorbatyuk/slothy-terminal" target="_blank" rel="noopener noreferrer" class="nav-github" aria-label="Slothy Terminal GitHub repository">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
             <path
               d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z" />
@@ -73,6 +75,7 @@
   </nav>
 
   <!-- Hero Section -->
+  <main id="main">
   <section class="hero">
     <div class="hero-content">
       <div class="hero-icon-wrapper">
@@ -83,8 +86,7 @@
       <p class="hero-tagline">Take it slow, ship it fast.</p>
       <p class="hero-description">
         A GPU-accelerated macOS terminal for AI coding assistants.<br>
-        Powered by <a href="https://github.com/ghostty-org/ghostty" target="_blank" rel="noopener"
-          style="color: var(--accent-primary); text-decoration: none;">libghostty</a> with Metal rendering,
+        Powered by <a href="https://github.com/ghostty-org/ghostty" target="_blank" rel="noopener noreferrer" class="inline-link">libghostty</a> with Metal rendering,
         workspace-aware tabs, automation sidebars, and native chat sessions.
       </p>
       <div class="hero-actions">
@@ -163,8 +165,7 @@
           </div>
           <h3 class="feature-title">GPU-Accelerated Terminal</h3>
           <p class="feature-description">
-            Powered by <a href="https://github.com/ghostty-org/ghostty" target="_blank" rel="noopener"
-              style="color: var(--accent-primary); text-decoration: none;">libghostty</a> with Metal rendering.
+            Powered by <a href="https://github.com/ghostty-org/ghostty" target="_blank" rel="noopener noreferrer" class="inline-link">libghostty</a> with Metal rendering.
             The same terminal engine behind the Ghostty terminal app, with full IME support
             and native Ghostty config file compatibility.
           </p>
@@ -404,9 +405,9 @@
         <div class="footer-column">
           <h4 class="footer-heading">Our Projects</h4>
           <ul class="footer-list">
-            <li><a href="https://techinterview.space" target="_blank">Techinterview.space</a></li>
-            <li><a href="https://mgorbatyuk.dev/ev-charging-tracker" target="_blank">EV Charge Tracker (iOS)</a></li>
-            <li><a href="https://mgorbatyuk.dev/journey-wallet" target="_blank">Journey Wallet (iOS)</a></li>
+            <li><a href="https://techinterview.space" target="_blank" rel="noopener noreferrer">Techinterview.space</a></li>
+            <li><a href="https://mgorbatyuk.dev/ev-charging-tracker" target="_blank" rel="noopener noreferrer">EV Charge Tracker (iOS)</a></li>
+            <li><a href="https://mgorbatyuk.dev/journey-wallet" target="_blank" rel="noopener noreferrer">Journey Wallet (iOS)</a></li>
           </ul>
         </div>
 
@@ -428,12 +429,13 @@
 
       <div class="footer-bottom">
         <p>Made with <span class="heart">♥</span> and plenty of coffee breaks by <a class="footer-author-link"
-            href="https://mgorbatyuk.dev" target="_blank" rel="noopener">Maxim
+            href="https://mgorbatyuk.dev" target="_blank" rel="noopener noreferrer">Maxim
             Gorbatyuk</a></p>
         <p class="footer-license">MIT License</p>
       </div>
     </div>
   </footer>
+  </main>
 
   <!-- Image Lightbox -->
   <div class="lightbox" id="lightbox">

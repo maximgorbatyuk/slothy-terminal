@@ -7,12 +7,23 @@ struct TerminalContainerView: View {
   @Environment(AppState.self) private var appState
 
   var body: some View {
-    if appState.visibleTabs.isEmpty {
-      EmptyTerminalView()
-    } else if let split = appState.activeSplitState {
-      splitLayout(split)
-    } else {
-      singleLayout
+    let isEmpty = appState.visibleTabs.isEmpty
+
+    ZStack {
+      // Always keep all tab surfaces alive to preserve PTY sessions
+      // across workspace switches. The active layout (single or split)
+      // controls visibility; tabs from inactive workspaces stay hidden.
+      // When empty, force single layout to avoid rendering a stale split.
+      if !isEmpty, let split = appState.activeSplitState {
+        splitLayout(split)
+      } else {
+        singleLayout
+      }
+
+      if isEmpty {
+        EmptyTerminalView()
+          .allowsHitTesting(true)
+      }
     }
   }
 

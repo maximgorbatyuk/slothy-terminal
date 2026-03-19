@@ -2,6 +2,14 @@
 
 All notable changes to SlothyTerminal will be documented in this file.
 
+## [2026.2.13] - 2026-03-18
+
+_Analysis range: `e98cac7..70f6895` (1 commit, 1 source file changed, 17 insertions, 6 deletions)._
+
+### Fixed
+- **Workspace switch destroys other workspaces' terminal sessions** — closing a workspace (or emptying its tabs) caused all PTY sessions across every workspace to be killed. `TerminalContainerView` used an `if/else` branch on `visibleTabs.isEmpty` that replaced the entire tab ZStack with `EmptyTerminalView`, removing all `GhosttySurfaceView` instances from the view tree and triggering `destroySurface()`. The tab ZStack is now always rendered, with the empty state overlaid on top when the active workspace has no visible tabs.
+- **Stale split layout on empty workspace** — when the active workspace had no tabs, a lingering `activeSplitState` could still activate the split layout path. The split branch is now guarded by `!isEmpty` to force single layout when there are no visible tabs.
+
 ## [2026.2.12] - 2026-03-17
 
 _Analysis range: `dc5de5c..82068d2` (1 commit, 8 source files changed, 367 insertions, 35 deletions)._
