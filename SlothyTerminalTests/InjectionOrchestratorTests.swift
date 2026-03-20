@@ -276,7 +276,7 @@ final class InjectionOrchestratorTests: XCTestCase {
     registry.register(tabId: terminalTab, surface: surface1)
     registry.register(tabId: chatTab, surface: surface2)
     tabProvider.tabIds = [terminalTab, chatTab]
-    tabProvider.tabModes = [terminalTab: .terminal, chatTab: .chat]
+    tabProvider.tabModes = [terminalTab: .terminal, chatTab: .git]
 
     let request = InjectionRequest(
       payload: .text("terminal only"),

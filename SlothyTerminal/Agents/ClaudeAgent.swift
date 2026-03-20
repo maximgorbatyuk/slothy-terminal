@@ -7,8 +7,6 @@ struct ClaudeAgent: AIAgent {
   let accentColor = Color(red: 0.85, green: 0.47, blue: 0.34)
   let iconName = "brain.head.profile"
   let displayName = "Claude"
-  let contextWindowLimit = 200_000
-
   /// Resolves the Claude CLI executable path, preferring native Mach-O
   /// binaries over Node.js script wrappers.
   var command: String {
@@ -40,11 +38,6 @@ struct ClaudeAgent: AIAgent {
     env["COLORTERM"] = "truecolor"
 
     return env
-  }
-
-  func parseStats(from output: String) -> UsageUpdate? {
-    let parser = StatsParser.shared
-    return parser.parseClaudeOutput(output)
   }
 
   func isAvailable() -> Bool {

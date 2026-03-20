@@ -166,24 +166,6 @@ struct AppStateWorkspaceTests {
     #expect(newTab.workspaceID == workspaceB.id)
   }
 
-  @Test("Creating a chat tab retargets an empty active workspace")
-  @MainActor
-  func creatingChatTabRetargetsEmptyActiveWorkspace() throws {
-    let appState = AppState()
-
-    appState.createTab(agent: .terminal, directory: dirA)
-    let workspaceID = try #require(appState.activeWorkspaceID)
-    let tabID = try #require(appState.activeTabID)
-
-    appState.closeTab(id: tabID)
-    appState.createChatTab(agent: .claude, directory: dirB)
-
-    #expect(appState.workspaces.count == 1)
-    #expect(appState.activeWorkspaceID == workspaceID)
-    #expect(appState.activeWorkspace?.rootDirectory == dirB)
-    #expect(appState.activeTab?.workingDirectory == dirB)
-  }
-
   @Test("Creating a Git tab retargets an empty active workspace")
   @MainActor
   func creatingGitTabRetargetsEmptyActiveWorkspace() throws {
@@ -363,9 +345,9 @@ struct AppStateWorkspaceTests {
     #expect(appState.currentContextDirectory == dirB)
   }
 
-  @Test("Git branch refresh context changes when active terminal tab completes work")
+  @Test("Git branch refresh context is stable across terminal busy-idle transitions")
   @MainActor
-  func gitBranchRefreshContextChangesAfterTerminalCommand() throws {
+  func gitBranchRefreshContextStableAcrossBusyIdle() throws {
     let appState = AppState()
 
     appState.createTab(agent: .terminal, directory: dirA)
@@ -375,12 +357,12 @@ struct AppStateWorkspaceTests {
     tab.markTerminalBusy()
     let busyContext = try #require(appState.gitBranchRefreshContext)
 
-    #expect(busyContext != idleContext)
+    /// Context must not change on busy/idle — only on tab or directory changes.
+    #expect(busyContext == idleContext)
 
     tab.markTerminalIdle()
     let settledContext = try #require(appState.gitBranchRefreshContext)
 
-    #expect(settledContext != busyContext)
     #expect(settledContext == idleContext)
   }
 

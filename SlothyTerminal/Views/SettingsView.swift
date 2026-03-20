@@ -19,14 +19,8 @@ struct SettingsView: View {
         case .general:
           GeneralSettingsTab()
 
-        case .chat:
-          ChatSettingsTab()
-
         case .agents:
           AgentsSettingsTab()
-
-        case .telegram:
-          TelegramSettingsTab()
 
         case .appearance:
           AppearanceSettingsTab()
@@ -63,13 +57,6 @@ struct GeneralSettingsTab: View {
   var body: some View {
     Form {
       Section("Startup") {
-        Picker("Default tab mode", selection: Bindable(configManager).config.defaultTabMode) {
-          ForEach(TabMode.defaultOptions, id: \.self) { mode in
-            Text(mode.displayName).tag(mode)
-          }
-        }
-        .pickerStyle(.segmented)
-
         Picker("Default agent (TUI)", selection: Bindable(configManager).config.defaultAgent) {
           ForEach(AgentType.allCases) { agent in
             Text(agent.rawValue).tag(agent)
@@ -232,73 +219,6 @@ struct GeneralSettingsTab: View {
       return "~" + path.dropFirst(homeDir.count)
     }
     return path
-  }
-}
-
-// MARK: - Chat Settings Tab
-
-struct ChatSettingsTab: View {
-  private var configManager = ConfigManager.shared
-
-  var body: some View {
-    Form {
-      Section("Input") {
-        Picker("Send message with", selection: Bindable(configManager).config.chatSendKey) {
-          ForEach(ChatSendKey.allCases, id: \.self) { key in
-            Text(key.displayName).tag(key)
-          }
-        }
-        .pickerStyle(.segmented)
-
-        Text(configManager.config.chatSendKey.newlineHint)
-          .font(.caption)
-          .foregroundColor(.secondary)
-      }
-
-      Section("Display") {
-        Picker("Render mode", selection: Bindable(configManager).config.chatRenderMode) {
-          ForEach(ChatRenderMode.allCases, id: \.self) { mode in
-            Text(mode.displayName).tag(mode)
-          }
-        }
-        .pickerStyle(.segmented)
-
-        Text("Controls how assistant messages are displayed by default.")
-          .font(.caption)
-          .foregroundColor(.secondary)
-      }
-
-      Section("Text Size") {
-        Picker("Message text size", selection: Bindable(configManager).config.chatMessageTextSize) {
-          ForEach(ChatMessageTextSize.allCases, id: \.self) { size in
-            Text(size.displayName).tag(size)
-          }
-        }
-        .pickerStyle(.segmented)
-
-        /// Preview text at the selected size.
-        Text("The quick brown fox jumps over the lazy dog.")
-          .font(.system(size: configManager.config.chatMessageTextSize.bodyFontSize))
-          .foregroundColor(.secondary)
-          .padding(.vertical, 4)
-      }
-
-      Section("Metadata") {
-        Toggle(
-          "Show message timestamps",
-          isOn: Bindable(configManager).config.chatShowTimestamps
-        )
-
-        Toggle(
-          "Show token counts",
-          isOn: Bindable(configManager).config.chatShowTokenMetadata
-        )
-      }
-    }
-    .formStyle(.grouped)
-    .scrollContentBackground(.hidden)
-    .padding()
-    .background(appBackgroundColor)
   }
 }
 

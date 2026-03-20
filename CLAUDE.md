@@ -104,6 +104,7 @@ User Action → AppState.createGitTab() → Tab(mode: .git)
 - **GitStatsService** (`Services/GitStatsService.swift`) - Repository statistics: author stats, daily activity, commit graph, repo summary
 - **GraphLaneCalculator** (`Services/GraphLaneCalculator.swift`) - Pure-logic lane assignment for revision graph rendering (no I/O, synchronous)
 - **OpenCodeCLIService** (`Services/OpenCodeCLIService.swift`) - OpenCode CLI wrapper for model catalog and session export
+- **ANSIStripper** (`Services/ANSIStripper.swift`) - Utility for stripping ANSI escape sequences from terminal output
 - **UpdateManager** (`Services/UpdateManager.swift`) - Sparkle-based auto-update coordinator (UI-only, excluded from SPM)
 
 ### Source Directory Structure
@@ -122,13 +123,11 @@ SlothyTerminal/
 │   ├── Transport/   # ChatTransport protocol + ClaudeCLITransport
 │   └── Views/       # Chat UI (messages, markdown, tools, composer)
 ├── Injection/       # Terminal input injection (models, orchestrator, registry)
-├── Models/          # Tab, Workspace, AppConfig, AgentType, UsageStats, GitStats, GitTab, TerminalCommandCaptureBuffer
+├── Models/          # Tab, Workspace, AppConfig, AgentType, UsageStats, GitStats, GitTab, GitDiffModels, GitWorkingTreeModels, MakeCommitComposerState, SavedPrompt, LaunchType, WorkspaceSplitState
 ├── Services/        # ConfigManager, GitService, GitStatsService, GraphLaneCalculator, StatsParser, etc.
-├── Telegram/        # Telegram bot (API, relay, runtime, models)
 ├── Terminal/        # GhosttyApp singleton + GhosttySurfaceView
 └── Views/           # SwiftUI views (main, sidebar, tab bar, git client)
-    ├── Settings/    # Settings tabs (general, telegram, etc.)
-    └── Telegram/    # Telegram sidebar views
+    └── Settings/    # Settings tabs (general, appearance, etc.)
 ```
 
 ### Adding a New Agent (Terminal/CLI Tabs)
@@ -144,7 +143,7 @@ SlothyTerminal/
 Workspaces are first-class tab containers. Each workspace maps to a project directory and owns a set of tabs.
 
 - `AppState.visibleTabs` — computed property returning only tabs from the active workspace. **All UI code must use `visibleTabs`** (tab bar, terminal container, keyboard shortcuts), not `tabs` directly.
-- `AppState.tabs` — global flat list of all tabs across all workspaces. Use only for global operations (terminate all, injection, Telegram).
+- `AppState.tabs` — global flat list of all tabs across all workspaces. Use only for global operations (terminate all, injection).
 - `AppState.createWorkspace(from:)` creates an empty workspace (no tab). Creating a workspace calls `switchWorkspace(id:)` to deactivate any current tab.
 - `AppState.closeTab(id:)` selects the next tab from the **same workspace**, not globally.
 - `AppState.switchWorkspace(id:)` aligns the active tab to the target workspace (first tab, or nil if empty).
@@ -256,6 +255,9 @@ Built-in Git repository browser (`.git` tab mode). No agent or PTY — pure Swif
 
 Key models in `Models/GitStats.swift`: `GraphCommit`, `LaneAssignment`, `LaneState`, `AuthorStats`, `DailyActivity`, `RepositorySummary`.
 
+- **MakeCommitView** (`Views/MakeCommitView.swift`) — Commit composer UI with sidebar file picker, diff viewer, and commit message editor. Related views: `MakeCommitComposerView`, `MakeCommitDiffContentView`, `MakeCommitSidebarView`.
+- **GitChangesView** (`Views/GitChangesView.swift`) — Working tree changes display.
+
 ### Adding a Git Sub-Tab
 
 1. Add case to `GitTab` enum in `Models/GitTab.swift`
@@ -263,19 +265,6 @@ Key models in `Models/GitStats.swift`: `GraphCommit`, `LaneAssignment`, `LaneSta
 3. Create the view (Xcode-only, not in `Package.swift`)
 4. Wire in `GitClientView.repoContent` switch statement
 5. Add any new service/model files to `Package.swift` sources list
-
-## Telegram Bot Subsystem
-
-Sidebar panel (`.telegram` in `SidebarTab`). Runtime owned by `AppState.telegramRuntime`, decoupled via `TelegramBotDelegate` protocol. Code in `Telegram/` (API client, runtime, relay, models). Settings in `Views/Settings/TelegramSettingsTab.swift`, sidebar in `Views/Telegram/TelegramSidebarView.swift`.
-
-### Telegram Plain Text Routing
-
-When the bot receives plain text (non-slash-command):
-1. **Active AI tab** — inject into the active terminal tab if it runs Claude/OpenCode and has a registered surface
-2. **Relay fallback** — inject into the active relay session tab (if started via `/relay_start`)
-3. **Error reply** — no eligible target; no headless execution for plain text
-
-Slash commands are handled by `TelegramCommandHandler`.
 
 ## Testing
 

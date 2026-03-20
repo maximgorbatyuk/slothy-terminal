@@ -30,11 +30,6 @@ struct AppConfigTests {
         "chatShowTokenMetadata": false,
         "lastUsedOpenCodeAskModeEnabled": true,
         "shortcuts": {},
-        "telegramExecutionAgent": "Claude",
-        "telegramAutoStartOnOpen": false,
-        "telegramDefaultListenMode": "execute",
-        "telegramOpenDirectoryTabMode": "chat",
-        "telegramOpenDirectoryAgent": "Claude",
         "sidebarTab": "explorer"
       }
       """
@@ -45,7 +40,6 @@ struct AppConfigTests {
     #expect(config.sidebarWidth == 300)
     #expect(config.showSidebarByDefault == false)
     #expect(config.colorScheme == .dark)
-    #expect(config.chatSendKey == .shiftEnter)
     #expect(config.terminalFontName == "Menlo")
   }
 
@@ -58,7 +52,6 @@ struct AppConfigTests {
     #expect(config.sidebarWidth == defaults.sidebarWidth)
     #expect(config.showSidebarByDefault == defaults.showSidebarByDefault)
     #expect(config.defaultTabMode == defaults.defaultTabMode)
-    #expect(config.chatSendKey == defaults.chatSendKey)
     #expect(config.terminalFontName == defaults.terminalFontName)
     #expect(config.terminalFontSize == defaults.terminalFontSize)
     #expect(config.sidebarTab == .explorer)
@@ -85,7 +78,6 @@ struct AppConfigTests {
 
     /// Provided values are used.
     #expect(config.sidebarWidth == 400)
-    #expect(config.chatSendKey == .shiftEnter)
 
     /// Missing values fall back to defaults.
     #expect(config.terminalFontName == defaults.terminalFontName)
@@ -149,7 +141,6 @@ struct AppConfigTests {
   func roundTrip() throws {
     var original = AppConfig()
     original.sidebarWidth = 350
-    original.chatSendKey = .shiftEnter
     original.terminalFontName = "Monaco"
 
     let encoder = JSONEncoder()
@@ -157,5 +148,26 @@ struct AppConfigTests {
     let decoded = try JSONDecoder().decode(AppConfig.self, from: data)
 
     #expect(decoded == original)
+  }
+
+  @Test("WindowState round-trips through AppConfig serialization")
+  func windowStateRoundTrip() throws {
+    var original = AppConfig()
+    original.windowState = WindowState(x: 100, y: 200, width: 800, height: 600)
+
+    let data = try JSONEncoder().encode(original)
+    let decoded = try JSONDecoder().decode(AppConfig.self, from: data)
+
+    #expect(decoded.windowState == original.windowState)
+    #expect(decoded.windowState?.frame.origin.x == 100)
+    #expect(decoded.windowState?.frame.size.width == 800)
+  }
+
+  @Test("WindowState is nil by default and absent keys decode gracefully")
+  func windowStateDefaultNil() throws {
+    let data = Data("{}".utf8)
+    let config = try JSONDecoder().decode(AppConfig.self, from: data)
+
+    #expect(config.windowState == nil)
   }
 }

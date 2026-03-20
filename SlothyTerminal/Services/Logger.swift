@@ -26,9 +26,6 @@ extension Logger {
   /// Logger for general app operations.
   static let app = Logger(subsystem: subsystem, category: "App")
 
-  /// Logger for Telegram bot operations.
-  static let telegram = Logger(subsystem: subsystem, category: "Telegram")
-
   /// Logger for terminal injection operations.
   static let injection = Logger(subsystem: subsystem, category: "Injection")
 }

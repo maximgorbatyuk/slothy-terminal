@@ -31,12 +31,17 @@ struct TerminalContainerView: View {
 
   /// Renders all tabs in a ZStack; only the active tab is visible.
   /// Tabs are never destroyed when switching — their PTY sessions stay alive.
+  /// Hidden tabs get a zero frame so they don't participate in layout.
   private var singleLayout: some View {
     ZStack {
       ForEach(appState.tabs) { tab in
         let isVisible = tab.id == appState.activeTabID
 
         ActiveTerminalView(tab: tab, isActive: isVisible)
+          .frame(
+            maxWidth: isVisible ? .infinity : 0,
+            maxHeight: isVisible ? .infinity : 0
+          )
           .opacity(isVisible ? 1 : 0)
           .allowsHitTesting(isVisible)
       }
@@ -55,6 +60,7 @@ struct TerminalContainerView: View {
 
       ZStack(alignment: .topLeading) {
         // All tabs rendered — only split members visible.
+        // Hidden tabs get zero frame to avoid layout participation.
         ForEach(appState.tabs) { tab in
           let isLeftPane = tab.id == split.leftTabID
           let isRightPane = tab.id == split.rightTabID
@@ -70,7 +76,10 @@ struct TerminalContainerView: View {
               }
             } : nil
           )
-          .frame(width: isVisibleInSplit ? paneWidth : 0, height: paneHeight)
+          .frame(
+            width: isVisibleInSplit ? paneWidth : 0,
+            height: isVisibleInSplit ? paneHeight : 0
+          )
           .offset(x: isRightPane ? paneWidth + 1 : 0)
           .opacity(isVisibleInSplit ? 1 : 0)
           .allowsHitTesting(isVisibleInSplit)
@@ -117,10 +126,6 @@ struct ActiveTerminalView: View {
         GitClientView(workingDirectory: tab.workingDirectory)
           .contentShape(Rectangle())
           .onTapGesture { onPaneFocused?() }
-      } else if tab.mode == .chat, let chatState = tab.chatState {
-        ChatView(chatState: chatState)
-          .contentShape(Rectangle())
-          .onTapGesture { onPaneFocused?() }
       } else if let error = agentUnavailableError {
         AgentUnavailableView(agentName: tab.agent?.displayName ?? "Unknown", error: error)
           .environment(\.colorScheme, .dark)
@@ -131,7 +136,7 @@ struct ActiveTerminalView: View {
           arguments: tab.arguments,
           environment: tab.environment,
           tabId: tab.id,
-          shouldAutoRunCommand: tab.agentType?.showsUsageStats ?? false,
+          shouldAutoRunCommand: tab.agentType?.supportsInitialPrompt ?? false,
           isActive: isActive,
           onDirectoryChanged: { newDirectory in
             tab.workingDirectory = newDirectory
@@ -170,12 +175,6 @@ struct ActiveTerminalView: View {
         return
       }
 
-      // Chat mode doesn't need PTY availability checks.
-      if tab.mode == .chat {
-        tab.usageStats.startSession()
-        return
-      }
-
       // Check if agent is available.
       if !tab.isAgentAvailable {
         agentUnavailableError = "The \(tab.agent?.displayName ?? "Agent") CLI was not found at: \(tab.command)"
@@ -184,10 +183,7 @@ struct ActiveTerminalView: View {
 
       // Mark as ready to show terminal.
       isReady = true
-      tab.handleTerminalLaunch(shouldAutoRunCommand: tab.agentType?.showsUsageStats ?? false)
-
-      // Start the session timer.
-      tab.usageStats.startSession()
+      tab.handleTerminalLaunch(shouldAutoRunCommand: tab.agentType?.supportsInitialPrompt ?? false)
     }
   }
 }

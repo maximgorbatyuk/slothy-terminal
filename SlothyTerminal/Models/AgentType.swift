@@ -32,16 +32,6 @@ enum AgentType: String, CaseIterable, Identifiable, Codable {
     }
   }
 
-  /// Whether this tab type shows usage stats in the sidebar.
-  var showsUsageStats: Bool {
-    switch self {
-    case .terminal:
-      return false
-    case .claude, .opencode:
-      return true
-    }
-  }
-
   /// Whether this agent type supports receiving an initial prompt.
   var supportsInitialPrompt: Bool {
     switch self {
@@ -49,17 +39,6 @@ enum AgentType: String, CaseIterable, Identifiable, Codable {
       return false
     case .claude, .opencode:
       return true
-    }
-  }
-
-  /// Whether this agent type supports the chat UI mode.
-  var supportsChatMode: Bool {
-    switch self {
-    case .claude, .opencode:
-      return true
-
-    case .terminal:
-      return false
     }
   }
 

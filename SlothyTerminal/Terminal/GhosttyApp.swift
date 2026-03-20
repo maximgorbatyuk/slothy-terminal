@@ -17,6 +17,8 @@ class GhosttyApp {
 
   private(set) var app: ghostty_app_t?
   fileprivate let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "SlothyTerminal", category: "GhosttyApp")
+  private var tickRequestPending = false
+  private var tickNeedsAnotherPass = false
 
   private init() {
     initializeGhostty()
@@ -105,6 +107,43 @@ class GhosttyApp {
     ghostty_app_tick(app)
   }
 
+  func requestTick(runImmediatelyIfPossible: Bool = false) {
+    if runImmediatelyIfPossible {
+      if tickRequestPending {
+        tickNeedsAnotherPass = true
+        return
+      }
+
+      tickRequestPending = true
+      drainTicks()
+      return
+    }
+
+    if tickRequestPending {
+      tickNeedsAnotherPass = true
+      return
+    }
+
+    tickRequestPending = true
+
+    DispatchQueue.main.async { [weak self] in
+      guard let self else {
+        return
+      }
+
+      self.drainTicks()
+    }
+  }
+
+  private func drainTicks() {
+    repeat {
+      tickNeedsAnotherPass = false
+      tick()
+    } while tickNeedsAnotherPass
+
+    tickRequestPending = false
+  }
+
   func updateColorScheme() {
     guard let app else {
       return
@@ -154,6 +193,14 @@ class GhosttyApp {
 
 // MARK: - C Callback Trampolines
 
+private func ghosttyDispatchOnMain(_ work: @escaping () -> Void) {
+  if Thread.isMainThread {
+    work()
+  } else {
+    DispatchQueue.main.async(execute: work)
+  }
+}
+
 /// These are free functions (not closures that capture `self`) so they can be
 /// passed as C function pointers in `ghostty_runtime_config_s`.
 
@@ -162,9 +209,16 @@ private func ghosttyWakeup(_ userdata: UnsafeMutableRawPointer?) {
     return
   }
 
-  DispatchQueue.main.async {
-    let app = Unmanaged<GhosttyApp>.fromOpaque(userdata).takeUnretainedValue()
-    app.tick()
+  let app = Unmanaged<GhosttyApp>.fromOpaque(userdata).takeUnretainedValue()
+
+  if Thread.isMainThread {
+    MainActor.assumeIsolated {
+      app.requestTick(runImmediatelyIfPossible: true)
+    }
+  } else {
+    Task { @MainActor in
+      app.requestTick()
+    }
   }
 }
 
@@ -186,32 +240,34 @@ private func ghosttyAction(
   switch action.tag {
   case GHOSTTY_ACTION_SET_TITLE:
     guard let surface,
-          let cTitle = action.action.set_title.title
+          let cTitle = action.action.set_title.title,
+          let surfaceView = GhosttyApp.surfaceView(from: surface)
     else {
       return false
     }
 
     let title = String(cString: cTitle)
-    DispatchQueue.main.async {
-      guard let view = GhosttyApp.surfaceView(from: surface) else {
+    ghosttyDispatchOnMain { [weak surfaceView] in
+      guard let surfaceView else {
         return
       }
 
-      view.onTitleChanged?(title)
+      surfaceView.onTitleChanged?(title)
     }
 
     return true
 
   case GHOSTTY_ACTION_PWD:
     guard let surface,
-          let cPwd = action.action.pwd.pwd
+          let cPwd = action.action.pwd.pwd,
+          let surfaceView = GhosttyApp.surfaceView(from: surface)
     else {
       return false
     }
 
     let pwd = String(cString: cPwd)
-    DispatchQueue.main.async {
-      guard let view = GhosttyApp.surfaceView(from: surface) else {
+    ghosttyDispatchOnMain { [weak surfaceView] in
+      guard let surfaceView else {
         return
       }
 
@@ -223,13 +279,13 @@ private func ghosttyAction(
         url = URL(fileURLWithPath: pwd)
       }
 
-      view.onDirectoryChanged?(url)
+      surfaceView.onDirectoryChanged?(url)
     }
 
     return true
 
   case GHOSTTY_ACTION_RING_BELL:
-    DispatchQueue.main.async {
+    ghosttyDispatchOnMain {
       NSSound.beep()
     }
 
@@ -240,19 +296,23 @@ private func ghosttyAction(
       return false
     }
 
+    guard let surfaceView = GhosttyApp.surfaceView(from: surface) else {
+      return false
+    }
+
     let shape = action.action.mouse_shape
-    DispatchQueue.main.async {
-      guard let view = GhosttyApp.surfaceView(from: surface) else {
+    ghosttyDispatchOnMain { [weak surfaceView] in
+      guard let surfaceView else {
         return
       }
 
-      view.updateMouseCursor(shape)
+      surfaceView.updateMouseCursor(shape)
     }
     return true
 
   case GHOSTTY_ACTION_MOUSE_VISIBILITY:
     let visible = action.action.mouse_visibility == GHOSTTY_MOUSE_VISIBLE
-    DispatchQueue.main.async {
+    ghosttyDispatchOnMain {
       if visible {
         NSCursor.unhide()
       } else {
@@ -262,7 +322,7 @@ private func ghosttyAction(
     return true
 
   case GHOSTTY_ACTION_QUIT:
-    DispatchQueue.main.async {
+    ghosttyDispatchOnMain {
       NSApp.terminate(nil)
     }
     return true
@@ -291,13 +351,11 @@ private func ghosttyAction(
     let finished = action.action.command_finished
     ghosttyCallbackLogger.info("Ghostty command finished: exit=\(finished.exit_code), durationNs=\(finished.duration)")
 
-    if let surface {
-      DispatchQueue.main.async {
-        guard let view = GhosttyApp.surfaceView(from: surface) else {
-          return
-        }
-
-        view.onCommandFinished?()
+    if let surface,
+       let surfaceView = GhosttyApp.surfaceView(from: surface)
+    {
+      ghosttyDispatchOnMain { [weak surfaceView] in
+        surfaceView?.onCommandFinished?()
       }
     }
 
@@ -309,7 +367,7 @@ private func ghosttyAction(
     return true
 
   case GHOSTTY_ACTION_OPEN_CONFIG:
-    DispatchQueue.main.async {
+    ghosttyDispatchOnMain {
       let configPath = ghostty_config_open_path()
       defer { ghostty_string_free(configPath) }
 
@@ -325,18 +383,24 @@ private func ghosttyAction(
       return false
     }
 
+    guard let surfaceView = GhosttyApp.surfaceView(from: surface) else {
+      return false
+    }
+
     /// Embedded runtime requests a draw on the app thread.
     if Thread.isMainThread {
       ghostty_surface_draw(surface)
-      if let view = GhosttyApp.surfaceView(from: surface) {
-        view.markRenderDirty()
-      }
+      surfaceView.markRenderDirty()
     } else {
-      DispatchQueue.main.async {
-        ghostty_surface_draw(surface)
-        if let view = GhosttyApp.surfaceView(from: surface) {
-          view.markRenderDirty()
+      ghosttyDispatchOnMain { [weak surfaceView] in
+        guard let surfaceView,
+              let liveSurface = surfaceView.surface
+        else {
+          return
         }
+
+        ghostty_surface_draw(liveSurface)
+        surfaceView.markRenderDirty()
       }
     }
 
@@ -344,13 +408,11 @@ private func ghosttyAction(
 
   case GHOSTTY_ACTION_CLOSE_WINDOW:
     /// In our app, closing the "window" for a surface means closing that surface's tab.
-    if let surface {
-      DispatchQueue.main.async {
-        guard let view = GhosttyApp.surfaceView(from: surface) else {
-          return
-        }
-
-        view.onClosed?()
+    if let surface,
+       let surfaceView = GhosttyApp.surfaceView(from: surface)
+    {
+      ghosttyDispatchOnMain { [weak surfaceView] in
+        surfaceView?.onClosed?()
       }
     }
 
@@ -371,16 +433,18 @@ private func ghosttyReadClipboard(
     return
   }
 
-  /// Read from the standard pasteboard.
-  let str = NSPasteboard.general.string(forType: .string) ?? ""
   let surfaceView = Unmanaged<GhosttySurfaceView>.fromOpaque(userdata).takeUnretainedValue()
 
-  guard let surface = surfaceView.surface else {
-    return
-  }
+  ghosttyDispatchOnMain {
+    let str = NSPasteboard.general.string(forType: .string) ?? ""
+    surfaceView.captureClipboardPasteIfNeeded(str)
+    guard let surface = surfaceView.surface else {
+      return
+    }
 
-  str.withCString { ptr in
-    ghostty_surface_complete_clipboard_request(surface, ptr, state, false)
+    str.withCString { ptr in
+      ghostty_surface_complete_clipboard_request(surface, ptr, state, false)
+    }
   }
 }
 
@@ -397,13 +461,18 @@ private func ghosttyConfirmReadClipboard(
   /// Auto-approve clipboard reads for simplicity.
   let surfaceView = Unmanaged<GhosttySurfaceView>.fromOpaque(userdata).takeUnretainedValue()
 
-  guard let surface = surfaceView.surface else {
-    return
-  }
+  let providedString = string.map { String(cString: $0) }
 
-  let str = NSPasteboard.general.string(forType: .string) ?? ""
-  str.withCString { ptr in
-    ghostty_surface_complete_clipboard_request(surface, ptr, state, true)
+  ghosttyDispatchOnMain {
+    let str = providedString ?? NSPasteboard.general.string(forType: .string) ?? ""
+    surfaceView.captureClipboardPasteIfNeeded(str)
+    guard let surface = surfaceView.surface else {
+      return
+    }
+
+    str.withCString { ptr in
+      ghostty_surface_complete_clipboard_request(surface, ptr, state, true)
+    }
   }
 }
 
@@ -448,7 +517,7 @@ private func ghosttyCloseSurface(_ userdata: UnsafeMutableRawPointer?, processAl
   let surfaceView = Unmanaged<GhosttySurfaceView>.fromOpaque(userdata).takeUnretainedValue()
   ghosttyCallbackLogger.info("Ghostty close surface requested (processAlive=\(processAlive))")
 
-  DispatchQueue.main.async {
+  ghosttyDispatchOnMain {
     surfaceView.onClosed?()
   }
 }

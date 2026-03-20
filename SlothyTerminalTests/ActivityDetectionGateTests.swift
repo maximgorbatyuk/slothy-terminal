@@ -4,36 +4,70 @@ import Testing
 
 @Suite("Activity Detection Gate")
 struct ActivityDetectionGateTests {
-  @Test("Repeated schedule attempts are ignored while a check is pending")
+  @Test("Latest scheduled render version wins while work is pending")
   @MainActor
-  func repeatedScheduleAttemptsWhilePending() {
+  func latestScheduledRenderVersionWins() {
     let gate = ActivityDetectionGate()
 
-    #expect(gate.beginSchedule())
-    #expect(gate.beginSchedule() == false)
+    #expect(gate.noteRender())
+    #expect(gate.noteRender() == false)
+    #expect(gate.beginScheduledCheck() == 2)
   }
 
-  @Test("Finishing a pending check allows the next schedule")
+  @Test("Render during in-flight work reschedules latest version")
   @MainActor
-  func finishingPendingCheckAllowsNextSchedule() {
+  func renderDuringInFlightWorkReschedulesLatestVersion() {
     let gate = ActivityDetectionGate()
 
-    #expect(gate.beginSchedule())
+    #expect(gate.noteRender())
+    let version = gate.beginScheduledCheck()
 
-    gate.finishSchedule()
-
-    #expect(gate.beginSchedule())
+    #expect(version == 1)
+    #expect(gate.noteRender() == false)
+    #expect(gate.completeScheduledCheck(for: 1))
+    #expect(gate.beginScheduledCheck() == 2)
   }
 
-  @Test("Cancelling a pending check allows the next schedule")
+  @Test("Cancel clears pending and in-flight state")
   @MainActor
-  func cancelingPendingCheckAllowsNextSchedule() {
+  func cancelClearsPendingAndInFlightState() {
     let gate = ActivityDetectionGate()
 
-    #expect(gate.beginSchedule())
+    #expect(gate.noteRender())
+    #expect(gate.beginScheduledCheck() == 1)
 
-    gate.cancelSchedule()
+    gate.cancelAll()
 
-    #expect(gate.beginSchedule())
+    #expect(gate.beginScheduledCheck() == nil)
+    #expect(gate.noteRender())
+    #expect(gate.beginScheduledCheck() == 2)
+  }
+
+  @Test("Cancelling invalidates the old in-flight result")
+  @MainActor
+  func cancelInvalidatesOldInFlightResult() {
+    let gate = ActivityDetectionGate()
+
+    #expect(gate.noteRender())
+    #expect(gate.beginScheduledCheck() == 1)
+    #expect(gate.shouldAcceptResult(for: 1))
+
+    gate.cancelAll()
+
+    #expect(gate.shouldAcceptResult(for: 1) == false)
+  }
+
+  @Test("Completing stale version does not reopen scheduling")
+  @MainActor
+  func completingStaleVersionDoesNotReopenScheduling() {
+    let gate = ActivityDetectionGate()
+
+    #expect(gate.noteRender())
+    #expect(gate.beginScheduledCheck() == 1)
+
+    gate.cancelAll()
+
+    #expect(gate.completeScheduledCheck(for: 1) == false)
+    #expect(gate.beginScheduledCheck() == nil)
   }
 }

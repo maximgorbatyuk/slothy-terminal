@@ -19,7 +19,7 @@ struct AppConfig: Codable, Equatable {
   // MARK: - Startup Settings
 
   /// The default tab mode when creating a new tab via Cmd+T.
-  var defaultTabMode: TabMode = .chat
+  var defaultTabMode: TabMode = .terminal
 
   /// The default agent to use when creating a new terminal-mode tab.
   var defaultAgent: AgentType = .claude
@@ -81,72 +81,19 @@ struct AppConfig: Codable, Equatable {
     }
   }
 
-  // MARK: - Chat Settings
-
-  /// Which key sends a chat message (the other key inserts a newline).
-  var chatSendKey: ChatSendKey = .enter
-
-  /// Default render mode for chat messages.
-  var chatRenderMode: ChatRenderMode = .markdown
-
-  /// Text size for chat messages.
-  var chatMessageTextSize: ChatMessageTextSize = .medium
-
-  /// Whether to show timestamps on completed assistant messages.
-  var chatShowTimestamps: Bool = true
-
-  /// Whether to show token counts on completed assistant messages.
-  var chatShowTokenMetadata: Bool = true
-
-  /// Last explicitly selected model for OpenCode chat.
-  /// Used to preselect model in new OpenCode chat tabs.
+  /// Last explicitly selected model for OpenCode terminal sessions.
   var lastUsedOpenCodeModel: ChatModelSelection?
 
-  /// Last explicitly selected mode for OpenCode chat.
-  /// Used to preselect Build/Plan in new OpenCode chat tabs.
+  /// Last explicitly selected mode for OpenCode terminal sessions.
   var lastUsedOpenCodeMode: ChatMode?
 
-  /// Whether OpenCode chat should prefer asking clarifying questions first.
-  /// Used to preselect Ask mode in new OpenCode chat tabs.
+  /// Whether OpenCode should prefer asking clarifying questions first.
   var lastUsedOpenCodeAskModeEnabled: Bool = false
 
   // MARK: - Keyboard Shortcuts
 
   /// Custom keyboard shortcuts.
   var shortcuts: [String: String] = [:]
-
-  // MARK: - Telegram Settings
-
-  /// Bot token for the Telegram Bot API.
-  var telegramBotToken: String?
-
-  /// User ID allowed to interact with the bot.
-  var telegramAllowedUserID: Int64?
-
-  /// Which agent to use for prompt execution.
-  var telegramExecutionAgent: AgentType = .claude
-
-  /// Whether the bot auto-starts when the Telegram sidebar is opened.
-  var telegramAutoStartOnOpen: Bool = false
-
-  /// Deprecated — bot always runs in execute mode now.
-  /// Kept for backward-compatible JSON decoding of existing configs.
-  var telegramDefaultListenMode: TelegramBotMode = .execute
-
-  /// Optional prefix prepended to bot replies.
-  var telegramReplyPrefix: String?
-
-  /// Root directory path for /open-directory command.
-  var telegramRootDirectoryPath: String?
-
-  /// Predefined subfolder appended to root directory for /open-directory.
-  var telegramPredefinedOpenSubpath: String?
-
-  /// Tab mode for tabs opened via /open-directory.
-  var telegramOpenDirectoryTabMode: TabMode = .chat
-
-  /// Agent type for tabs opened via /open-directory.
-  var telegramOpenDirectoryAgent: AgentType = .claude
 
   // MARK: - Window State
 
@@ -198,52 +145,17 @@ struct AppConfig: Codable, Equatable {
     savedPrompts = (try? c.decode([SavedPrompt].self, forKey: .savedPrompts)) ?? d.savedPrompts
     savedPromptTags = try? c.decode([PromptTag].self, forKey: .savedPromptTags)
 
-    chatSendKey = (try? c.decode(ChatSendKey.self, forKey: .chatSendKey)) ?? d.chatSendKey
-    chatRenderMode = (try? c.decode(ChatRenderMode.self, forKey: .chatRenderMode)) ?? d.chatRenderMode
-    chatMessageTextSize = (try? c.decode(ChatMessageTextSize.self, forKey: .chatMessageTextSize)) ?? d.chatMessageTextSize
-    chatShowTimestamps = (try? c.decode(Bool.self, forKey: .chatShowTimestamps)) ?? d.chatShowTimestamps
-    chatShowTokenMetadata = (try? c.decode(Bool.self, forKey: .chatShowTokenMetadata)) ?? d.chatShowTokenMetadata
     lastUsedOpenCodeModel = try? c.decode(ChatModelSelection.self, forKey: .lastUsedOpenCodeModel)
     lastUsedOpenCodeMode = try? c.decode(ChatMode.self, forKey: .lastUsedOpenCodeMode)
     lastUsedOpenCodeAskModeEnabled = (try? c.decode(Bool.self, forKey: .lastUsedOpenCodeAskModeEnabled)) ?? d.lastUsedOpenCodeAskModeEnabled
 
     shortcuts = (try? c.decode([String: String].self, forKey: .shortcuts)) ?? d.shortcuts
 
-    telegramBotToken = try? c.decode(String.self, forKey: .telegramBotToken)
-    telegramAllowedUserID = try? c.decode(Int64.self, forKey: .telegramAllowedUserID)
-    telegramExecutionAgent = (try? c.decode(AgentType.self, forKey: .telegramExecutionAgent)) ?? d.telegramExecutionAgent
-    telegramAutoStartOnOpen = (try? c.decode(Bool.self, forKey: .telegramAutoStartOnOpen)) ?? d.telegramAutoStartOnOpen
-    telegramDefaultListenMode = (try? c.decode(TelegramBotMode.self, forKey: .telegramDefaultListenMode)) ?? d.telegramDefaultListenMode
-    telegramReplyPrefix = try? c.decode(String.self, forKey: .telegramReplyPrefix)
-    telegramRootDirectoryPath = try? c.decode(String.self, forKey: .telegramRootDirectoryPath)
-    telegramPredefinedOpenSubpath = try? c.decode(String.self, forKey: .telegramPredefinedOpenSubpath)
-    telegramOpenDirectoryTabMode = (try? c.decode(TabMode.self, forKey: .telegramOpenDirectoryTabMode)) ?? d.telegramOpenDirectoryTabMode
-    telegramOpenDirectoryAgent = (try? c.decode(AgentType.self, forKey: .telegramOpenDirectoryAgent)) ?? d.telegramOpenDirectoryAgent
-
     windowState = try? c.decode(WindowState.self, forKey: .windowState)
   }
 }
 
 // MARK: - Supporting Types
-
-/// Which key sends a chat message.
-enum ChatSendKey: String, Codable, CaseIterable {
-  case enter = "Enter"
-  case shiftEnter = "Shift+Enter"
-
-  var displayName: String { rawValue }
-
-  /// The key combination that inserts a newline (the opposite of sendKey).
-  var newlineHint: String {
-    switch self {
-    case .enter:
-      return "Shift+Return for new line"
-
-    case .shiftEnter:
-      return "Return for new line"
-    }
-  }
-}
 
 /// Controls how mouse input is routed in terminal tabs.
 enum TerminalInteractionMode: String, Codable, CaseIterable {
@@ -283,70 +195,6 @@ enum TerminalInteractionMode: String, Codable, CaseIterable {
   }
 }
 
-/// Chat message render mode.
-enum ChatRenderMode: String, Codable, CaseIterable {
-  case markdown
-  case plainText
-
-  var displayName: String {
-    switch self {
-    case .markdown:
-      return "Markdown"
-
-    case .plainText:
-      return "Plain Text"
-    }
-  }
-}
-
-/// Chat message text size.
-enum ChatMessageTextSize: String, Codable, CaseIterable {
-  case small
-  case medium
-  case large
-
-  var displayName: String {
-    switch self {
-    case .small:
-      return "Small"
-
-    case .medium:
-      return "Medium"
-
-    case .large:
-      return "Large"
-    }
-  }
-
-  /// Font size in points for message body text.
-  var bodyFontSize: CGFloat {
-    switch self {
-    case .small:
-      return 12
-
-    case .medium:
-      return 13
-
-    case .large:
-      return 15
-    }
-  }
-
-  /// Font size in points for metadata and captions.
-  var metadataFontSize: CGFloat {
-    switch self {
-    case .small:
-      return 9
-
-    case .medium:
-      return 10
-
-    case .large:
-      return 11
-    }
-  }
-}
-
 /// Sidebar position options.
 enum SidebarPosition: String, Codable, CaseIterable {
   case left
@@ -369,7 +217,6 @@ enum SidebarTab: String, Codable, CaseIterable, Identifiable {
   case gitChanges
   case prompts
   case automation
-  case telegram
 
   var id: String { rawValue }
 
@@ -386,9 +233,6 @@ enum SidebarTab: String, Codable, CaseIterable, Identifiable {
 
     case .prompts:
       return "text.bubble"
-
-    case .telegram:
-      return "paperplane"
 
     case .automation:
       return "gearshape.2"
@@ -408,9 +252,6 @@ enum SidebarTab: String, Codable, CaseIterable, Identifiable {
 
     case .prompts:
       return "Prompts"
-
-    case .telegram:
-      return "Telegram Bot"
 
     case .automation:
       return "Automation"
@@ -497,7 +338,6 @@ struct CodableColor: Codable, Equatable {
 
 /// Actions that can have keyboard shortcuts assigned.
 enum ShortcutAction: String, Codable, CaseIterable {
-  case newChatTab
   case newTerminalTab
   case newClaudeTab
   case newOpencodeTab
@@ -510,8 +350,6 @@ enum ShortcutAction: String, Codable, CaseIterable {
 
   var displayName: String {
     switch self {
-    case .newChatTab:
-      return "New Chat Tab"
     case .newTerminalTab:
       return "New Terminal Tab"
     case .newClaudeTab:
@@ -535,10 +373,8 @@ enum ShortcutAction: String, Codable, CaseIterable {
 
   var defaultShortcut: String {
     switch self {
-    case .newChatTab:
-      return "⌘T"
     case .newTerminalTab:
-      return "⌘⇧⌥T"
+      return "⌘T"
     case .newClaudeTab:
       return "⌘⇧T"
     case .newOpencodeTab:
@@ -560,7 +396,7 @@ enum ShortcutAction: String, Codable, CaseIterable {
 
   var category: ShortcutCategory {
     switch self {
-    case .newChatTab, .newTerminalTab, .newClaudeTab, .newOpencodeTab, .closeTab, .nextTab, .previousTab:
+    case .newTerminalTab, .newClaudeTab, .newOpencodeTab, .closeTab, .nextTab, .previousTab:
       return .tabs
     case .toggleSidebar:
       return .view

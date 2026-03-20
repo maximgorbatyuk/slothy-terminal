@@ -3,21 +3,17 @@ import Foundation
 /// The mode a tab operates in.
 enum TabMode: String, Codable, CaseIterable {
   case terminal
-  case chat
   case git
 
   /// Modes available as a default startup option in settings.
   static var defaultOptions: [TabMode] {
-    [.terminal, .chat]
+    [.terminal]
   }
 
   var displayName: String {
     switch self {
     case .terminal:
       return "Terminal"
-
-    case .chat:
-      return "Chat"
 
     case .git:
       return "Git client"
@@ -38,7 +34,7 @@ class Tab: Identifiable {
   var lastSubmittedCommandLabel: String?
   var isActive: Bool = false
   var hasBackgroundActivity: Bool = false
-  var usageStats: UsageStats
+  let startTime: Date = Date()
   var isTerminalBusy: Bool = false
   private var terminalActivityResetTask: Task<Void, Never>?
   private let terminalActivityIdleDelayNanoseconds: UInt64 = 800_000_000
@@ -53,9 +49,6 @@ class Tab: Identifiable {
   /// The AI agent for this tab (nil for non-agent modes like `.git`).
   let agent: AIAgent?
 
-  /// The chat state for chat-mode tabs.
-  var chatState: ChatState?
-
   init(
     id: UUID = UUID(),
     workspaceID: UUID,
@@ -64,8 +57,7 @@ class Tab: Identifiable {
     title: String? = nil,
     initialPrompt: SavedPrompt? = nil,
     launchArgumentsOverride: [String]? = nil,
-    mode: TabMode = .terminal,
-    resumeSessionId: String? = nil
+    mode: TabMode = .terminal
   ) {
     assert(
       mode != .git || agentType == nil,
@@ -81,29 +73,11 @@ class Tab: Identifiable {
     self.lastSubmittedCommandLabel = nil
     self.initialPrompt = initialPrompt
     self.launchArgumentsOverride = launchArgumentsOverride
-    self.usageStats = UsageStats()
-
     if let agentType {
       let createdAgent = AgentFactory.createAgent(for: agentType)
       self.agent = createdAgent
-      self.usageStats.contextWindowLimit = createdAgent.contextWindowLimit
     } else {
       self.agent = nil
-    }
-
-    if mode == .chat, let agentType {
-      if let resumeSessionId {
-        self.chatState = ChatState(
-          workingDirectory: workingDirectory,
-          agentType: agentType,
-          resumeSessionId: resumeSessionId
-        )
-      } else {
-        self.chatState = ChatState(
-          workingDirectory: workingDirectory,
-          agentType: agentType
-        )
-      }
     }
   }
 
@@ -337,9 +311,6 @@ class Tab: Identifiable {
   /// Mode label used in tab/window titles.
   private var modeNameForTab: String {
     switch mode {
-    case .chat:
-      return "chat"
-
     case .terminal:
       return "cli"
 
@@ -384,9 +355,6 @@ class Tab: Identifiable {
   /// Whether this tab is actively executing work.
   var isExecuting: Bool {
     switch mode {
-    case .chat:
-      return chatState?.isLoading ?? false
-
     case .terminal:
       return isTerminalBusy
 
@@ -407,7 +375,6 @@ class Tab: Identifiable {
 
   /// Records that a terminal command has started running.
   func handleTerminalCommandEntered() {
-    usageStats.incrementCommandCount()
     recordTerminalActivity()
   }
 

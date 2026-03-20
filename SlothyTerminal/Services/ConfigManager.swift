@@ -29,6 +29,11 @@ class ConfigManager {
   private var saveTimer: Timer?
   private let saveDebounceInterval: TimeInterval = 0.5
 
+  /// Window state stored outside the observable `config` so that
+  /// window-move events do not invalidate unrelated SwiftUI views.
+  @ObservationIgnored private var _pendingWindowState: WindowState?
+  @ObservationIgnored private var windowStateSaveTimer: Timer?
+
   /// URL for the config file.
   private var configFileURL: URL {
     guard let appSupport = FileManager.default.urls(
@@ -80,23 +85,69 @@ class ConfigManager {
     }
   }
 
-  /// Saves configuration to disk.
+  /// Serial queue for background config writes.
+  private static let saveQueue = DispatchQueue(label: "com.slothyterminal.config-save")
+
+  /// Saves configuration to disk synchronously.
+  /// Drains any pending background writes first to avoid races.
+  /// Use only during app termination.
+  func saveImmediately() {
+    saveTimer?.invalidate()
+    saveTimer = nil
+    windowStateSaveTimer?.invalidate()
+    windowStateSaveTimer = nil
+
+    /// Drain any in-flight background save to avoid a race.
+    Self.saveQueue.sync {}
+
+    performSave()
+  }
+
+  /// Saves configuration to disk on a background queue.
   func save() {
     saveTimer?.invalidate()
     saveTimer = nil
+    windowStateSaveTimer?.invalidate()
+    windowStateSaveTimer = nil
 
+    let configCopy = configForSerialization()
+    let url = configFileURL
+
+    Self.saveQueue.async {
+      let fileManager = FileManager.default
+      let folder = url.deletingLastPathComponent()
+
+      do {
+        if !fileManager.fileExists(atPath: folder.path) {
+          try fileManager.createDirectory(at: folder, withIntermediateDirectories: true)
+        }
+
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        let data = try encoder.encode(configCopy)
+        try data.write(to: url, options: .atomic)
+      } catch {
+        print("Failed to save config: \(error)")
+      }
+    }
+
+    hasUnsavedChanges = false
+  }
+
+  /// Synchronous save for app termination paths.
+  private func performSave() {
     let fileManager = FileManager.default
     let folder = configFileURL.deletingLastPathComponent()
+    let configToSave = configForSerialization()
 
     do {
-      /// Create directory if needed.
       if !fileManager.fileExists(atPath: folder.path) {
         try fileManager.createDirectory(at: folder, withIntermediateDirectories: true)
       }
 
       let encoder = JSONEncoder()
       encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-      let data = try encoder.encode(config)
+      let data = try encoder.encode(configToSave)
       try data.write(to: configFileURL, options: .atomic)
       hasUnsavedChanges = false
     } catch {
@@ -111,6 +162,62 @@ class ConfigManager {
     saveTimer = Timer.scheduledTimer(withTimeInterval: saveDebounceInterval, repeats: false) { [weak self] _ in
       self?.save()
     }
+  }
+
+  // MARK: - Window State (non-invalidating)
+
+  /// Persists the window frame without mutating the observable `config` tree.
+  /// Avoids invalidating every view that reads config on each window move/resize.
+  /// Must be called on the main thread (uses Timer.scheduledTimer).
+  func saveWindowFrame(_ frame: CGRect) {
+    assert(Thread.isMainThread, "saveWindowFrame must be called on the main thread")
+    _pendingWindowState = WindowState(frame: frame)
+    windowStateSaveTimer?.invalidate()
+    windowStateSaveTimer = Timer.scheduledTimer(
+      withTimeInterval: saveDebounceInterval,
+      repeats: false
+    ) { [weak self] _ in
+      self?.flushWindowState()
+    }
+  }
+
+  /// Writes the pending window state to disk without touching the observable config.
+  private func flushWindowState() {
+    guard _pendingWindowState != nil else {
+      return
+    }
+
+    let configCopy = configForSerialization()
+    let url = configFileURL
+
+    Self.saveQueue.async {
+      let fileManager = FileManager.default
+      let folder = url.deletingLastPathComponent()
+
+      do {
+        if !fileManager.fileExists(atPath: folder.path) {
+          try fileManager.createDirectory(at: folder, withIntermediateDirectories: true)
+        }
+
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        let data = try encoder.encode(configCopy)
+        try data.write(to: url, options: .atomic)
+      } catch {
+        print("Failed to save window state: \(error)")
+      }
+    }
+  }
+
+  /// Returns a serialization-ready copy with the pending window state merged in.
+  private func configForSerialization() -> AppConfig {
+    var copy = config
+
+    if let pending = _pendingWindowState {
+      copy.windowState = pending
+    }
+
+    return copy
   }
 
   /// Resets configuration to defaults.

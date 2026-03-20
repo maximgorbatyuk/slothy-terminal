@@ -33,9 +33,6 @@ struct SidebarContainerView: View {
       case .prompts:
         PromptsSidebarView()
 
-      case .telegram:
-        TelegramSidebarView()
-
       case .automation:
         AutomationSidebarView()
       }

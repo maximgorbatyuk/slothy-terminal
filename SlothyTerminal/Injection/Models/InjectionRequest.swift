@@ -15,7 +15,6 @@ enum InjectionStatus: String, Codable, Equatable, Sendable {
 enum InjectionOrigin: String, Codable, Equatable, Sendable {
   case ui
   case automation
-  case telegram
   case externalAPI
 }
 

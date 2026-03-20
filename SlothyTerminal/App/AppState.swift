@@ -31,10 +31,10 @@ enum ModalType: Identifiable {
 }
 
 /// Input that determines when the status bar should re-fetch the git branch.
+/// Keyed only on tab identity and directory — not terminal busy state.
 struct GitBranchRefreshContext: Equatable {
   let tabID: UUID
   let workingDirectory: URL
-  let isTerminalBusy: Bool
 }
 
 enum TabDropIndicator: Equatable {
@@ -80,7 +80,6 @@ class AppState {
   }
   var activeModal: ModalType?
   private(set) var injectionOrchestrator: InjectionOrchestrator?
-  var telegramRuntime: TelegramBotRuntime?
 
   /// Section to navigate to when the native Settings window opens.
   var pendingSettingsSection: SettingsSection?
@@ -114,8 +113,7 @@ class AppState {
 
     return GitBranchRefreshContext(
       tabID: activeTab.id,
-      workingDirectory: activeTab.workingDirectory,
-      isTerminalBusy: activeTab.mode == .terminal ? activeTab.isTerminalBusy : false
+      workingDirectory: activeTab.workingDirectory
     )
   }
 
@@ -348,32 +346,6 @@ class AppState {
     switchToTab(id: tab.id)
   }
 
-  /// Creates a new chat tab with the specified working directory and agent.
-  func createChatTab(
-    agent: AgentType = .claude,
-    directory: URL,
-    initialPrompt: String? = nil,
-    resumeSessionId: String? = nil
-  ) {
-    let workspaceID = resolveWorkspaceID(for: directory)
-    let tab = Tab(
-      workspaceID: workspaceID,
-      agentType: agent,
-      workingDirectory: directory,
-      mode: .chat,
-      resumeSessionId: resumeSessionId
-    )
-    tabs.append(tab)
-    switchToTab(id: tab.id)
-
-    // Send initial prompt if provided.
-    if let prompt = initialPrompt,
-       !prompt.isEmpty
-    {
-      tab.chatState?.sendMessage(prompt)
-    }
-  }
-
   /// Creates a new Git client tab with the specified working directory.
   func createGitTab(directory: URL) {
     let workspaceID = resolveWorkspaceID(for: directory)
@@ -384,27 +356,6 @@ class AppState {
     )
     tabs.append(tab)
     switchToTab(id: tab.id)
-  }
-
-  /// Starts the Telegram bot as a sidebar service.
-  func startTelegramBot(directory: URL, startImmediately: Bool = false) {
-    guard telegramRuntime == nil else {
-      return
-    }
-
-    let runtime = TelegramBotRuntime(workingDirectory: directory)
-    runtime.delegate = self
-    telegramRuntime = runtime
-
-    if startImmediately || configManager.config.telegramAutoStartOnOpen {
-      runtime.start()
-    }
-  }
-
-  /// Stops and removes the Telegram bot runtime.
-  func stopTelegramBot() {
-    telegramRuntime?.stop()
-    telegramRuntime = nil
   }
 
   /// Closes the tab with the specified ID.
@@ -448,9 +399,6 @@ class AppState {
     }
 
     let closedTab = tabs[index]
-
-    // Terminate chat process if active.
-    closedTab.chatState?.terminateProcess()
 
     // Heal split if the closed tab was part of one.
     healSplitAfterRemoval(tabID: id, workspaceID: closedTab.workspaceID)
@@ -696,14 +644,9 @@ class AppState {
     isSidebarVisible.toggle()
   }
 
-  /// Terminates all active PTY sessions, chat responses, and bot runtimes.
+  /// Terminates all active PTY sessions.
   /// Called during app quit to ensure child processes are cleaned up.
   func terminateAllSessions() {
-    for tab in tabs {
-      // terminateProcess() calls store.saveImmediately() internally.
-      tab.chatState?.terminateProcess()
-    }
-    telegramRuntime?.stop()
   }
 }
 
@@ -772,33 +715,6 @@ extension AppState {
     insertTabAdjacentTo(focusedID, newTab: tab)
     wireSplit(focusedTabID: focusedID, newTabID: tab.id, workspaceID: workspaceID)
     switchToTab(id: tab.id)
-  }
-
-  /// Creates a new chat tab and places it into the split.
-  func createChatTabInSplit(
-    agent: AgentType = .claude,
-    directory: URL,
-    initialPrompt: String? = nil
-  ) {
-    guard let focusedID = activeTabID else {
-      createChatTab(agent: agent, directory: directory, initialPrompt: initialPrompt)
-      return
-    }
-
-    let workspaceID = resolveWorkspaceID(for: directory)
-    let tab = Tab(
-      workspaceID: workspaceID,
-      agentType: agent,
-      workingDirectory: directory,
-      mode: .chat
-    )
-    insertTabAdjacentTo(focusedID, newTab: tab)
-    wireSplit(focusedTabID: focusedID, newTabID: tab.id, workspaceID: workspaceID)
-    switchToTab(id: tab.id)
-
-    if let prompt = initialPrompt, !prompt.isEmpty {
-      tab.chatState?.sendMessage(prompt)
-    }
   }
 
   /// Creates a new git tab and places it into the split.
@@ -993,126 +909,3 @@ extension AppState: InjectionTabProvider {
   }
 }
 
-// MARK: - TelegramBotDelegate
-
-extension AppState: TelegramBotDelegate {
-  func telegramBotRequestReport() -> String {
-    if tabs.isEmpty {
-      return "No tabs open."
-    }
-
-    var lines = ["Open tabs (\(tabs.count)):"]
-    for (index, tab) in tabs.enumerated() {
-      let marker = tab.id == activeTabID ? " [active]" : ""
-      let status = tabStatusForTelegramReport(tab)
-      let directory = compactTelegramPath(tab.workingDirectory)
-      lines.append("\(index + 1)) \(tab.tabName) (\(status)) \(directory)\(marker)")
-    }
-
-    if let activeTab {
-      lines.append("Selected directory: \(compactTelegramPath(activeTab.workingDirectory))")
-    }
-
-    return lines.joined(separator: "\n")
-  }
-
-  func telegramBotOpenTab(mode: TabMode, agent: AgentType, directory: URL) {
-    switch mode {
-    case .chat:
-      createChatTab(agent: agent, directory: directory)
-
-    case .git:
-      createGitTab(directory: directory)
-
-    case .terminal:
-      createTab(agent: agent, directory: directory)
-    }
-  }
-
-  func telegramBotListRelayableTabs() -> [TelegramRelayTabInfo] {
-    let registeredIds = Set(TerminalSurfaceRegistry.shared.registeredTabIds())
-    return tabs
-      .filter { $0.mode == .terminal && $0.agentType != nil && registeredIds.contains($0.id) }
-      .compactMap { tab in
-        guard let agentType = tab.agentType else {
-          return nil
-        }
-
-        return TelegramRelayTabInfo(
-          id: tab.id,
-          name: tab.tabName,
-          agentType: agentType,
-          directory: tab.workingDirectory,
-          isActive: tab.id == activeTabID
-        )
-      }
-  }
-
-  func telegramBotActiveInjectableAITab() -> TelegramRelayTabInfo? {
-    guard let tab = activeTab,
-          tab.mode == .terminal,
-          let agentType = tab.agentType,
-          (agentType == .claude || agentType == .opencode)
-    else {
-      return nil
-    }
-
-    let registeredIds = Set(TerminalSurfaceRegistry.shared.registeredTabIds())
-
-    guard registeredIds.contains(tab.id) else {
-      return nil
-    }
-
-    return TelegramRelayTabInfo(
-      id: tab.id,
-      name: tab.tabName,
-      agentType: agentType,
-      directory: tab.workingDirectory,
-      isActive: true
-    )
-  }
-
-  func telegramBotInject(_ request: InjectionRequest) -> InjectionRequest? {
-    inject(request)
-  }
-
-  func telegramBotStartupStatement(workingDirectory: URL) async -> String {
-    let repoRoot = await GitService.shared.getRepositoryRoot(for: workingDirectory)
-
-    let openTabCount = tabs.count
-
-    return TelegramStartupStatement.compose(
-      repositoryPath: repoRoot?.path,
-      workingDirectoryPath: workingDirectory.path,
-      openTabCount: openTabCount
-    )
-  }
-
-  private func compactTelegramPath(_ directory: URL) -> String {
-    let fullPath = directory.path
-    let homeDirectory = FileManager.default.homeDirectoryForCurrentUser.path
-
-    if fullPath.hasPrefix(homeDirectory) {
-      return "~" + fullPath.dropFirst(homeDirectory.count)
-    }
-
-    return fullPath
-  }
-
-  private func tabStatusForTelegramReport(_ tab: Tab) -> String {
-    switch tab.mode {
-    case .chat:
-      if let chatState = tab.chatState {
-        return chatState.sessionState.isProcessingTurn ? "processing" : "idle"
-      }
-
-      return "idle"
-
-    case .terminal:
-      return "interactive"
-
-    case .git:
-      return "git"
-    }
-  }
-}

@@ -29,7 +29,7 @@ struct SlothyTerminalApp: App {
         }
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.willTerminateNotification)) { _ in
           appState.terminateAllSessions()
-          configManager.save()
+          configManager.saveImmediately()
         }
     }
     .windowStyle(.titleBar)
@@ -68,11 +68,6 @@ struct SlothyTerminalApp: App {
           appState.showFolderSelector(for: .terminal)
         }
         .keyboardShortcut("t", modifiers: [.command, .shift, .option])
-
-        Button("Show Telegram Bot") {
-          configManager.config.sidebarTab = .telegram
-          appState.isSidebarVisible = true
-        }
 
         Divider()
 

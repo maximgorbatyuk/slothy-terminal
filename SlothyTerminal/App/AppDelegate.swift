@@ -49,7 +49,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
       return
     }
 
-    configManager.config.windowState = WindowState(frame: window.frame)
+    configManager.saveWindowFrame(window.frame)
   }
 
   private func observeWindowChanges() {

@@ -10,20 +10,7 @@ struct SidebarView: View {
     VStack(alignment: .leading, spacing: 16) {
 
       if let tab = appState.activeTab {
-        if tab.mode == .chat, let chatState = tab.chatState {
-          ScrollView {
-            ChatSidebarView(tab: tab, chatState: chatState)
-          }
-        } else if tab.mode == .git {
-          // Git tabs show the directory sidebar (tree, open-in-app, docs).
-          TerminalSidebarView(tab: tab)
-        } else if tab.agentType?.showsUsageStats == true {
-          ScrollView {
-            AgentStatsView(tab: tab)
-          }
-        } else {
-          TerminalSidebarView(tab: tab)
-        }
+        TerminalSidebarView(tab: tab)
       } else {
         EmptySidebarView()
       }
@@ -60,10 +47,6 @@ struct EmptySidebarView: View {
 /// Sidebar view for plain terminal tabs.
 struct TerminalSidebarView: View {
   let tab: Tab
-  @State private var currentTime = Date()
-
-  /// Timer to update duration every second.
-  private let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
   var body: some View {
     VStack(spacing: 16) {
@@ -78,65 +61,6 @@ struct TerminalSidebarView: View {
 
       /// Project docs.
       ProjectDocsView(workingDirectory: tab.workingDirectory)
-    }
-    .onReceive(timer) { _ in
-      currentTime = Date()
-    }
-  }
-
-  /// Formatted duration that updates with the timer.
-  private var formattedDuration: String {
-    let totalSeconds = Int(currentTime.timeIntervalSince(tab.usageStats.startTime))
-    let hours = totalSeconds / 3600
-    let minutes = (totalSeconds % 3600) / 60
-    let seconds = totalSeconds % 60
-
-    if hours > 0 {
-      return String(format: "%dh %02dm %02ds", hours, minutes, seconds)
-    } else {
-      return String(format: "%dm %02ds", minutes, seconds)
-    }
-  }
-}
-
-/// Displays statistics for an agent session.
-struct AgentStatsView: View {
-  let tab: Tab
-  @State private var currentTime = Date()
-
-  /// Timer to update duration every second.
-  private let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
-
-  var body: some View {
-    VStack(alignment: .leading, spacing: 16) {
-      /// Working directory.
-      WorkingDirectoryCard(path: tab.workingDirectory)
-
-      /// Open in external app button.
-      OpenInAppButton(directory: tab.workingDirectory)
-
-      /// Directory tree.
-      DirectoryTreeView(rootDirectory: tab.workingDirectory)
-
-      /// Project docs.
-      ProjectDocsView(workingDirectory: tab.workingDirectory)
-    }
-    .onReceive(timer) { _ in
-      currentTime = Date()
-    }
-  }
-
-  /// Formatted duration that updates with the timer.
-  private var formattedDuration: String {
-    let totalSeconds = Int(currentTime.timeIntervalSince(tab.usageStats.startTime))
-    let hours = totalSeconds / 3600
-    let minutes = (totalSeconds % 3600) / 60
-    let seconds = totalSeconds % 60
-
-    if hours > 0 {
-      return String(format: "%dh %02dm %02ds", hours, minutes, seconds)
-    } else {
-      return String(format: "%dm %02ds", minutes, seconds)
     }
   }
 }
@@ -228,6 +152,13 @@ struct DirectoryTreeView: View {
   let rootDirectory: URL
   @State private var isExpanded: Bool = true
   @State private var items: [FileItem] = []
+  @State private var isLoading = false
+  @State private var lastLoadedRootDirectory: URL?
+  @State private var rootLoadGeneration = 0
+
+  private var loadKey: String {
+    "\(rootDirectory.path)|\(isExpanded)"
+  }
 
   var body: some View {
     VStack(alignment: .leading, spacing: 8) {
@@ -261,14 +192,24 @@ struct DirectoryTreeView: View {
         /// Tree content in a card.
         ScrollView {
           VStack(alignment: .leading, spacing: 0) {
-            if items.isEmpty {
+            if isLoading {
+              HStack(spacing: 8) {
+                ProgressView()
+                  .controlSize(.small)
+
+                Text("Loading files...")
+                  .font(.system(size: 11))
+                  .foregroundColor(.secondary)
+              }
+              .padding(.vertical, 8)
+            } else if items.isEmpty {
               Text("No files")
                 .font(.system(size: 11))
                 .foregroundColor(.secondary)
                 .padding(.vertical, 8)
             } else {
-              ForEach(Array(items.indices), id: \.self) { index in
-                FileItemRow(item: $items[index], depth: 0, rootDirectory: rootDirectory)
+              ForEach($items) { $item in
+                FileItemRow(item: $item, depth: 0, rootDirectory: rootDirectory)
               }
             }
           }
@@ -280,16 +221,41 @@ struct DirectoryTreeView: View {
         .cornerRadius(8)
       }
     }
-    .onAppear {
-      loadItems()
-    }
-    .onChange(of: rootDirectory) {
-      loadItems()
-    }
-  }
+    .task(id: loadKey) {
+      guard isExpanded else {
+        rootLoadGeneration += 1
+        isLoading = false
+        return
+      }
 
-  private func loadItems() {
-    items = DirectoryTreeManager.shared.scanDirectory(rootDirectory)
+      guard lastLoadedRootDirectory != rootDirectory || items.isEmpty else {
+        isLoading = false
+        return
+      }
+
+      let directory = rootDirectory
+      rootLoadGeneration += 1
+      let loadGeneration = rootLoadGeneration
+      isLoading = true
+
+      if lastLoadedRootDirectory != directory {
+        items = []
+      }
+
+      let loadedItems = await DirectoryTreeManager.shared.loadItems(in: directory)
+
+      guard !Task.isCancelled,
+            rootDirectory == directory,
+            isExpanded,
+            rootLoadGeneration == loadGeneration
+      else {
+        return
+      }
+
+      items = loadedItems
+      lastLoadedRootDirectory = directory
+      isLoading = false
+    }
   }
 }
 
@@ -299,6 +265,7 @@ struct FileItemRow: View {
   let depth: Int
   let rootDirectory: URL
   @State private var showCopiedTooltip: Bool = false
+  @State private var childLoadTask: Task<Void, Never>?
 
   /// Relative path from the root directory.
   private var relativePath: String {
@@ -386,17 +353,35 @@ struct FileItemRow: View {
       }
 
       /// Render children if expanded.
-      if item.isDirectory && item.isExpanded, let children = item.children {
-        ForEach(Array(children.indices), id: \.self) { index in
-          FileItemRow(
-            item: Binding(
-              get: { item.children![index] },
-              set: { item.children![index] = $0 }
-            ),
-            depth: depth + 1,
-            rootDirectory: rootDirectory
-          )
+      if item.isDirectory && item.isExpanded {
+        if item.isLoadingChildren {
+          HStack(spacing: 6) {
+            Spacer()
+              .frame(width: CGFloat(depth + 1) * 12 + 20)
+
+            ProgressView()
+              .controlSize(.small)
+
+            Text("Loading...")
+              .font(.system(size: 10))
+              .foregroundColor(.secondary)
+          }
+          .padding(.vertical, 3)
+        } else {
+          ForEach($item.children) { $child in
+            FileItemRow(item: $child, depth: depth + 1, rootDirectory: rootDirectory)
+          }
         }
+      }
+    }
+    .onDisappear {
+      childLoadTask?.cancel()
+      childLoadTask = nil
+
+      if item.isLoadingChildren {
+        item.childLoadGeneration += 1
+        item.isExpanded = false
+        item.isLoadingChildren = false
       }
     }
   }
@@ -404,8 +389,46 @@ struct FileItemRow: View {
   private func toggleExpand() {
     item.isExpanded.toggle()
 
-    if item.isExpanded && item.children == nil {
-      item.children = DirectoryTreeManager.shared.loadChildren(for: item)
+    guard item.isDirectory else {
+      return
+    }
+
+    if !item.isExpanded {
+      childLoadTask?.cancel()
+      childLoadTask = nil
+      item.childLoadGeneration += 1
+      item.isLoadingChildren = false
+      return
+    }
+
+    guard !item.didLoadChildren, !item.isLoadingChildren else {
+      return
+    }
+
+    let itemID = item.id
+    let itemURL = item.url
+    item.childLoadGeneration += 1
+    let loadGeneration = item.childLoadGeneration
+
+    item.isLoadingChildren = true
+    childLoadTask?.cancel()
+    childLoadTask = Task { @MainActor in
+      let children = await DirectoryTreeManager.shared.loadChildren(in: itemURL)
+
+      guard item.id == itemID,
+            item.childLoadGeneration == loadGeneration
+      else {
+        return
+      }
+
+      guard !Task.isCancelled, item.isExpanded else {
+        item.isLoadingChildren = false
+        return
+      }
+
+      item.children = children
+      item.didLoadChildren = true
+      item.isLoadingChildren = false
     }
   }
 
@@ -503,7 +526,7 @@ struct ProjectDocRow: View {
 
   var body: some View {
     HStack(spacing: 4) {
-      Image(nsImage: NSWorkspace.shared.icon(forFile: url.path))
+      Image(nsImage: DirectoryTreeManager.shared.fileIcon(for: url))
         .resizable()
         .frame(width: 14, height: 14)
 
@@ -625,188 +648,9 @@ struct StatRow: View {
   }
 }
 
-/// Progress bar showing context window usage.
-struct ContextWindowProgress: View {
-  let used: Int
-  let limit: Int
-
-  private var percentage: Double {
-    guard limit > 0 else {
-      return 0
-    }
-
-    return Double(used) / Double(limit)
-  }
-
-  private var percentageText: String {
-    String(format: "%.1f%%", percentage * 100)
-  }
-
-  private static let numberFormatter: NumberFormatter = {
-    let formatter = NumberFormatter()
-    formatter.numberStyle = .decimal
-    formatter.groupingSeparator = ","
-    return formatter
-  }()
-
-  private var usageText: String {
-    let usedStr = Self.numberFormatter.string(from: NSNumber(value: used)) ?? "\(used)"
-    let limitStr = Self.numberFormatter.string(from: NSNumber(value: limit)) ?? "\(limit)"
-
-    return "\(usedStr) / \(limitStr)"
-  }
-
-  private var progressColor: Color {
-    if percentage > 0.9 {
-      return .red
-    } else if percentage > 0.7 {
-      return .orange
-    } else {
-      return .green
-    }
-  }
-
-  private var statusIcon: String {
-    if percentage > 0.9 {
-      return "exclamationmark.triangle.fill"
-    } else if percentage > 0.7 {
-      return "exclamationmark.circle.fill"
-    } else {
-      return "checkmark.circle.fill"
-    }
-  }
-
-  var body: some View {
-    VStack(alignment: .leading, spacing: 8) {
-      HStack {
-        Text("Context Window")
-          .font(.system(size: 10, weight: .semibold))
-          .textCase(.uppercase)
-          .foregroundColor(.secondary)
-
-        Spacer()
-
-        Image(systemName: statusIcon)
-          .font(.system(size: 10))
-          .foregroundColor(progressColor)
-      }
-
-      VStack(spacing: 8) {
-        /// Progress bar.
-        GeometryReader { geometry in
-          ZStack(alignment: .leading) {
-            RoundedRectangle(cornerRadius: 4)
-              .fill(appBackgroundColor)
-              .frame(height: 8)
-
-            RoundedRectangle(cornerRadius: 4)
-              .fill(progressColor)
-              .frame(width: geometry.size.width * min(percentage, 1.0), height: 8)
-          }
-        }
-        .frame(height: 8)
-
-        /// Usage details.
-        HStack {
-          Text(usageText)
-            .font(.system(size: 10))
-            .foregroundColor(.secondary)
-            .monospacedDigit()
-
-          Spacer()
-
-          Text(percentageText)
-            .font(.system(size: 10, weight: .medium))
-            .foregroundColor(progressColor)
-            .monospacedDigit()
-        }
-      }
-      .padding(10)
-      .background(appCardColor)
-      .cornerRadius(8)
-    }
-  }
-}
-
-/// Sidebar view for chat-mode tabs.
-struct ChatSidebarView: View {
-  let tab: Tab
-  let chatState: ChatState
-  @State private var currentTime = Date()
-
-  private let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
-
-  var body: some View {
-    VStack(alignment: .leading, spacing: 16) {
-      /// Working directory.
-      WorkingDirectoryCard(path: tab.workingDirectory)
-
-      /// Open in external app button.
-      OpenInAppButton(directory: tab.workingDirectory)
-
-      /// Directory tree.
-      DirectoryTreeView(rootDirectory: tab.workingDirectory)
-
-      /// Project docs.
-      ProjectDocsView(workingDirectory: tab.workingDirectory)
-
-      /// Chat stats section.
-      StatsSection(title: "Chat Info") {
-        StatRow(label: "Messages", value: "\(chatState.conversation.messages.count)")
-        StatRow(label: "Duration", value: formattedDuration)
-      }
-
-      /// Token usage section.
-      StatsSection(title: "Token Usage") {
-        StatRow(
-          label: "Input",
-          value: formatNumber(chatState.conversation.totalInputTokens),
-          isHighlighted: chatState.conversation.totalInputTokens > 0
-        )
-        StatRow(
-          label: "Output",
-          value: formatNumber(chatState.conversation.totalOutputTokens),
-          isHighlighted: chatState.conversation.totalOutputTokens > 0
-        )
-      }
-    }
-    .onReceive(timer) { _ in
-      currentTime = Date()
-    }
-  }
-
-  private var formattedDuration: String {
-    let totalSeconds = Int(currentTime.timeIntervalSince(tab.usageStats.startTime))
-    let hours = totalSeconds / 3600
-    let minutes = (totalSeconds % 3600) / 60
-    let seconds = totalSeconds % 60
-
-    if hours > 0 {
-      return String(format: "%dh %02dm %02ds", hours, minutes, seconds)
-    } else {
-      return String(format: "%dm %02ds", minutes, seconds)
-    }
-  }
-
-  private static let numberFormatter: NumberFormatter = {
-    let formatter = NumberFormatter()
-    formatter.numberStyle = .decimal
-    formatter.groupingSeparator = ","
-    return formatter
-  }()
-
-  private func formatNumber(_ value: Int) -> String {
-    Self.numberFormatter.string(from: NSNumber(value: value)) ?? "\(value)"
-  }
-}
-
 #Preview("With Active Tab") {
   let appState = AppState()
   let tab = Tab(workspaceID: UUID(), agentType: .claude, workingDirectory: URL(fileURLWithPath: "/Users/demo/projects"))
-  tab.usageStats.tokensIn = 12847
-  tab.usageStats.tokensOut = 8234
-  tab.usageStats.messageCount = 24
-  tab.usageStats.estimatedCost = 0.0847
   appState.tabs.append(tab)
   appState.activeTabID = tab.id
 

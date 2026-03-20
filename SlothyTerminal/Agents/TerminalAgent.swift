@@ -7,8 +7,6 @@ struct TerminalAgent: AIAgent {
   let accentColor = Color.secondary
   let iconName = "terminal"
   let displayName = "Terminal"
-  let contextWindowLimit = 0
-
   /// Uses the user's default shell.
   var command: String {
     ProcessInfo.processInfo.environment["SHELL"] ?? "/bin/zsh"
@@ -24,11 +22,6 @@ struct TerminalAgent: AIAgent {
       "TERM": "xterm-256color",
       "COLORTERM": "truecolor"
     ]
-  }
-
-  /// Terminal doesn't parse stats.
-  func parseStats(from output: String) -> UsageUpdate? {
-    nil
   }
 
   /// Terminal is always available.
