@@ -166,24 +166,6 @@ struct AppStateWorkspaceTests {
     #expect(newTab.workspaceID == workspaceB.id)
   }
 
-  @Test("Creating a chat tab retargets an empty active workspace")
-  @MainActor
-  func creatingChatTabRetargetsEmptyActiveWorkspace() throws {
-    let appState = AppState()
-
-    appState.createTab(agent: .terminal, directory: dirA)
-    let workspaceID = try #require(appState.activeWorkspaceID)
-    let tabID = try #require(appState.activeTabID)
-
-    appState.closeTab(id: tabID)
-    appState.createChatTab(agent: .claude, directory: dirB)
-
-    #expect(appState.workspaces.count == 1)
-    #expect(appState.activeWorkspaceID == workspaceID)
-    #expect(appState.activeWorkspace?.rootDirectory == dirB)
-    #expect(appState.activeTab?.workingDirectory == dirB)
-  }
-
   @Test("Creating a Git tab retargets an empty active workspace")
   @MainActor
   func creatingGitTabRetargetsEmptyActiveWorkspace() throws {

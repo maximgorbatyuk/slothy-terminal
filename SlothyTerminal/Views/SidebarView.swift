@@ -10,13 +10,7 @@ struct SidebarView: View {
     VStack(alignment: .leading, spacing: 16) {
 
       if let tab = appState.activeTab {
-        if tab.mode == .chat, let chatState = tab.chatState {
-          ScrollView {
-            ChatSidebarView(tab: tab, chatState: chatState)
-          }
-        } else {
-          TerminalSidebarView(tab: tab)
-        }
+        TerminalSidebarView(tab: tab)
       } else {
         EmptySidebarView()
       }
@@ -552,81 +546,6 @@ struct StatRow: View {
         .foregroundColor(valueColor)
         .monospacedDigit()
     }
-  }
-}
-
-/// Sidebar view for chat-mode tabs.
-struct ChatSidebarView: View {
-  let tab: Tab
-  let chatState: ChatState
-  @State private var currentTime = Date()
-
-  var body: some View {
-    TimelineView(.periodic(from: .now, by: 1)) { context in
-      let _ = updateCurrentTime(context.date)
-
-      VStack(alignment: .leading, spacing: 16) {
-        /// Working directory.
-        WorkingDirectoryCard(path: tab.workingDirectory)
-
-        /// Open in external app button.
-        OpenInAppButton(directory: tab.workingDirectory)
-
-        /// Directory tree.
-        DirectoryTreeView(rootDirectory: tab.workingDirectory)
-
-        /// Project docs.
-        ProjectDocsView(workingDirectory: tab.workingDirectory)
-
-        /// Chat stats section.
-        StatsSection(title: "Chat Info") {
-          StatRow(label: "Messages", value: "\(chatState.conversation.messages.count)")
-          StatRow(label: "Duration", value: formattedDuration)
-        }
-
-        /// Token usage section.
-        StatsSection(title: "Token Usage") {
-          StatRow(
-            label: "Input",
-            value: formatNumber(chatState.conversation.totalInputTokens),
-            isHighlighted: chatState.conversation.totalInputTokens > 0
-          )
-          StatRow(
-            label: "Output",
-            value: formatNumber(chatState.conversation.totalOutputTokens),
-            isHighlighted: chatState.conversation.totalOutputTokens > 0
-          )
-        }
-      }
-    }
-  }
-
-  private func updateCurrentTime(_ date: Date) {
-    currentTime = date
-  }
-
-  private var formattedDuration: String {
-    let totalSeconds = Int(currentTime.timeIntervalSince(tab.startTime))
-    let hours = totalSeconds / 3600
-    let minutes = (totalSeconds % 3600) / 60
-    let seconds = totalSeconds % 60
-
-    if hours > 0 {
-      return String(format: "%dh %02dm %02ds", hours, minutes, seconds)
-    } else {
-      return String(format: "%dm %02ds", minutes, seconds)
-    }
-  }
-
-  private static let numberFormatter: NumberFormatter = {
-    let formatter = NumberFormatter()
-    formatter.numberStyle = .decimal
-    formatter.groupingSeparator = ","
-    return formatter
-  }()
-
-  private func formatNumber(_ value: Int) -> String {
-    Self.numberFormatter.string(from: NSNumber(value: value)) ?? "\(value)"
   }
 }
 

@@ -40,7 +40,6 @@ struct AppConfigTests {
     #expect(config.sidebarWidth == 300)
     #expect(config.showSidebarByDefault == false)
     #expect(config.colorScheme == .dark)
-    #expect(config.chatSendKey == .shiftEnter)
     #expect(config.terminalFontName == "Menlo")
   }
 
@@ -53,7 +52,6 @@ struct AppConfigTests {
     #expect(config.sidebarWidth == defaults.sidebarWidth)
     #expect(config.showSidebarByDefault == defaults.showSidebarByDefault)
     #expect(config.defaultTabMode == defaults.defaultTabMode)
-    #expect(config.chatSendKey == defaults.chatSendKey)
     #expect(config.terminalFontName == defaults.terminalFontName)
     #expect(config.terminalFontSize == defaults.terminalFontSize)
     #expect(config.sidebarTab == .explorer)
@@ -80,7 +78,6 @@ struct AppConfigTests {
 
     /// Provided values are used.
     #expect(config.sidebarWidth == 400)
-    #expect(config.chatSendKey == .shiftEnter)
 
     /// Missing values fall back to defaults.
     #expect(config.terminalFontName == defaults.terminalFontName)
@@ -144,7 +141,6 @@ struct AppConfigTests {
   func roundTrip() throws {
     var original = AppConfig()
     original.sidebarWidth = 350
-    original.chatSendKey = .shiftEnter
     original.terminalFontName = "Monaco"
 
     let encoder = JSONEncoder()

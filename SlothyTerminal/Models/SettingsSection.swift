@@ -3,7 +3,6 @@ import Foundation
 /// Settings navigation sections.
 enum SettingsSection: String, CaseIterable, Identifiable {
   case general
-  case chat
   case agents
   case appearance
   case shortcuts
@@ -16,9 +15,6 @@ enum SettingsSection: String, CaseIterable, Identifiable {
     switch self {
     case .general:
       return "General"
-
-    case .chat:
-      return "Chat"
 
     case .agents:
       return "Agents"
@@ -41,9 +37,6 @@ enum SettingsSection: String, CaseIterable, Identifiable {
     switch self {
     case .general:
       return "gear"
-
-    case .chat:
-      return "bubble.left.and.bubble.right"
 
     case .agents:
       return "cpu"

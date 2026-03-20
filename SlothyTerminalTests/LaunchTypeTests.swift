@@ -7,15 +7,13 @@ final class LaunchTypeTests: XCTestCase {
   // MARK: - Metadata Tests
 
   func testAllCasesCount() {
-    XCTAssertEqual(LaunchType.allCases.count, 6)
+    XCTAssertEqual(LaunchType.allCases.count, 4)
   }
 
   func testDisplayNames() {
     XCTAssertEqual(LaunchType.terminal.displayName, "Terminal")
     XCTAssertEqual(LaunchType.claude.displayName, "claude")
     XCTAssertEqual(LaunchType.opencode.displayName, "opencode")
-    XCTAssertEqual(LaunchType.claudeChat.displayName, "Claude Chat")
-    XCTAssertEqual(LaunchType.opencodeChat.displayName, "OpenCode Chat")
   }
 
   func testSubtitlesAreNonEmpty() {
@@ -40,24 +38,18 @@ final class LaunchTypeTests: XCTestCase {
     XCTAssertTrue(LaunchType.terminal.requiresPrompt)
     XCTAssertTrue(LaunchType.claude.requiresPrompt)
     XCTAssertTrue(LaunchType.opencode.requiresPrompt)
-    XCTAssertTrue(LaunchType.claudeChat.requiresPrompt)
-    XCTAssertTrue(LaunchType.opencodeChat.requiresPrompt)
   }
 
   func testRequiresPredefinedPrompt() {
     XCTAssertFalse(LaunchType.terminal.requiresPredefinedPrompt)
     XCTAssertFalse(LaunchType.claude.requiresPredefinedPrompt)
     XCTAssertFalse(LaunchType.opencode.requiresPredefinedPrompt)
-    XCTAssertFalse(LaunchType.claudeChat.requiresPredefinedPrompt)
-    XCTAssertFalse(LaunchType.opencodeChat.requiresPredefinedPrompt)
   }
 
   func testAgentTypeMapping() {
     XCTAssertEqual(LaunchType.terminal.agentType, .terminal)
     XCTAssertEqual(LaunchType.claude.agentType, .claude)
     XCTAssertEqual(LaunchType.opencode.agentType, .opencode)
-    XCTAssertEqual(LaunchType.claudeChat.agentType, .claude)
-    XCTAssertEqual(LaunchType.opencodeChat.agentType, .opencode)
   }
 
   func testIdentifiable() {
@@ -80,20 +72,18 @@ final class LaunchTypeTests: XCTestCase {
     XCTAssertEqual(LaunchType.terminal.rawValue, "terminal")
     XCTAssertEqual(LaunchType.claude.rawValue, "claude")
     XCTAssertEqual(LaunchType.opencode.rawValue, "opencode")
-    XCTAssertEqual(LaunchType.claudeChat.rawValue, "claudeChat")
-    XCTAssertEqual(LaunchType.opencodeChat.rawValue, "opencodeChat")
   }
 
   // MARK: - Config Persistence Tests
 
   func testAppConfigLastUsedLaunchTypeEncoding() throws {
     var config = AppConfig.default
-    config.lastUsedLaunchType = .opencodeChat
+    config.lastUsedLaunchType = .opencode
 
     let encoded = try JSONEncoder().encode(config)
     let decoded = try JSONDecoder().decode(AppConfig.self, from: encoded)
 
-    XCTAssertEqual(decoded.lastUsedLaunchType, .opencodeChat)
+    XCTAssertEqual(decoded.lastUsedLaunchType, .opencode)
   }
 
   func testAppConfigLastUsedLaunchTypeNewCases() throws {
@@ -117,7 +107,7 @@ final class LaunchTypeTests: XCTestCase {
     /// Encode a full config with lastUsedLaunchType set, then remove it from
     /// the JSON to simulate a config saved before the field existed.
     var config = AppConfig.default
-    config.lastUsedLaunchType = .claudeChat
+    config.lastUsedLaunchType = .claude
 
     let encoded = try JSONEncoder().encode(config)
     var dict = try JSONSerialization.jsonObject(with: encoded) as! [String: Any]

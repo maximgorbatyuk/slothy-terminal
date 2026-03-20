@@ -241,10 +241,6 @@ struct TabItemView: View {
   }
 
   private var tabIconName: String {
-    if tab.mode == .chat {
-      return "bubble.left.and.bubble.right"
-    }
-
     if tab.mode == .git {
       return "arrow.triangle.branch"
     }

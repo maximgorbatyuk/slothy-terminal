@@ -117,10 +117,6 @@ struct ActiveTerminalView: View {
         GitClientView(workingDirectory: tab.workingDirectory)
           .contentShape(Rectangle())
           .onTapGesture { onPaneFocused?() }
-      } else if tab.mode == .chat, let chatState = tab.chatState {
-        ChatView(chatState: chatState)
-          .contentShape(Rectangle())
-          .onTapGesture { onPaneFocused?() }
       } else if let error = agentUnavailableError {
         AgentUnavailableView(agentName: tab.agent?.displayName ?? "Unknown", error: error)
           .environment(\.colorScheme, .dark)
@@ -167,11 +163,6 @@ struct ActiveTerminalView: View {
     .task {
       // Git mode renders its own content; no PTY or chat setup needed.
       if tab.mode == .git {
-        return
-      }
-
-      // Chat mode doesn't need PTY availability checks.
-      if tab.mode == .chat {
         return
       }
 

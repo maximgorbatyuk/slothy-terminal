@@ -347,32 +347,6 @@ class AppState {
     switchToTab(id: tab.id)
   }
 
-  /// Creates a new chat tab with the specified working directory and agent.
-  func createChatTab(
-    agent: AgentType = .claude,
-    directory: URL,
-    initialPrompt: String? = nil,
-    resumeSessionId: String? = nil
-  ) {
-    let workspaceID = resolveWorkspaceID(for: directory)
-    let tab = Tab(
-      workspaceID: workspaceID,
-      agentType: agent,
-      workingDirectory: directory,
-      mode: .chat,
-      resumeSessionId: resumeSessionId
-    )
-    tabs.append(tab)
-    switchToTab(id: tab.id)
-
-    // Send initial prompt if provided.
-    if let prompt = initialPrompt,
-       !prompt.isEmpty
-    {
-      tab.chatState?.sendMessage(prompt)
-    }
-  }
-
   /// Creates a new Git client tab with the specified working directory.
   func createGitTab(directory: URL) {
     let workspaceID = resolveWorkspaceID(for: directory)
@@ -426,9 +400,6 @@ class AppState {
     }
 
     let closedTab = tabs[index]
-
-    // Terminate chat process if active.
-    closedTab.chatState?.terminateProcess()
 
     // Heal split if the closed tab was part of one.
     healSplitAfterRemoval(tabID: id, workspaceID: closedTab.workspaceID)
@@ -674,13 +645,9 @@ class AppState {
     isSidebarVisible.toggle()
   }
 
-  /// Terminates all active PTY sessions, chat responses, and bot runtimes.
+  /// Terminates all active PTY sessions.
   /// Called during app quit to ensure child processes are cleaned up.
   func terminateAllSessions() {
-    for tab in tabs {
-      // terminateProcess() calls store.saveImmediately() internally.
-      tab.chatState?.terminateProcess()
-    }
   }
 }
 
@@ -749,33 +716,6 @@ extension AppState {
     insertTabAdjacentTo(focusedID, newTab: tab)
     wireSplit(focusedTabID: focusedID, newTabID: tab.id, workspaceID: workspaceID)
     switchToTab(id: tab.id)
-  }
-
-  /// Creates a new chat tab and places it into the split.
-  func createChatTabInSplit(
-    agent: AgentType = .claude,
-    directory: URL,
-    initialPrompt: String? = nil
-  ) {
-    guard let focusedID = activeTabID else {
-      createChatTab(agent: agent, directory: directory, initialPrompt: initialPrompt)
-      return
-    }
-
-    let workspaceID = resolveWorkspaceID(for: directory)
-    let tab = Tab(
-      workspaceID: workspaceID,
-      agentType: agent,
-      workingDirectory: directory,
-      mode: .chat
-    )
-    insertTabAdjacentTo(focusedID, newTab: tab)
-    wireSplit(focusedTabID: focusedID, newTabID: tab.id, workspaceID: workspaceID)
-    switchToTab(id: tab.id)
-
-    if let prompt = initialPrompt, !prompt.isEmpty {
-      tab.chatState?.sendMessage(prompt)
-    }
   }
 
   /// Creates a new git tab and places it into the split.

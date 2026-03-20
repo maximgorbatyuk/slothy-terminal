@@ -19,7 +19,7 @@ struct AppConfig: Codable, Equatable {
   // MARK: - Startup Settings
 
   /// The default tab mode when creating a new tab via Cmd+T.
-  var defaultTabMode: TabMode = .chat
+  var defaultTabMode: TabMode = .terminal
 
   /// The default agent to use when creating a new terminal-mode tab.
   var defaultAgent: AgentType = .claude
@@ -80,23 +80,6 @@ struct AppConfig: Codable, Equatable {
       savedPromptTags = newValue
     }
   }
-
-  // MARK: - Chat Settings
-
-  /// Which key sends a chat message (the other key inserts a newline).
-  var chatSendKey: ChatSendKey = .enter
-
-  /// Default render mode for chat messages.
-  var chatRenderMode: ChatRenderMode = .markdown
-
-  /// Text size for chat messages.
-  var chatMessageTextSize: ChatMessageTextSize = .medium
-
-  /// Whether to show timestamps on completed assistant messages.
-  var chatShowTimestamps: Bool = true
-
-  /// Whether to show token counts on completed assistant messages.
-  var chatShowTokenMetadata: Bool = true
 
   /// Last explicitly selected model for OpenCode chat.
   /// Used to preselect model in new OpenCode chat tabs.
@@ -165,11 +148,6 @@ struct AppConfig: Codable, Equatable {
     savedPrompts = (try? c.decode([SavedPrompt].self, forKey: .savedPrompts)) ?? d.savedPrompts
     savedPromptTags = try? c.decode([PromptTag].self, forKey: .savedPromptTags)
 
-    chatSendKey = (try? c.decode(ChatSendKey.self, forKey: .chatSendKey)) ?? d.chatSendKey
-    chatRenderMode = (try? c.decode(ChatRenderMode.self, forKey: .chatRenderMode)) ?? d.chatRenderMode
-    chatMessageTextSize = (try? c.decode(ChatMessageTextSize.self, forKey: .chatMessageTextSize)) ?? d.chatMessageTextSize
-    chatShowTimestamps = (try? c.decode(Bool.self, forKey: .chatShowTimestamps)) ?? d.chatShowTimestamps
-    chatShowTokenMetadata = (try? c.decode(Bool.self, forKey: .chatShowTokenMetadata)) ?? d.chatShowTokenMetadata
     lastUsedOpenCodeModel = try? c.decode(ChatModelSelection.self, forKey: .lastUsedOpenCodeModel)
     lastUsedOpenCodeMode = try? c.decode(ChatMode.self, forKey: .lastUsedOpenCodeMode)
     lastUsedOpenCodeAskModeEnabled = (try? c.decode(Bool.self, forKey: .lastUsedOpenCodeAskModeEnabled)) ?? d.lastUsedOpenCodeAskModeEnabled
@@ -181,25 +159,6 @@ struct AppConfig: Codable, Equatable {
 }
 
 // MARK: - Supporting Types
-
-/// Which key sends a chat message.
-enum ChatSendKey: String, Codable, CaseIterable {
-  case enter = "Enter"
-  case shiftEnter = "Shift+Enter"
-
-  var displayName: String { rawValue }
-
-  /// The key combination that inserts a newline (the opposite of sendKey).
-  var newlineHint: String {
-    switch self {
-    case .enter:
-      return "Shift+Return for new line"
-
-    case .shiftEnter:
-      return "Return for new line"
-    }
-  }
-}
 
 /// Controls how mouse input is routed in terminal tabs.
 enum TerminalInteractionMode: String, Codable, CaseIterable {
@@ -235,70 +194,6 @@ enum TerminalInteractionMode: String, Codable, CaseIterable {
 
     case .appMouse:
       return "Send mouse events to the running TUI for in-app interactions."
-    }
-  }
-}
-
-/// Chat message render mode.
-enum ChatRenderMode: String, Codable, CaseIterable {
-  case markdown
-  case plainText
-
-  var displayName: String {
-    switch self {
-    case .markdown:
-      return "Markdown"
-
-    case .plainText:
-      return "Plain Text"
-    }
-  }
-}
-
-/// Chat message text size.
-enum ChatMessageTextSize: String, Codable, CaseIterable {
-  case small
-  case medium
-  case large
-
-  var displayName: String {
-    switch self {
-    case .small:
-      return "Small"
-
-    case .medium:
-      return "Medium"
-
-    case .large:
-      return "Large"
-    }
-  }
-
-  /// Font size in points for message body text.
-  var bodyFontSize: CGFloat {
-    switch self {
-    case .small:
-      return 12
-
-    case .medium:
-      return 13
-
-    case .large:
-      return 15
-    }
-  }
-
-  /// Font size in points for metadata and captions.
-  var metadataFontSize: CGFloat {
-    switch self {
-    case .small:
-      return 9
-
-    case .medium:
-      return 10
-
-    case .large:
-      return 11
     }
   }
 }
@@ -446,7 +341,6 @@ struct CodableColor: Codable, Equatable {
 
 /// Actions that can have keyboard shortcuts assigned.
 enum ShortcutAction: String, Codable, CaseIterable {
-  case newChatTab
   case newTerminalTab
   case newClaudeTab
   case newOpencodeTab
@@ -459,8 +353,6 @@ enum ShortcutAction: String, Codable, CaseIterable {
 
   var displayName: String {
     switch self {
-    case .newChatTab:
-      return "New Chat Tab"
     case .newTerminalTab:
       return "New Terminal Tab"
     case .newClaudeTab:
@@ -484,10 +376,8 @@ enum ShortcutAction: String, Codable, CaseIterable {
 
   var defaultShortcut: String {
     switch self {
-    case .newChatTab:
-      return "⌘T"
     case .newTerminalTab:
-      return "⌘⇧⌥T"
+      return "⌘T"
     case .newClaudeTab:
       return "⌘⇧T"
     case .newOpencodeTab:
@@ -509,7 +399,7 @@ enum ShortcutAction: String, Codable, CaseIterable {
 
   var category: ShortcutCategory {
     switch self {
-    case .newChatTab, .newTerminalTab, .newClaudeTab, .newOpencodeTab, .closeTab, .nextTab, .previousTab:
+    case .newTerminalTab, .newClaudeTab, .newOpencodeTab, .closeTab, .nextTab, .previousTab:
       return .tabs
     case .toggleSidebar:
       return .view

@@ -45,7 +45,7 @@ struct StartSessionContentView: View {
     self.onStart = onStart
 
     let config = ConfigManager.shared.config
-    _selectedLaunchType = State(initialValue: config.lastUsedLaunchType ?? .claudeChat)
+    _selectedLaunchType = State(initialValue: config.lastUsedLaunchType ?? .claude)
     _claudeSkipPermissions = State(initialValue: config.claudeSkipPermissions)
     _openCodeMode = State(initialValue: config.lastUsedOpenCodeMode ?? .build)
     _openCodeModel = State(initialValue: config.lastUsedOpenCodeModel)
@@ -573,12 +573,6 @@ struct StartSessionContentView: View {
     case .opencode:
       handleStartOpenCode(directory: directory, prompt: prompt, inSplit: false)
 
-    case .claudeChat:
-      appState.createChatTab(agent: .claude, directory: directory, initialPrompt: prompt?.promptText)
-
-    case .opencodeChat:
-      appState.createChatTab(agent: .opencode, directory: directory, initialPrompt: prompt?.promptText)
-
     case .gitClient:
       appState.createGitTab(directory: directory)
     }
@@ -603,12 +597,6 @@ struct StartSessionContentView: View {
 
     case .opencode:
       handleStartOpenCode(directory: directory, prompt: prompt, inSplit: true)
-
-    case .claudeChat:
-      appState.createChatTabInSplit(agent: .claude, directory: directory, initialPrompt: prompt?.promptText)
-
-    case .opencodeChat:
-      appState.createChatTabInSplit(agent: .opencode, directory: directory, initialPrompt: prompt?.promptText)
 
     case .gitClient:
       appState.createGitTabInSplit(directory: directory)
@@ -667,10 +655,10 @@ struct StartSessionContentView: View {
     case .terminal, .gitClient:
       return true
 
-    case .claude, .claudeChat:
+    case .claude:
       return AgentFactory.createAgent(for: .claude).isAvailable()
 
-    case .opencode, .opencodeChat:
+    case .opencode:
       return AgentFactory.createAgent(for: .opencode).isAvailable()
     }
   }
@@ -680,7 +668,7 @@ struct StartSessionContentView: View {
     case .terminal, .gitClient:
       return ""
 
-    case .claude, .opencode, .claudeChat, .opencodeChat:
+    case .claude, .opencode:
       return "CLI not found"
     }
   }
@@ -690,10 +678,10 @@ struct StartSessionContentView: View {
     case .terminal:
       return .secondary
 
-    case .claude, .claudeChat:
+    case .claude:
       return Color(red: 0.85, green: 0.47, blue: 0.34)
 
-    case .opencode, .opencodeChat:
+    case .opencode:
       return Color(red: 0.29, green: 0.78, blue: 0.49)
 
     case .gitClient:
