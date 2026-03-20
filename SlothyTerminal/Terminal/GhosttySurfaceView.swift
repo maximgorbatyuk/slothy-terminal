@@ -1284,14 +1284,14 @@ extension GhosttySurfaceView {
           return
         }
 
+        defer {
+          self.finishBackgroundActivityDetection(for: version)
+        }
+
         guard self.activityDetectionGate.shouldAcceptResult(for: version),
               self.shouldAcceptViewportSnapshotGeneration(snapshotGeneration)
         else {
           return
-        }
-
-        defer {
-          self.finishBackgroundActivityDetection(for: version)
         }
 
         guard snapshot != previousSnapshot else {

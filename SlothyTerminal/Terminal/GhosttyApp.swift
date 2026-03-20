@@ -18,6 +18,7 @@ class GhosttyApp {
   private(set) var app: ghostty_app_t?
   fileprivate let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "SlothyTerminal", category: "GhosttyApp")
   private var tickRequestPending = false
+  private var tickNeedsAnotherPass = false
 
   private init() {
     initializeGhostty()
@@ -108,15 +109,18 @@ class GhosttyApp {
 
   func requestTick(runImmediatelyIfPossible: Bool = false) {
     if runImmediatelyIfPossible {
-      guard !tickRequestPending else {
+      if tickRequestPending {
+        tickNeedsAnotherPass = true
         return
       }
 
-      tick()
+      tickRequestPending = true
+      drainTicks()
       return
     }
 
-    guard !tickRequestPending else {
+    if tickRequestPending {
+      tickNeedsAnotherPass = true
       return
     }
 
@@ -127,9 +131,17 @@ class GhosttyApp {
         return
       }
 
-      self.tickRequestPending = false
-      self.tick()
+      self.drainTicks()
     }
+  }
+
+  private func drainTicks() {
+    repeat {
+      tickNeedsAnotherPass = false
+      tick()
+    } while tickNeedsAnotherPass
+
+    tickRequestPending = false
   }
 
   func updateColorScheme() {
@@ -228,32 +240,34 @@ private func ghosttyAction(
   switch action.tag {
   case GHOSTTY_ACTION_SET_TITLE:
     guard let surface,
-          let cTitle = action.action.set_title.title
+          let cTitle = action.action.set_title.title,
+          let surfaceView = GhosttyApp.surfaceView(from: surface)
     else {
       return false
     }
 
     let title = String(cString: cTitle)
-    ghosttyDispatchOnMain {
-      guard let view = GhosttyApp.surfaceView(from: surface) else {
+    ghosttyDispatchOnMain { [weak surfaceView] in
+      guard let surfaceView else {
         return
       }
 
-      view.onTitleChanged?(title)
+      surfaceView.onTitleChanged?(title)
     }
 
     return true
 
   case GHOSTTY_ACTION_PWD:
     guard let surface,
-          let cPwd = action.action.pwd.pwd
+          let cPwd = action.action.pwd.pwd,
+          let surfaceView = GhosttyApp.surfaceView(from: surface)
     else {
       return false
     }
 
     let pwd = String(cString: cPwd)
-    ghosttyDispatchOnMain {
-      guard let view = GhosttyApp.surfaceView(from: surface) else {
+    ghosttyDispatchOnMain { [weak surfaceView] in
+      guard let surfaceView else {
         return
       }
 
@@ -265,7 +279,7 @@ private func ghosttyAction(
         url = URL(fileURLWithPath: pwd)
       }
 
-      view.onDirectoryChanged?(url)
+      surfaceView.onDirectoryChanged?(url)
     }
 
     return true
@@ -282,13 +296,17 @@ private func ghosttyAction(
       return false
     }
 
+    guard let surfaceView = GhosttyApp.surfaceView(from: surface) else {
+      return false
+    }
+
     let shape = action.action.mouse_shape
-    ghosttyDispatchOnMain {
-      guard let view = GhosttyApp.surfaceView(from: surface) else {
+    ghosttyDispatchOnMain { [weak surfaceView] in
+      guard let surfaceView else {
         return
       }
 
-      view.updateMouseCursor(shape)
+      surfaceView.updateMouseCursor(shape)
     }
     return true
 
@@ -333,13 +351,11 @@ private func ghosttyAction(
     let finished = action.action.command_finished
     ghosttyCallbackLogger.info("Ghostty command finished: exit=\(finished.exit_code), durationNs=\(finished.duration)")
 
-    if let surface {
-      ghosttyDispatchOnMain {
-        guard let view = GhosttyApp.surfaceView(from: surface) else {
-          return
-        }
-
-        view.onCommandFinished?()
+    if let surface,
+       let surfaceView = GhosttyApp.surfaceView(from: surface)
+    {
+      ghosttyDispatchOnMain { [weak surfaceView] in
+        surfaceView?.onCommandFinished?()
       }
     }
 
@@ -367,18 +383,24 @@ private func ghosttyAction(
       return false
     }
 
+    guard let surfaceView = GhosttyApp.surfaceView(from: surface) else {
+      return false
+    }
+
     /// Embedded runtime requests a draw on the app thread.
     if Thread.isMainThread {
       ghostty_surface_draw(surface)
-      if let view = GhosttyApp.surfaceView(from: surface) {
-        view.markRenderDirty()
-      }
+      surfaceView.markRenderDirty()
     } else {
-      DispatchQueue.main.async {
-        ghostty_surface_draw(surface)
-        if let view = GhosttyApp.surfaceView(from: surface) {
-          view.markRenderDirty()
+      ghosttyDispatchOnMain { [weak surfaceView] in
+        guard let surfaceView,
+              let liveSurface = surfaceView.surface
+        else {
+          return
         }
+
+        ghostty_surface_draw(liveSurface)
+        surfaceView.markRenderDirty()
       }
     }
 
@@ -386,13 +408,11 @@ private func ghosttyAction(
 
   case GHOSTTY_ACTION_CLOSE_WINDOW:
     /// In our app, closing the "window" for a surface means closing that surface's tab.
-    if let surface {
-      ghosttyDispatchOnMain {
-        guard let view = GhosttyApp.surfaceView(from: surface) else {
-          return
-        }
-
-        view.onClosed?()
+    if let surface,
+       let surfaceView = GhosttyApp.surfaceView(from: surface)
+    {
+      ghosttyDispatchOnMain { [weak surfaceView] in
+        surfaceView?.onClosed?()
       }
     }
 
