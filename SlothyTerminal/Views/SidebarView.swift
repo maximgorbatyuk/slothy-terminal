@@ -14,13 +14,6 @@ struct SidebarView: View {
           ScrollView {
             ChatSidebarView(tab: tab, chatState: chatState)
           }
-        } else if tab.mode == .git {
-          // Git tabs show the directory sidebar (tree, open-in-app, docs).
-          TerminalSidebarView(tab: tab)
-        } else if tab.agentType?.showsUsageStats == true {
-          ScrollView {
-            AgentStatsView(tab: tab)
-          }
         } else {
           TerminalSidebarView(tab: tab)
         }
@@ -74,42 +67,6 @@ struct TerminalSidebarView: View {
 
       /// Project docs.
       ProjectDocsView(workingDirectory: tab.workingDirectory)
-    }
-  }
-}
-
-/// Displays statistics for an agent session.
-struct AgentStatsView: View {
-  let tab: Tab
-  @State private var currentTime = Date()
-
-  var body: some View {
-    VStack(alignment: .leading, spacing: 16) {
-      /// Working directory.
-      WorkingDirectoryCard(path: tab.workingDirectory)
-
-      /// Open in external app button.
-      OpenInAppButton(directory: tab.workingDirectory)
-
-      /// Directory tree.
-      DirectoryTreeView(rootDirectory: tab.workingDirectory)
-
-      /// Project docs.
-      ProjectDocsView(workingDirectory: tab.workingDirectory)
-    }
-  }
-
-  /// Formatted duration that updates with the timer.
-  private var formattedDuration: String {
-    let totalSeconds = Int(currentTime.timeIntervalSince(tab.usageStats.startTime))
-    let hours = totalSeconds / 3600
-    let minutes = (totalSeconds % 3600) / 60
-    let seconds = totalSeconds % 60
-
-    if hours > 0 {
-      return String(format: "%dh %02dm %02ds", hours, minutes, seconds)
-    } else {
-      return String(format: "%dm %02ds", minutes, seconds)
     }
   }
 }
@@ -598,109 +555,6 @@ struct StatRow: View {
   }
 }
 
-/// Progress bar showing context window usage.
-struct ContextWindowProgress: View {
-  let used: Int
-  let limit: Int
-
-  private var percentage: Double {
-    guard limit > 0 else {
-      return 0
-    }
-
-    return Double(used) / Double(limit)
-  }
-
-  private var percentageText: String {
-    String(format: "%.1f%%", percentage * 100)
-  }
-
-  private static let numberFormatter: NumberFormatter = {
-    let formatter = NumberFormatter()
-    formatter.numberStyle = .decimal
-    formatter.groupingSeparator = ","
-    return formatter
-  }()
-
-  private var usageText: String {
-    let usedStr = Self.numberFormatter.string(from: NSNumber(value: used)) ?? "\(used)"
-    let limitStr = Self.numberFormatter.string(from: NSNumber(value: limit)) ?? "\(limit)"
-
-    return "\(usedStr) / \(limitStr)"
-  }
-
-  private var progressColor: Color {
-    if percentage > 0.9 {
-      return .red
-    } else if percentage > 0.7 {
-      return .orange
-    } else {
-      return .green
-    }
-  }
-
-  private var statusIcon: String {
-    if percentage > 0.9 {
-      return "exclamationmark.triangle.fill"
-    } else if percentage > 0.7 {
-      return "exclamationmark.circle.fill"
-    } else {
-      return "checkmark.circle.fill"
-    }
-  }
-
-  var body: some View {
-    VStack(alignment: .leading, spacing: 8) {
-      HStack {
-        Text("Context Window")
-          .font(.system(size: 10, weight: .semibold))
-          .textCase(.uppercase)
-          .foregroundColor(.secondary)
-
-        Spacer()
-
-        Image(systemName: statusIcon)
-          .font(.system(size: 10))
-          .foregroundColor(progressColor)
-      }
-
-      VStack(spacing: 8) {
-        /// Progress bar.
-        GeometryReader { geometry in
-          ZStack(alignment: .leading) {
-            RoundedRectangle(cornerRadius: 4)
-              .fill(appBackgroundColor)
-              .frame(height: 8)
-
-            RoundedRectangle(cornerRadius: 4)
-              .fill(progressColor)
-              .frame(width: geometry.size.width * min(percentage, 1.0), height: 8)
-          }
-        }
-        .frame(height: 8)
-
-        /// Usage details.
-        HStack {
-          Text(usageText)
-            .font(.system(size: 10))
-            .foregroundColor(.secondary)
-            .monospacedDigit()
-
-          Spacer()
-
-          Text(percentageText)
-            .font(.system(size: 10, weight: .medium))
-            .foregroundColor(progressColor)
-            .monospacedDigit()
-        }
-      }
-      .padding(10)
-      .background(appCardColor)
-      .cornerRadius(8)
-    }
-  }
-}
-
 /// Sidebar view for chat-mode tabs.
 struct ChatSidebarView: View {
   let tab: Tab
@@ -752,7 +606,7 @@ struct ChatSidebarView: View {
   }
 
   private var formattedDuration: String {
-    let totalSeconds = Int(currentTime.timeIntervalSince(tab.usageStats.startTime))
+    let totalSeconds = Int(currentTime.timeIntervalSince(tab.startTime))
     let hours = totalSeconds / 3600
     let minutes = (totalSeconds % 3600) / 60
     let seconds = totalSeconds % 60
@@ -779,10 +633,6 @@ struct ChatSidebarView: View {
 #Preview("With Active Tab") {
   let appState = AppState()
   let tab = Tab(workspaceID: UUID(), agentType: .claude, workingDirectory: URL(fileURLWithPath: "/Users/demo/projects"))
-  tab.usageStats.tokensIn = 12847
-  tab.usageStats.tokensOut = 8234
-  tab.usageStats.messageCount = 24
-  tab.usageStats.estimatedCost = 0.0847
   appState.tabs.append(tab)
   appState.activeTabID = tab.id
 

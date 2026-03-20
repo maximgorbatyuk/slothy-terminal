@@ -7,8 +7,6 @@ struct OpenCodeAgent: AIAgent {
   let accentColor = Color(red: 0.29, green: 0.78, blue: 0.49)
   let iconName = "chevron.left.forwardslash.chevron.right"
   let displayName = "OpenCode"
-  let contextWindowLimit = 200_000
-
   /// Command to run OpenCode CLI.
   /// Uses just "opencode" to let the shell's PATH find the correct version.
   var command: String {
@@ -31,11 +29,6 @@ struct OpenCodeAgent: AIAgent {
     env["TERM"] = "xterm-256color"
     env["COLORTERM"] = "truecolor"
     return env
-  }
-
-  func parseStats(from output: String) -> UsageUpdate? {
-    let parser = StatsParser.shared
-    return parser.parseClaudeOutput(output)
   }
 
   /// OpenCode TUI uses `--prompt` to prefill the input field.

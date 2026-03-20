@@ -7,7 +7,7 @@ import Testing
 struct TabActivityTests {
   private let activityIdleWait: UInt64 = 1_200_000_000
 
-  @Test("Terminal command entry marks tab busy and increments command count")
+  @Test("Terminal command entry marks tab busy")
   @MainActor
   func terminalCommandEntryMarksBusy() {
     let tab = Tab(
@@ -17,12 +17,10 @@ struct TabActivityTests {
     )
 
     #expect(tab.isExecuting == false)
-    #expect(tab.usageStats.commandCount == 0)
 
     tab.handleTerminalCommandEntered()
 
     #expect(tab.isExecuting)
-    #expect(tab.usageStats.commandCount == 1)
   }
 
   @Test("Auto-run terminal launch settles back to idle after inactivity")
@@ -57,7 +55,6 @@ struct TabActivityTests {
     tab.handleTerminalLaunch(shouldAutoRunCommand: false)
 
     #expect(tab.isExecuting == false)
-    #expect(tab.usageStats.commandCount == 0)
   }
 
   @Test("Terminal activity refresh keeps tab active until output stops")

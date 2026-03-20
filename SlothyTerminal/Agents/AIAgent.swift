@@ -23,14 +23,6 @@ protocol AIAgent {
   /// The display name for this agent.
   var displayName: String { get }
 
-  /// The context window limit for this agent (in tokens).
-  var contextWindowLimit: Int { get }
-
-  /// Parses terminal output to extract usage statistics.
-  /// - Parameter output: The terminal output text to parse.
-  /// - Returns: A UsageUpdate if stats were found, nil otherwise.
-  func parseStats(from output: String) -> UsageUpdate?
-
   /// Formats a startup message to display when the session begins.
   /// - Returns: An optional startup message, or nil for no message.
   func formatStartupMessage() -> String?

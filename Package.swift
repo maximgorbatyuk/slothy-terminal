@@ -39,7 +39,6 @@ let package = Package(
         "Terminal/GhosttySurfaceView.swift"
       ],
       sources: [
-        "Services/StatsParser.swift",
         "Services/RecentFoldersManager.swift",
         "Services/ConfigManager.swift",
         "Services/BuildConfig.swift",
@@ -53,7 +52,6 @@ let package = Package(
         "Services/GitStatsService.swift",
         "Services/GraphLaneCalculator.swift",
         "Services/ANSIStripper.swift",
-        "Models/UsageStats.swift",
         "Models/AgentType.swift",
         "Models/GitDiffModels.swift",
         "Models/GitModifiedFile.swift",

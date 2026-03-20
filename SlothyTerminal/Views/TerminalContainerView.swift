@@ -131,7 +131,7 @@ struct ActiveTerminalView: View {
           arguments: tab.arguments,
           environment: tab.environment,
           tabId: tab.id,
-          shouldAutoRunCommand: tab.agentType?.showsUsageStats ?? false,
+          shouldAutoRunCommand: tab.agentType?.supportsInitialPrompt ?? false,
           isActive: isActive,
           onDirectoryChanged: { newDirectory in
             tab.workingDirectory = newDirectory
@@ -172,7 +172,6 @@ struct ActiveTerminalView: View {
 
       // Chat mode doesn't need PTY availability checks.
       if tab.mode == .chat {
-        tab.usageStats.startSession()
         return
       }
 
@@ -184,10 +183,7 @@ struct ActiveTerminalView: View {
 
       // Mark as ready to show terminal.
       isReady = true
-      tab.handleTerminalLaunch(shouldAutoRunCommand: tab.agentType?.showsUsageStats ?? false)
-
-      // Start the session timer.
-      tab.usageStats.startSession()
+      tab.handleTerminalLaunch(shouldAutoRunCommand: tab.agentType?.supportsInitialPrompt ?? false)
     }
   }
 }

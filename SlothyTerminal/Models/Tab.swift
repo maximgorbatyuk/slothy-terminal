@@ -38,7 +38,7 @@ class Tab: Identifiable {
   var lastSubmittedCommandLabel: String?
   var isActive: Bool = false
   var hasBackgroundActivity: Bool = false
-  var usageStats: UsageStats
+  let startTime: Date = Date()
   var isTerminalBusy: Bool = false
   private var terminalActivityResetTask: Task<Void, Never>?
   private let terminalActivityIdleDelayNanoseconds: UInt64 = 800_000_000
@@ -81,12 +81,9 @@ class Tab: Identifiable {
     self.lastSubmittedCommandLabel = nil
     self.initialPrompt = initialPrompt
     self.launchArgumentsOverride = launchArgumentsOverride
-    self.usageStats = UsageStats()
-
     if let agentType {
       let createdAgent = AgentFactory.createAgent(for: agentType)
       self.agent = createdAgent
-      self.usageStats.contextWindowLimit = createdAgent.contextWindowLimit
     } else {
       self.agent = nil
     }
@@ -407,7 +404,6 @@ class Tab: Identifiable {
 
   /// Records that a terminal command has started running.
   func handleTerminalCommandEntered() {
-    usageStats.incrementCommandCount()
     recordTerminalActivity()
   }
 
