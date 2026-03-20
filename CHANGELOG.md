@@ -2,6 +2,67 @@
 
 All notable changes to SlothyTerminal will be documented in this file.
 
+## [2026.2.14] - 2026-03-20
+
+_Analysis range: `53ff684..HEAD` (7 commits, 90 files changed, 1787 insertions, 9241 deletions)._
+
+### Removed
+- **Native chat subsystem** — removed the entire `Chat/` directory (38 source files, 5 test files): `ChatState`, `ChatSessionEngine`, `ChatTransport`, `ClaudeCLITransport`, `OpenCodeCLITransport`, stream parsers, markdown renderer, tool views, message bubble views, chat composer, and `ChatSessionStore`. OpenCode CLI is now the sole multi-provider backend; all AI interaction happens through terminal-mode tabs.
+- **Chat-related settings and config** — removed `ChatSendKey`, `ChatRenderMode`, `ChatMessageTextSize` enums; removed `ChatSettingsTab`, `ChatSidebarView`, and `supportsChatMode` agent property. Removed corresponding `AppConfig` fields and resilient decoding entries.
+- **`.chat` tab mode** — removed `TabMode.chat`, `createChatTab()`, `createChatTabInSplit()`, `ShortcutAction.newChatTab`, and `.claudeChat`/`.opencodeChat` launch types. Default tab mode changed from `.chat` to `.terminal`.
+- **`StatsParser` and `UsageStats`** — removed the token/cost stats parser and its 290-line test suite; live usage tracking was specific to the removed chat subsystem.
+- **Chat test infrastructure** — removed `ChatSessionEngineTests`, `ChatSessionStoreTests`, `OpenCodeStreamEventParserTests`, `StreamEventParserTests`, `UsageStatsTests`, `StatsParserTests`, and `MockChatTransport`.
+
+### Changed
+
+#### Performance — subprocess execution
+- **`GitProcessRunner`** — replaced thread-blocking pipe reads with a timeout-aware async execution path using `DispatchSemaphore` + deadline. Git subprocesses now terminate and are reaped on cancel or timeout instead of blocking indefinitely. Added `GitProcessResult` value type with structured stdout/stderr/exit status.
+- **`OpenCodeCLIService`** — replaced `DispatchSemaphore`-based synchronous model loading with the same timeout-aware async path. Extracted pure model-line parsing into a testable `parseModelLine(_:)` helper; deduplication and malformed-line handling are now covered by unit tests.
+
+#### Performance — Explorer sidebar
+- **`DirectoryTreeManager`** — moved directory scanning and sorting onto a background-friendly async API returning value types; results publish back on the main actor. Icon resolution is cached per file path via `NSCache` during tree loading instead of calling `NSWorkspace.shared.icon(forFile:)` during row rendering.
+- **`DirectoryTreeScanner`** — extracted as a new SwiftPM-testable module with `scanDirectory()` async API, stable `FileItem.id` identity, child lazy-loading with cancellation, and a configurable visible-item limit.
+- **Sidebar file tree** — replaced index-based rendering with `FileItem.id` identity and switched to a cancellable task-based loader keyed by `rootDirectory`.
+
+#### Performance — terminal rendering
+- **Ghostty resize deduplication** — added `GhosttySurfaceMetricsCache` that tracks last surface size and content scale; `ghostty_surface_set_size` and `ghostty_surface_set_content_scale` are skipped when the effective values have not changed.
+- **Activity detection sampler** — rewrote `ActivityDetectionGate` as a versioned single-in-flight latest-wins sampler. Only one viewport read and one ANSI-strip task can be active at a time; stale scheduled reads are skipped.
+- **Ghostty callback coalescing** — `GhosttyApp.requestTick(runImmediatelyIfPossible:)` with `drainTicks()` loop coalesces callback-driven wakeups. `GHOSTTY_ACTION_RENDER` inlines `ghostty_surface_draw` when already on the main thread.
+
+#### Performance — revision graph
+- **Latest-wins loading** — added a `graphGeneration` counter checked after every `await` in `loadInitialBatch()`, `loadMore()`, `loadCommitDetails()`, and `loadSelectedFileDiff()`. Stale results from prior refresh/pagination cycles are discarded. `loadMore()` captures `loadedCount` locally to prevent a concurrent reload from corrupting the skip offset.
+- **Cancellation-aware lane computation** — replaced `Task.detached` in `computeLanes` with `withCheckedContinuation` on a background queue, so the caller's `Task.isCancelled` checks apply around it.
+
+#### Performance — status bar and git
+- **Status bar branch refresh** — removed `isTerminalBusy` from `GitBranchRefreshContext`; the status bar no longer re-fetches the git branch on every terminal busy/idle flip, only on tab or directory changes.
+- **Batched `getRepositorySummary`** — all four git subprocess calls (commit count, author count, root commit date, current branch) now run concurrently via `async let`. Replaced the separate `countAuthors` shortlog call with `countAuthorsFromShortlog` that reuses already-fetched output. Replaced two sequential `firstCommitDate` calls with a single `git log --reverse --format=%ai --max-parents=0 --all`.
+
+#### Performance — config and window
+- **Non-invalidating window state** — window-frame persistence now uses `@ObservationIgnored` backing storage with a dedicated `saveWindowFrame(_:)` method. Window move/resize events no longer mutate the observable `config` tree, eliminating repeated SwiftUI view invalidation during dragging.
+
+#### Performance — external app lookups
+- **Cached app snapshots** — `ExternalApp` now resolves `appURL` and `appIcon` once at init instead of calling `NSWorkspace.shared.urlForApplication` on every view render. `installedApps` and `installedEditorApps` are stored properties computed once at singleton creation.
+
+#### Performance — hidden tab layout
+- **Zero-frame hidden tabs** — `TerminalContainerView` now gives hidden tabs (inactive workspace or non-active in single/split mode) a zero frame so they don't participate in SwiftUI layout, while keeping view identity alive for PTY lifetime.
+
+#### Settings and UI
+- **Settings cleanup** — removed Chat settings tab, chat-related appearance settings, and legacy native agent configuration entries.
+- **Simplified sidebar** — removed chat-mode sidebar content (`ChatSidebarView`); sidebar now shows only terminal/git-relevant panels.
+- **Startup page** — removed chat launch types (`.claudeChat`, `.opencodeChat`); startup flow is terminal-only.
+- **`ChatModelMode.swift`** moved from `Chat/Models/` to `Models/` (kept for OpenCode terminal-mode model/mode selection).
+
+### Tests
+- Added `GitProcessRunnerTests` (4 tests) for timeout, cancellation, trimmed output, and stdout+stderr capture.
+- Added `OpenCodeCLIServiceTests` (4 tests) for duplicate models, invalid rows, empty output, and sorted order.
+- Added `GhosttySurfaceMetricsCacheTests` (4 tests) for size deduplication, zero-size rejection, content-scale tolerance, and reset.
+- Added `ActivityDetectionGateTests` (5 tests) for latest-wins scheduling, in-flight rescheduling, cancel, stale-result rejection, and stale-completion handling.
+- Added `DirectoryTreeScannerTests` (7 tests) for async scanning, sort order, recursive scripts/ scan, shallow root scan, file type filtering, and visible-item limit.
+- Added `GitStatsServiceTests` additions (2 tests) for `countAuthorsFromShortlog` normal and empty input.
+- Added `AppConfigTests` additions (2 tests) for `WindowState` round-trip and nil-default decoding.
+- Updated `AppStateWorkspaceTests` to validate that git branch refresh context is stable across busy/idle transitions.
+- Removed 5 chat-related test files (1632 lines).
+
 ## [2026.2.13] - 2026-03-18
 
 _Analysis range: `e98cac7..70f6895` (1 commit, 1 source file changed, 17 insertions, 6 deletions)._
