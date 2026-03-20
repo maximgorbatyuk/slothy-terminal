@@ -13,6 +13,7 @@ struct RevisionGraphView: View {
   @State private var hasMore = true
   @State private var loadedCount = 0
   @State private var maxLaneCount = 1
+  @State private var graphGeneration: UInt = 0
 
   // MARK: - Selection & Inspector State
 
@@ -564,6 +565,7 @@ struct RevisionGraphView: View {
     }
 
     isLoading = true
+    let generation = graphGeneration
 
     let commits = await GitStatsService.shared.getCommitGraph(
       in: workingDirectory,
@@ -571,7 +573,21 @@ struct RevisionGraphView: View {
       skip: 0
     )
 
+    guard !Task.isCancelled,
+          graphGeneration == generation
+    else {
+      isLoading = false
+      return
+    }
+
     let computed = await computeLanes(for: commits)
+
+    guard !Task.isCancelled,
+          graphGeneration == generation
+    else {
+      isLoading = false
+      return
+    }
 
     allCommits = commits
     assignments = computed
@@ -588,31 +604,49 @@ struct RevisionGraphView: View {
     }
 
     isLoading = true
+    let generation = graphGeneration
+    let skipCount = loadedCount
 
     let newCommits = await GitStatsService.shared.getCommitGraph(
       in: workingDirectory,
       limit: batchSize,
-      skip: loadedCount
+      skip: skipCount
     )
+
+    guard !Task.isCancelled,
+          graphGeneration == generation
+    else {
+      isLoading = false
+      return
+    }
 
     let combined = allCommits + newCommits
     let computed = await computeLanes(for: combined)
 
+    guard !Task.isCancelled,
+          graphGeneration == generation
+    else {
+      isLoading = false
+      return
+    }
+
     allCommits = combined
     assignments = computed
     maxLaneCount = computed.map(\.activeLanes.count).max() ?? 1
-    loadedCount += newCommits.count
+    loadedCount = skipCount + newCommits.count
     hasMore = newCommits.count >= batchSize
 
     isLoading = false
   }
 
   private func reload() async {
+    graphGeneration &+= 1
     allCommits = []
     assignments = []
     maxLaneCount = 1
     loadedCount = 0
     hasMore = true
+    isLoading = false
     selectedCommitID = nil
     await loadInitialBatch()
   }
@@ -628,6 +662,7 @@ struct RevisionGraphView: View {
       return
     }
 
+    let commitID = commit.id
     selectedFilePath = nil
     diffDocument = GitDiffDocument()
     isLoadingChanges = true
@@ -639,20 +674,21 @@ struct RevisionGraphView: View {
     let firstParent = commit.parentHashes.first
 
     async let filesResult = GitStatsService.shared.getCommitChangedFiles(
-      hash: commit.id,
+      hash: commitID,
       firstParentHash: firstParent,
       in: workingDirectory
     )
     async let bodyResult = GitStatsService.shared.getCommitBody(
-      hash: commit.id,
+      hash: commitID,
       in: workingDirectory
     )
 
     let files = await filesResult
     let body = await bodyResult
 
-    // Guard against stale load — user may have selected a different commit.
-    guard selectedCommitID == commit.id else {
+    guard !Task.isCancelled,
+          selectedCommitID == commitID
+    else {
       return
     }
 
@@ -664,15 +700,15 @@ struct RevisionGraphView: View {
 
   @MainActor
   private func loadSelectedFileDiff() async {
-    guard
-      let path = selectedFilePath,
-      let commit = selectedCommit
+    guard let path = selectedFilePath,
+          let commit = selectedCommit
     else {
       diffDocument = GitDiffDocument()
       isLoadingDiff = false
       return
     }
 
+    let commitID = commit.id
     isLoadingDiff = true
 
     defer {
@@ -680,25 +716,30 @@ struct RevisionGraphView: View {
     }
 
     let doc = await GitStatsService.shared.getCommitFileDiff(
-      hash: commit.id,
+      hash: commitID,
       firstParentHash: commit.parentHashes.first,
       path: path,
       in: workingDirectory
     )
 
-    // Guard against stale load — user may have selected a different file.
-    guard selectedFilePath == path else {
+    guard !Task.isCancelled,
+          selectedFilePath == path,
+          selectedCommitID == commitID
+    else {
       return
     }
 
     diffDocument = doc
   }
 
-  /// Runs lane calculation on a background thread.
+  /// Runs lane calculation on a background thread with cancellation support.
   private func computeLanes(for commits: [GraphCommit]) async -> [LaneAssignment] {
-    await Task.detached {
-      GraphLaneCalculator.assignLanes(commits)
-    }.value
+    await withCheckedContinuation { continuation in
+      DispatchQueue.global(qos: .userInitiated).async {
+        let result = GraphLaneCalculator.assignLanes(commits)
+        continuation.resume(returning: result)
+      }
+    }
   }
 
   // MARK: - Helpers

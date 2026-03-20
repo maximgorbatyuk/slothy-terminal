@@ -34,21 +34,26 @@ final class GitStatsService {
   }
 
   /// Returns summary stats: total commits, total authors, first commit date, current branch.
+  /// Batches shared git facts to reduce subprocess fan-out.
   func getRepositorySummary(in directory: URL) async -> RepositorySummary? {
-    let totalCommits = await countAllCommits(in: directory)
+    async let commitCountOutput = runGit(["rev-list", "--count", "--all"], in: directory)
+    async let shortlogOutput = runGit(["shortlog", "-sn", "--all"], in: directory)
+    async let rootDateOutput = firstCommitDateBatched(in: directory)
+    async let branch = GitService.shared.getCurrentBranch(in: directory)
 
-    guard totalCommits > 0 else {
+    guard let commitStr = await commitCountOutput,
+          let totalCommits = Int(commitStr.trimmingCharacters(in: .whitespacesAndNewlines)),
+          totalCommits > 0
+    else {
       return nil
     }
 
-    async let authorCount = countAuthors(in: directory)
-    async let firstDate = firstCommitDate(in: directory)
-    async let branch = GitService.shared.getCurrentBranch(in: directory)
+    let authorCount = countAuthorsFromShortlog(await shortlogOutput ?? "")
 
     return RepositorySummary(
       totalCommits: totalCommits,
-      totalAuthors: await authorCount,
-      firstCommitDate: await firstDate,
+      totalAuthors: authorCount,
+      firstCommitDate: await rootDateOutput,
       currentBranch: await branch
     )
   }
@@ -360,56 +365,34 @@ final class GitStatsService {
 
   // MARK: - Private helpers
 
-  private func countAllCommits(in directory: URL) async -> Int {
-    guard let output = await runGit(["rev-list", "--count", "--all"], in: directory) else {
-      return 0
-    }
-
-    return Int(output.trimmingCharacters(in: .whitespacesAndNewlines)) ?? 0
-  }
-
-  private func countAuthors(in directory: URL) async -> Int {
-    guard let output = await runGit(["shortlog", "-sn", "--all"], in: directory) else {
-      return 0
-    }
-
-    return output
+  /// Counts non-empty lines in shortlog output to derive author count.
+  func countAuthorsFromShortlog(_ output: String) -> Int {
+    output
       .components(separatedBy: "\n")
       .filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
       .count
   }
 
-  private func firstCommitDate(in directory: URL) async -> Date? {
-    // Find the root commit hash first, then get its date.
-    // `git log --reverse -1` is wrong: `-1` limits before `--reverse` applies.
-    guard let rootHash = await runGit(
-      ["rev-list", "--max-parents=0", "HEAD"],
+  /// Fetches root commit date in a single git call using `--diff-filter` with `--reverse`.
+  private func firstCommitDateBatched(in directory: URL) async -> Date? {
+    guard let output = await runGit(
+      ["log", "--reverse", "--format=%ai", "--max-parents=0", "--all"],
       in: directory
     ) else {
       return nil
     }
 
-    // rev-list may return multiple roots; take the first line.
-    let firstRoot = rootHash
+    /// Take the first non-empty line (earliest root commit's date).
+    let dateLine = output
       .components(separatedBy: "\n")
-      .first?
-      .trimmingCharacters(in: .whitespaces) ?? ""
+      .first { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }?
+      .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
 
-    guard !firstRoot.isEmpty else {
+    guard !dateLine.isEmpty else {
       return nil
     }
 
-    guard let dateOutput = await runGit(
-      ["log", "--format=%ai", "-1", firstRoot],
-      in: directory
-    ) else {
-      return nil
-    }
-
-    return parseISODateToDay(
-      dateOutput.trimmingCharacters(in: .whitespacesAndNewlines),
-      calendar: Calendar.current
-    )
+    return parseISODateToDay(dateLine, calendar: Calendar.current)
   }
 
   /// Parses "Name <email>" into (name, email). Falls back to full string as name.

@@ -345,9 +345,9 @@ struct AppStateWorkspaceTests {
     #expect(appState.currentContextDirectory == dirB)
   }
 
-  @Test("Git branch refresh context changes when active terminal tab completes work")
+  @Test("Git branch refresh context is stable across terminal busy-idle transitions")
   @MainActor
-  func gitBranchRefreshContextChangesAfterTerminalCommand() throws {
+  func gitBranchRefreshContextStableAcrossBusyIdle() throws {
     let appState = AppState()
 
     appState.createTab(agent: .terminal, directory: dirA)
@@ -357,12 +357,12 @@ struct AppStateWorkspaceTests {
     tab.markTerminalBusy()
     let busyContext = try #require(appState.gitBranchRefreshContext)
 
-    #expect(busyContext != idleContext)
+    /// Context must not change on busy/idle — only on tab or directory changes.
+    #expect(busyContext == idleContext)
 
     tab.markTerminalIdle()
     let settledContext = try #require(appState.gitBranchRefreshContext)
 
-    #expect(settledContext != busyContext)
     #expect(settledContext == idleContext)
   }
 

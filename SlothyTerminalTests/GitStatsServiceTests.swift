@@ -211,4 +211,25 @@ struct GitStatsServiceTests {
     #expect(result[0].commitCount == 30)
     #expect(result[0].name == "User A")
   }
+
+  // MARK: - Author Count from Shortlog
+
+  @Test("Counts non-empty lines in shortlog output")
+  func countAuthorsFromShortlog() {
+    let output = """
+      142\tJohn Doe
+       87\tJane Smith
+        3\tBot
+    """
+
+    let count = service.countAuthorsFromShortlog(output)
+
+    #expect(count == 3)
+  }
+
+  @Test("Empty shortlog returns zero authors")
+  func countAuthorsFromShortlogEmpty() {
+    #expect(service.countAuthorsFromShortlog("") == 0)
+    #expect(service.countAuthorsFromShortlog("   \n  \n") == 0)
+  }
 }

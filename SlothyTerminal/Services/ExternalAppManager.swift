@@ -12,18 +12,21 @@ struct ExternalApp: Identifiable {
   /// SF Symbol name for fallback icon.
   let icon: String
 
+  /// Cached installation URL resolved once during snapshot.
+  let appURL: URL?
+
+  /// Cached application icon resolved once during snapshot.
+  let appIcon: NSImage?
+
   /// Whether the application is installed on this system.
-  var isInstalled: Bool {
-    NSWorkspace.shared.urlForApplication(withBundleIdentifier: id) != nil
-  }
+  var isInstalled: Bool { appURL != nil }
 
-  /// The application's icon from the system.
-  var appIcon: NSImage? {
-    guard let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: id) else {
-      return nil
-    }
-
-    return NSWorkspace.shared.icon(forFile: url.path)
+  init(id: String, name: String, icon: String) {
+    self.id = id
+    self.name = name
+    self.icon = icon
+    self.appURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: id)
+    self.appIcon = self.appURL.map { NSWorkspace.shared.icon(forFile: $0.path) }
   }
 }
 
@@ -32,8 +35,26 @@ final class ExternalAppManager {
   /// Shared singleton instance.
   static let shared = ExternalAppManager()
 
-  /// List of known developer applications.
-  let knownApps: [ExternalApp] = [
+  /// List of known developer applications (with cached install/icon state).
+  let knownApps: [ExternalApp]
+
+  /// Cached installed apps snapshot.
+  let installedApps: [ExternalApp]
+
+  /// Cached installed editor apps snapshot.
+  let installedEditorApps: [ExternalApp]
+
+  private init() {
+    let apps = Self.allKnownApps
+    self.knownApps = apps
+    self.installedApps = apps.filter { $0.isInstalled }
+    self.installedEditorApps = apps.filter {
+      Self.editorBundleIDs.contains($0.id) && $0.isInstalled
+    }
+  }
+
+  /// All known developer applications.
+  private static let allKnownApps: [ExternalApp] = [
     ExternalApp(id: "com.apple.finder", name: "Finder", icon: "folder"),
     ExternalApp(id: "com.anthropic.claudefordesktop", name: "Claude", icon: "bubble.left"),
     ExternalApp(id: "com.openai.chat", name: "ChatGPT", icon: "bubble.right"),
@@ -55,10 +76,8 @@ final class ExternalAppManager {
     ExternalApp(id: "com.jetbrains.fleet", name: "Fleet", icon: "bolt"),
   ]
 
-  private init() {}
-
   /// Bundle IDs of text editor applications suitable for file editing.
-  private let editorBundleIDs: Set<String> = [
+  private static let editorBundleIDs: Set<String> = [
     "com.microsoft.VSCode",
     "com.todesktop.230313mzl4w4u92",
     "com.google.antigravity",
@@ -71,16 +90,6 @@ final class ExternalAppManager {
     "com.jetbrains.idea",
     "com.apple.dt.Xcode",
   ]
-
-  /// Returns only the apps that are currently installed.
-  var installedApps: [ExternalApp] {
-    knownApps.filter { $0.isInstalled }
-  }
-
-  /// Returns installed text editor apps suitable for opening files.
-  var installedEditorApps: [ExternalApp] {
-    knownApps.filter { editorBundleIDs.contains($0.id) && $0.isInstalled }
-  }
 
   /// Opens a directory in the specified application.
   func openDirectory(_ url: URL, in app: ExternalApp) {
@@ -106,7 +115,7 @@ final class ExternalAppManager {
 
   /// Opens a URL in the specified application.
   private func openURL(_ url: URL, in app: ExternalApp) {
-    guard let appURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: app.id) else {
+    guard let appURL = app.appURL else {
       return
     }
 

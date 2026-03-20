@@ -149,4 +149,25 @@ struct AppConfigTests {
 
     #expect(decoded == original)
   }
+
+  @Test("WindowState round-trips through AppConfig serialization")
+  func windowStateRoundTrip() throws {
+    var original = AppConfig()
+    original.windowState = WindowState(x: 100, y: 200, width: 800, height: 600)
+
+    let data = try JSONEncoder().encode(original)
+    let decoded = try JSONDecoder().decode(AppConfig.self, from: data)
+
+    #expect(decoded.windowState == original.windowState)
+    #expect(decoded.windowState?.frame.origin.x == 100)
+    #expect(decoded.windowState?.frame.size.width == 800)
+  }
+
+  @Test("WindowState is nil by default and absent keys decode gracefully")
+  func windowStateDefaultNil() throws {
+    let data = Data("{}".utf8)
+    let config = try JSONDecoder().decode(AppConfig.self, from: data)
+
+    #expect(config.windowState == nil)
+  }
 }

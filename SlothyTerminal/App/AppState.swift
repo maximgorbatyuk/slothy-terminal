@@ -31,10 +31,10 @@ enum ModalType: Identifiable {
 }
 
 /// Input that determines when the status bar should re-fetch the git branch.
+/// Keyed only on tab identity and directory — not terminal busy state.
 struct GitBranchRefreshContext: Equatable {
   let tabID: UUID
   let workingDirectory: URL
-  let isTerminalBusy: Bool
 }
 
 enum TabDropIndicator: Equatable {
@@ -113,8 +113,7 @@ class AppState {
 
     return GitBranchRefreshContext(
       tabID: activeTab.id,
-      workingDirectory: activeTab.workingDirectory,
-      isTerminalBusy: activeTab.mode == .terminal ? activeTab.isTerminalBusy : false
+      workingDirectory: activeTab.workingDirectory
     )
   }
 
