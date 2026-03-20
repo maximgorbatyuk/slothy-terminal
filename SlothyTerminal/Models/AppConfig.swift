@@ -81,16 +81,13 @@ struct AppConfig: Codable, Equatable {
     }
   }
 
-  /// Last explicitly selected model for OpenCode chat.
-  /// Used to preselect model in new OpenCode chat tabs.
+  /// Last explicitly selected model for OpenCode terminal sessions.
   var lastUsedOpenCodeModel: ChatModelSelection?
 
-  /// Last explicitly selected mode for OpenCode chat.
-  /// Used to preselect Build/Plan in new OpenCode chat tabs.
+  /// Last explicitly selected mode for OpenCode terminal sessions.
   var lastUsedOpenCodeMode: ChatMode?
 
-  /// Whether OpenCode chat should prefer asking clarifying questions first.
-  /// Used to preselect Ask mode in new OpenCode chat tabs.
+  /// Whether OpenCode should prefer asking clarifying questions first.
   var lastUsedOpenCodeAskModeEnabled: Bool = false
 
   // MARK: - Keyboard Shortcuts

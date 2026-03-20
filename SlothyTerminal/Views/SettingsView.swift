@@ -57,13 +57,6 @@ struct GeneralSettingsTab: View {
   var body: some View {
     Form {
       Section("Startup") {
-        Picker("Default tab mode", selection: Bindable(configManager).config.defaultTabMode) {
-          ForEach(TabMode.defaultOptions, id: \.self) { mode in
-            Text(mode.displayName).tag(mode)
-          }
-        }
-        .pickerStyle(.segmented)
-
         Picker("Default agent (TUI)", selection: Bindable(configManager).config.defaultAgent) {
           ForEach(AgentType.allCases) { agent in
             Text(agent.rawValue).tag(agent)
