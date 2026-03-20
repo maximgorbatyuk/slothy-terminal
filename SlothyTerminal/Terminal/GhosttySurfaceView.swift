@@ -24,6 +24,7 @@ class GhosttySurfaceView: NSView, NSTextInputClient {
   /// Matches Ghostty's approach: during animations, `bounds` may be in transit,
   /// so we keep the last known-good size separately.
   private var contentSize: NSSize = .zero
+  private var surfaceMetricsCache = GhosttySurfaceMetricsCache()
 
   /// Accumulated text from `insertText` during key interpretation.
   private var keyTextAccumulator: [String]?
@@ -49,13 +50,17 @@ class GhosttySurfaceView: NSView, NSTextInputClient {
 
   private var isTabActive = true
   private var lastViewportSnapshot = ""
+  private var viewportSnapshotGeneration: UInt64 = 0
   private var activityDetectionWorkItem: DispatchWorkItem?
   private let activityDetectionGate = ActivityDetectionGate()
   private var lastUserInputAt: Date = .distantPast
+  private var pendingClipboardPasteCapture = false
+  private var pendingClipboardPasteCaptureArmedAt: Date?
   private var commandCaptureBuffer = TerminalCommandCaptureBuffer()
 
   private let activityDetectionDelay: TimeInterval = 0.12
   private let userInputSuppressionInterval: TimeInterval = 0.4
+  private let clipboardPasteCaptureValidity: TimeInterval = 0.1
 
   // MARK: - Initialization
 
@@ -205,6 +210,8 @@ class GhosttySurfaceView: NSView, NSTextInputClient {
       ghostty_surface_free(surface)
       self.surface = nil
     }
+
+    surfaceMetricsCache.reset()
   }
 
   // MARK: - View Lifecycle
@@ -289,7 +296,9 @@ class GhosttySurfaceView: NSView, NSTextInputClient {
 
     let xScale = fbFrame.size.width / frame.size.width
     let yScale = fbFrame.size.height / frame.size.height
-    ghostty_surface_set_content_scale(surface, xScale, yScale)
+    if surfaceMetricsCache.shouldApplyContentScale(x: xScale, y: yScale) {
+      ghostty_surface_set_content_scale(surface, xScale, yScale)
+    }
 
     /// Re-send size using the stored contentSize so we don't read stale bounds
     /// during animations or transitions.
@@ -317,6 +326,10 @@ class GhosttySurfaceView: NSView, NSTextInputClient {
           width > 0,
           height > 0
     else {
+      return
+    }
+
+    guard surfaceMetricsCache.shouldApplySurfaceSize(width: width, height: height) else {
       return
     }
 
@@ -365,7 +378,7 @@ class GhosttySurfaceView: NSView, NSTextInputClient {
     isTabActive = isActive
     activityDetectionWorkItem?.cancel()
     activityDetectionWorkItem = nil
-    activityDetectionGate.cancelSchedule()
+    activityDetectionGate.cancelAll()
     refreshViewportSnapshot()
   }
 
@@ -547,16 +560,16 @@ class GhosttySurfaceView: NSView, NSTextInputClient {
 
       if chars == "v" {
         noteUserInput()
-
-        // Best-effort paste capture. Newlines are not treated as submits since
-        // bracketed paste or shell multi-line editing may handle them differently.
-        if let pastedText = NSPasteboard.general.string(forType: .string) {
-          trackCommandCaptureText(pastedText, submitOnNewline: false)
-        }
+        pendingClipboardPasteCapture = true
+        pendingClipboardPasteCaptureArmedAt = Date()
 
         /// Paste from clipboard via ghostty binding action.
         let action = "paste_from_clipboard"
-        _ = ghostty_surface_binding_action(surface, action, UInt(action.count))
+        let didPaste = ghostty_surface_binding_action(surface, action, UInt(action.count))
+        if !didPaste {
+          pendingClipboardPasteCapture = false
+          pendingClipboardPasteCaptureArmedAt = nil
+        }
         return true
       }
     }
@@ -1196,8 +1209,43 @@ extension GhosttySurfaceView {
     lastUserInputAt = Date()
   }
 
+  func captureClipboardPasteIfNeeded(_ text: String) {
+    guard pendingClipboardPasteCapture else {
+      return
+    }
+
+    guard let armedAt = pendingClipboardPasteCaptureArmedAt,
+          Date().timeIntervalSince(armedAt) <= clipboardPasteCaptureValidity
+    else {
+      pendingClipboardPasteCapture = false
+      self.pendingClipboardPasteCaptureArmedAt = nil
+      return
+    }
+
+    pendingClipboardPasteCapture = false
+    pendingClipboardPasteCaptureArmedAt = nil
+    trackCommandCaptureText(text, submitOnNewline: false)
+  }
+
+  private func nextViewportSnapshotGeneration() -> UInt64 {
+    viewportSnapshotGeneration &+= 1
+    return viewportSnapshotGeneration
+  }
+
+  private func shouldAcceptViewportSnapshotGeneration(_ generation: UInt64) -> Bool {
+    generation == viewportSnapshotGeneration
+  }
+
   private func scheduleBackgroundActivityDetection() {
-    guard activityDetectionGate.beginSchedule() else {
+    guard activityDetectionGate.noteRender() else {
+      return
+    }
+
+    scheduleBackgroundActivityDetectionWorkItem()
+  }
+
+  private func scheduleBackgroundActivityDetectionWorkItem() {
+    guard activityDetectionWorkItem == nil else {
       return
     }
 
@@ -1207,44 +1255,57 @@ extension GhosttySurfaceView {
       }
 
       self.activityDetectionWorkItem = nil
-      self.activityDetectionGate.finishSchedule()
-      self.detectBackgroundActivityIfNeeded()
+
+      guard let version = self.activityDetectionGate.beginScheduledCheck() else {
+        return
+      }
+
+      self.detectBackgroundActivityIfNeeded(for: version)
     }
 
     activityDetectionWorkItem = workItem
     DispatchQueue.main.asyncAfter(deadline: .now() + activityDetectionDelay, execute: workItem)
   }
 
-  private func detectBackgroundActivityIfNeeded() {
+  private func detectBackgroundActivityIfNeeded(for version: UInt64) {
     guard let text = readViewportText() else {
+      finishBackgroundActivityDetection(for: version)
       return
     }
 
+    let snapshotGeneration = nextViewportSnapshotGeneration()
     let previousSnapshot = lastViewportSnapshot
-    let isCurrentlyActive = isTabActive
-    let suppressionInterval = userInputSuppressionInterval
-    let lastInput = lastUserInputAt
 
     DispatchQueue.global(qos: .utility).async { [weak self] in
       let snapshot = ANSIStripper.strip(text)
-
-      guard snapshot != previousSnapshot else {
-        return
-      }
 
       DispatchQueue.main.async {
         guard let self else {
           return
         }
 
-        self.lastViewportSnapshot = snapshot
-        self.onTerminalActivity?()
-
-        guard !isCurrentlyActive else {
+        guard self.activityDetectionGate.shouldAcceptResult(for: version),
+              self.shouldAcceptViewportSnapshotGeneration(snapshotGeneration)
+        else {
           return
         }
 
-        guard Date().timeIntervalSince(lastInput) > suppressionInterval else {
+        defer {
+          self.finishBackgroundActivityDetection(for: version)
+        }
+
+        guard snapshot != previousSnapshot else {
+          return
+        }
+
+        self.lastViewportSnapshot = snapshot
+        self.onTerminalActivity?()
+
+        guard !self.isTabActive else {
+          return
+        }
+
+        guard Date().timeIntervalSince(self.lastUserInputAt) > self.userInputSuppressionInterval else {
           return
         }
 
@@ -1253,16 +1314,32 @@ extension GhosttySurfaceView {
     }
   }
 
+  private func finishBackgroundActivityDetection(for version: UInt64) {
+    guard activityDetectionGate.completeScheduledCheck(for: version) else {
+      return
+    }
+
+    scheduleBackgroundActivityDetectionWorkItem()
+  }
+
   private func refreshViewportSnapshot() {
     guard let text = readViewportText() else {
       return
     }
 
+    let snapshotGeneration = nextViewportSnapshotGeneration()
+
     DispatchQueue.global(qos: .utility).async { [weak self] in
       let stripped = ANSIStripper.strip(text)
 
       DispatchQueue.main.async {
-        self?.lastViewportSnapshot = stripped
+        guard let self,
+              self.shouldAcceptViewportSnapshotGeneration(snapshotGeneration)
+        else {
+          return
+        }
+
+        self.lastViewportSnapshot = stripped
       }
     }
   }

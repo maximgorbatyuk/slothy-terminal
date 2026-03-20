@@ -152,6 +152,13 @@ struct DirectoryTreeView: View {
   let rootDirectory: URL
   @State private var isExpanded: Bool = true
   @State private var items: [FileItem] = []
+  @State private var isLoading = false
+  @State private var lastLoadedRootDirectory: URL?
+  @State private var rootLoadGeneration = 0
+
+  private var loadKey: String {
+    "\(rootDirectory.path)|\(isExpanded)"
+  }
 
   var body: some View {
     VStack(alignment: .leading, spacing: 8) {
@@ -185,14 +192,24 @@ struct DirectoryTreeView: View {
         /// Tree content in a card.
         ScrollView {
           VStack(alignment: .leading, spacing: 0) {
-            if items.isEmpty {
+            if isLoading {
+              HStack(spacing: 8) {
+                ProgressView()
+                  .controlSize(.small)
+
+                Text("Loading files...")
+                  .font(.system(size: 11))
+                  .foregroundColor(.secondary)
+              }
+              .padding(.vertical, 8)
+            } else if items.isEmpty {
               Text("No files")
                 .font(.system(size: 11))
                 .foregroundColor(.secondary)
                 .padding(.vertical, 8)
             } else {
-              ForEach(Array(items.indices), id: \.self) { index in
-                FileItemRow(item: $items[index], depth: 0, rootDirectory: rootDirectory)
+              ForEach($items) { $item in
+                FileItemRow(item: $item, depth: 0, rootDirectory: rootDirectory)
               }
             }
           }
@@ -204,16 +221,41 @@ struct DirectoryTreeView: View {
         .cornerRadius(8)
       }
     }
-    .onAppear {
-      loadItems()
-    }
-    .onChange(of: rootDirectory) {
-      loadItems()
-    }
-  }
+    .task(id: loadKey) {
+      guard isExpanded else {
+        rootLoadGeneration += 1
+        isLoading = false
+        return
+      }
 
-  private func loadItems() {
-    items = DirectoryTreeManager.shared.scanDirectory(rootDirectory)
+      guard lastLoadedRootDirectory != rootDirectory || items.isEmpty else {
+        isLoading = false
+        return
+      }
+
+      let directory = rootDirectory
+      rootLoadGeneration += 1
+      let loadGeneration = rootLoadGeneration
+      isLoading = true
+
+      if lastLoadedRootDirectory != directory {
+        items = []
+      }
+
+      let loadedItems = await DirectoryTreeManager.shared.loadItems(in: directory)
+
+      guard !Task.isCancelled,
+            rootDirectory == directory,
+            isExpanded,
+            rootLoadGeneration == loadGeneration
+      else {
+        return
+      }
+
+      items = loadedItems
+      lastLoadedRootDirectory = directory
+      isLoading = false
+    }
   }
 }
 
@@ -223,6 +265,7 @@ struct FileItemRow: View {
   let depth: Int
   let rootDirectory: URL
   @State private var showCopiedTooltip: Bool = false
+  @State private var childLoadTask: Task<Void, Never>?
 
   /// Relative path from the root directory.
   private var relativePath: String {
@@ -310,17 +353,35 @@ struct FileItemRow: View {
       }
 
       /// Render children if expanded.
-      if item.isDirectory && item.isExpanded, let children = item.children {
-        ForEach(Array(children.indices), id: \.self) { index in
-          FileItemRow(
-            item: Binding(
-              get: { item.children![index] },
-              set: { item.children![index] = $0 }
-            ),
-            depth: depth + 1,
-            rootDirectory: rootDirectory
-          )
+      if item.isDirectory && item.isExpanded {
+        if item.isLoadingChildren {
+          HStack(spacing: 6) {
+            Spacer()
+              .frame(width: CGFloat(depth + 1) * 12 + 20)
+
+            ProgressView()
+              .controlSize(.small)
+
+            Text("Loading...")
+              .font(.system(size: 10))
+              .foregroundColor(.secondary)
+          }
+          .padding(.vertical, 3)
+        } else {
+          ForEach($item.children) { $child in
+            FileItemRow(item: $child, depth: depth + 1, rootDirectory: rootDirectory)
+          }
         }
+      }
+    }
+    .onDisappear {
+      childLoadTask?.cancel()
+      childLoadTask = nil
+
+      if item.isLoadingChildren {
+        item.childLoadGeneration += 1
+        item.isExpanded = false
+        item.isLoadingChildren = false
       }
     }
   }
@@ -328,8 +389,46 @@ struct FileItemRow: View {
   private func toggleExpand() {
     item.isExpanded.toggle()
 
-    if item.isExpanded && item.children == nil {
-      item.children = DirectoryTreeManager.shared.loadChildren(for: item)
+    guard item.isDirectory else {
+      return
+    }
+
+    if !item.isExpanded {
+      childLoadTask?.cancel()
+      childLoadTask = nil
+      item.childLoadGeneration += 1
+      item.isLoadingChildren = false
+      return
+    }
+
+    guard !item.didLoadChildren, !item.isLoadingChildren else {
+      return
+    }
+
+    let itemID = item.id
+    let itemURL = item.url
+    item.childLoadGeneration += 1
+    let loadGeneration = item.childLoadGeneration
+
+    item.isLoadingChildren = true
+    childLoadTask?.cancel()
+    childLoadTask = Task { @MainActor in
+      let children = await DirectoryTreeManager.shared.loadChildren(in: itemURL)
+
+      guard item.id == itemID,
+            item.childLoadGeneration == loadGeneration
+      else {
+        return
+      }
+
+      guard !Task.isCancelled, item.isExpanded else {
+        item.isLoadingChildren = false
+        return
+      }
+
+      item.children = children
+      item.didLoadChildren = true
+      item.isLoadingChildren = false
     }
   }
 
@@ -427,7 +526,7 @@ struct ProjectDocRow: View {
 
   var body: some View {
     HStack(spacing: 4) {
-      Image(nsImage: NSWorkspace.shared.icon(forFile: url.path))
+      Image(nsImage: DirectoryTreeManager.shared.fileIcon(for: url))
         .resizable()
         .frame(width: 14, height: 14)
 

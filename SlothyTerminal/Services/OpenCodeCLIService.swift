@@ -3,66 +3,32 @@ import os
 
 /// Shared service for invoking the OpenCode CLI for model discovery.
 enum OpenCodeCLIService {
+  private static let modelsTimeout: TimeInterval = 15
 
   /// Runs `opencode models` and parses the output into model selections.
-  /// Must be called off the main thread (blocking I/O).
-  static func loadModels() -> [ChatModelSelection] {
-    let process = Process()
-    let stdout = Pipe()
-    let stderr = Pipe()
+  static func loadModels(timeout: TimeInterval = modelsTimeout) async -> [ChatModelSelection] {
+    let result = await GitProcessRunner.runProcessResult(
+      executableURL: URL(fileURLWithPath: "/usr/bin/env"),
+      arguments: ["opencode", "models"],
+      in: nil,
+      environment: makeEnvironment(),
+      timeout: timeout
+    )
 
-    process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
-    process.arguments = ["opencode", "models"]
-    process.standardOutput = stdout
-    process.standardError = stderr
+    guard result.isSuccess else {
+      guard !result.wasCancelled else {
+        return []
+      }
 
-    var env = ProcessInfo.processInfo.environment
-    let extraPaths = [
-      "/opt/homebrew/bin",
-      "/usr/local/bin",
-      "\(NSHomeDirectory())/.local/bin",
-    ]
-    let existingPath = env["PATH"] ?? "/usr/bin:/bin"
-    env["PATH"] = (extraPaths + [existingPath]).joined(separator: ":")
-    process.environment = env
-
-    do {
-      try process.run()
-    } catch {
-      Logger.app.warning("OpenCode model list failed to start: \(error.localizedDescription)")
+      let errorText = result.stderr.isEmpty ? "unknown error" : String(result.stderr.prefix(200))
+      Logger.app.warning("OpenCode model list failed: \(errorText)")
       return []
     }
 
-    let timeoutSeconds: Double = 15
-    let deadline = DispatchTime.now() + timeoutSeconds
-    let done = DispatchSemaphore(value: 0)
+    return parseModels(from: result.stdout)
+  }
 
-    DispatchQueue.global().async {
-      process.waitUntilExit()
-      done.signal()
-    }
-
-    if done.wait(timeout: deadline) == .timedOut {
-      process.terminate()
-      Logger.app.warning("OpenCode model list timed out after \(timeoutSeconds)s")
-      return []
-    }
-
-    guard process.terminationStatus == 0 else {
-      let errorText = String(
-        data: stderr.fileHandleForReading.readDataToEndOfFile(),
-        encoding: .utf8
-      ) ?? ""
-      Logger.app.warning("OpenCode model list failed: \(errorText.prefix(200))")
-      return []
-    }
-
-    let outputData = stdout.fileHandleForReading.readDataToEndOfFile()
-
-    guard let output = String(data: outputData, encoding: .utf8) else {
-      return []
-    }
-
+  static func parseModels(from output: String) -> [ChatModelSelection] {
     var seen = Set<String>()
     var models: [ChatModelSelection] = []
 
@@ -81,6 +47,11 @@ enum OpenCodeCLIService {
 
       let providerID = parts[0]
       let modelID = parts[1]
+
+      guard !providerID.isEmpty, !modelID.isEmpty else {
+        continue
+      }
+
       let key = "\(providerID)/\(modelID)"
 
       guard !seen.contains(key) else {
@@ -97,5 +68,17 @@ enum OpenCodeCLIService {
     }
 
     return models.sorted { $0.displayName < $1.displayName }
+  }
+
+  private static func makeEnvironment() -> [String: String] {
+    var env = ProcessInfo.processInfo.environment
+    let extraPaths = [
+      "/opt/homebrew/bin",
+      "/usr/local/bin",
+      "\(NSHomeDirectory())/.local/bin",
+    ]
+    let existingPath = env["PATH"] ?? "/usr/bin:/bin"
+    env["PATH"] = (extraPaths + [existingPath]).joined(separator: ":")
+    return env
   }
 }

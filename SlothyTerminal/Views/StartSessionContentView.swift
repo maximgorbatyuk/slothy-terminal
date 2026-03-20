@@ -198,9 +198,11 @@ struct StartSessionContentView: View {
         return
       }
 
-      let models = await Task.detached {
-        OpenCodeCLIService.loadModels()
-      }.value
+      let models = await OpenCodeCLIService.loadModels()
+
+      guard !Task.isCancelled else {
+        return
+      }
 
       openCodeModelOptions = models
     }

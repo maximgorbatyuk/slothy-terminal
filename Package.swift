@@ -43,6 +43,8 @@ let package = Package(
         "Services/BuildConfig.swift",
         "Services/Logger.swift",
         "Services/ActivityDetectionGate.swift",
+        "Services/DirectoryTreeScanner.swift",
+        "Services/GhosttySurfaceMetricsCache.swift",
         "Services/OpenCodeCLIService.swift",
         "Services/PythonScriptScanner.swift",
         "Services/GitProcessRunner.swift",
