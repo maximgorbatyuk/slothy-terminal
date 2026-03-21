@@ -40,6 +40,13 @@ swift test
 # Pre-requisite: appcast.xml and CHANGELOG.md entries for VERSION must exist before running
 ./scripts/release.sh [VERSION]
 # Example: ./scripts/release.sh 2026.2.15
+#
+# Release workflow:
+#   1. Write CHANGELOG.md entry for the new version
+#   2. Add appcast.xml <item> with SIGNATURE_HERE and FILE_SIZE_IN_BYTES placeholders
+#   3. Bump sparkle:version (build number) in the new appcast entry
+#   4. Run ./scripts/release.sh VERSION
+#   The script handles: build, notarize, Sparkle sign, appcast update, commit, GitHub release, push, merge to main
 ```
 
 ## Architecture
@@ -53,8 +60,6 @@ User Action → AppState.createTab() → Tab (with AIAgent)
                               GhosttyApp.shared (libghostty runtime)
                                         ↓
                          GhosttySurfaceView spawns PTY via libghostty
-                                        ↓
-                              Terminal output → StatsParser → UsageStats
                                         ↓
                               TerminalView renders via libghostty surface
 
@@ -99,7 +104,7 @@ SlothyTerminal/
 ├── Agents/          # AIAgent protocol + implementations (Claude, OpenCode, Terminal)
 ├── App/             # AppState, AppDelegate, SlothyTerminalApp entry point
 ├── Injection/       # Terminal input injection (models, orchestrator, registry)
-├── Models/          # Tab, Workspace, AppConfig, AgentType, UsageStats, GitStats, GitTab, GitDiffModels, GitWorkingTreeModels, MakeCommitComposerState, SavedPrompt, LaunchType, WorkspaceSplitState
+├── Models/          # Tab, Workspace, AppConfig, AgentType, GitStats, GitTab, GitDiffModels, GitModifiedFile, GitWorkingTreeModels, CommitFileChange, MakeCommitComposerState, SavedPrompt, LaunchType, WorkspaceSplitState, SettingsSection, ChatModelMode
 ├── Services/        # ConfigManager, GitService, GitStatsService, GraphLaneCalculator, StatsParser, etc.
 ├── Terminal/        # GhosttyApp singleton + GhosttySurfaceView
 └── Views/           # SwiftUI views (main, sidebar, tab bar, git client)
@@ -125,11 +130,6 @@ Workspaces are first-class tab containers. Each workspace maps to a project dire
 - `AppState.switchWorkspace(id:)` aligns the active tab to the target workspace (first tab, or nil if empty).
 - Empty workspaces show `EmptyTerminalView`.
 - **Empty workspace retargeting**: When the active workspace has no tabs and a new tab targets a different directory, `resolvedActiveWorkspaceID(for:)` retargets the workspace to the new directory. If another workspace already exists for that directory, the empty workspace is removed and the existing one is activated.
-
-## Core Architecture Notes
-
-- `AIAgent` is for PTY/CLI tab behavior (command, args, env vars, stats parsing).
-- Provider/model capabilities come through OpenCode CLI (`opencode models`, `opencode export`).
 
 ## Swift Style Guidelines
 
@@ -170,6 +170,7 @@ The Xcode project uses `PBXFileSystemSynchronizedRootGroup` — it auto-discover
 - `ModalRouter` in `MainView.swift` maps `ModalType` cases to views — keep it in sync when adding new modal types
 - `AppState.pendingSettingsSection` allows pre-selecting a `SettingsSection` tab when the native Settings window opens
 - All git `Process` calls must go through `GitProcessRunner.run()` — it reads pipe data before `waitUntilExit()` to prevent deadlocks when output exceeds the 64KB pipe buffer
+- **Terminal focus in `updateNSView`** — `ghostty_surface_set_focus` must only be called on actual `isTabActive` transitions (not every SwiftUI view update). Redundant focus calls cause libghostty to re-evaluate the viewport scroll position, producing a visible scroll-to-top-then-bottom artifact when switching tabs.
 - **Drag-drop reordering in vertical lists** requires two mitigations that horizontal tab bars don't need:
   1. **Use `swapAt` instead of `move(before:)`** — "insert before target" is a no-op when dragging downward (source is already before target). Swap works in both directions.
   2. **Add a cooldown after each swap** — after `swapWorkspaces` triggers a `ForEach` re-render, the swapped view can animate through the cursor and fire `dropEntered` again, immediately undoing the swap. A ~300ms cooldown flag prevents this double-swap.
