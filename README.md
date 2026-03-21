@@ -1,6 +1,6 @@
 # SlothyTerminal
 
-A native macOS terminal application designed for AI coding assistants with a tabbed interface, background task queue, and session tracking.
+A native macOS terminal application designed for AI coding assistants with a tabbed interface, workspace management, and session tracking.
 
 Privacy-first by design. See the [Privacy Policy](PRIVACY.md).
 
@@ -14,18 +14,20 @@ Known limitations and unresolved behavior are tracked in [KNOWN_ISSUES.md](KNOWN
 ## Overview
 
 SlothyTerminal provides a unified macOS workspace for AI coding agents with:
-- native chat tabs (Claude and OpenCode)
-- classic CLI/TUI terminal tabs
-- a background task queue for headless AI prompt execution
+- Claude CLI and OpenCode CLI terminal tabs
+- plain shell terminal tabs
+- a built-in Git repository browser
+- workspace-based tab organization
 
-Use Claude CLI, OpenCode, or plain terminal sessions in a clean tabbed interface. Queue prompts for background execution, review risky operations, and track session statistics.
+Use Claude CLI, OpenCode, or plain terminal sessions in a clean tabbed interface with workspaces, saved prompts, and session statistics.
 
 ## Features
 
 ### Multi-Agent Support
 - **Terminal** - Plain shell sessions powered by libghostty (Metal-accelerated)
-- **Claude** - Native chat + Claude CLI/TUI tab support
-- **OpenCode** - Native chat + OpenCode CLI/TUI tab support
+- **Claude** - Claude CLI/TUI terminal tabs
+- **OpenCode** - OpenCode CLI/TUI terminal tabs
+- **Git Client** - Built-in Git repository browser
 
 ![](/docs/assets/main_window.png)
 
@@ -34,24 +36,17 @@ Use Claude CLI, OpenCode, or plain terminal sessions in a clean tabbed interface
 - Quick tab switching with `Cmd+1-9`
 - Visual agent indicators with accent colors
 - Close tabs with `Cmd+W`
-- Mode-aware tab names (`Claude | chat`, `Claude | cli`, `Opencode | chat`, `Opencode | cli`, `Terminal | cli`)
+- Tab names: `Claude | cli`, `Opencode | cli`, `Terminal | cli`, `Git client`
+- Plain terminal tabs show the last submitted command in the tab label
 
 ![](/docs/assets/open_new_tab.png)
 
-### Task Queue
-- Background AI task execution engine for running prompts headlessly without occupying a chat tab
-- Compose tasks with title, prompt, agent type (Claude or OpenCode), working directory, and priority
-- Priority-then-FIFO scheduling with sequential execution
-- Live log streaming with timestamped entries during task execution
-- Log artifacts persisted per task attempt for later review
-- Auto-retry with exponential backoff for transient failures (up to 3 retries)
-- 30-minute execution timeout per task
-- Preflight validation (prompt non-empty, repo exists, CLI installed)
-- Crash recovery: tasks interrupted by app restart are automatically reset to pending
-- **Risky tool detection**: operations like `git push`, `rm -rf`, writing to `.env`/`.ssh`/credentials are detected and trigger a post-completion approval gate (Approve / Reject / Review)
-- Queue panel in the sidebar with running, pending, and history sections
-- Task composer modal with agent picker, directory selector, and priority
-- Task detail modal with metadata, prompt, result, risky operations, errors, and full log
+### Workspaces
+- Named project directory containers for organizing tabs
+- Switch between workspaces to focus on different projects
+- Drag-and-drop workspace reordering in the sidebar
+- Empty workspaces retarget to new directories automatically
+- Split view support for side-by-side terminal sessions
 
 ### GPU-Accelerated Terminal (libghostty)
 - Terminal rendering powered by [libghostty](https://github.com/ghostty-org/ghostty), the same engine behind the Ghostty terminal
@@ -68,22 +63,18 @@ Use Claude CLI, OpenCode, or plain terminal sessions in a clean tabbed interface
 - Command counter
 - Configurable sidebar position (left/right)
 
-### Native Chat Experience
-- Production chat engine architecture (state machine + transport + persistent store)
-- Streaming markdown responses with tool-aware rendering
-- Reliable multi-step tool flow handling for Claude stream-json
-- Session recovery and restore across app restarts
-- Composer status bar with mode selection (`Build` / `Plan`), model selection, and resolved metadata
-- Context-aware streaming indicator showing active tool name
-- Suggestion chips on empty state for quick-start prompts
-- Chat input history navigation with up/down arrow keys
+### Git Client
+- Built-in Git repository browser (no agent or PTY — pure SwiftUI)
+- Repository overview with summary stats and author activity
+- Revision graph with lane-based commit visualization
+- Activity heatmap grid
+- Commit composer with file picker, diff viewer, and commit message editor
+- Working tree changes display
 
-### OpenCode Chat Enhancements
-- Native OpenCode JSON event transport (`opencode run --format json`)
-- Searchable model picker loaded dynamically from `opencode models`
-- Model groups by provider prefix (for example `anthropic`, `openai`, `github-copilot`, `zai`)
-- Last used OpenCode model/mode remembered for new chats
-- **Ask mode**: instructs the agent to ask clarifying questions before implementing, with a visible badge in the input area
+### Saved Prompts
+- Save and reuse prompts for AI agent sessions
+- Inject saved prompts into active terminal sessions from the sidebar
+- Prompt management in settings
 
 ### Directory Tree Browser
 - Collapsible file tree showing project structure
@@ -111,9 +102,10 @@ Use Claude CLI, OpenCode, or plain terminal sessions in a clean tabbed interface
 ### Settings
 - **General** - Default agent, sidebar preferences, recent folders
 - **Agents** - Custom paths for Claude and OpenCode CLIs
-- **Appearance** - Terminal font family and size, agent accent colors, chat message text size
-- **Chat** - Markdown rendering mode, send key behavior, message timestamps and token metadata toggles
+- **Appearance** - Terminal font family and size, agent accent colors
 - **Shortcuts** - View keyboard shortcuts
+- **Prompts** - Manage saved prompts
+- **Licenses** - Third-party license information
 
 ### Additional Features
 - Smart Claude CLI path resolution preferring native Mach-O binaries over Node.js wrappers
@@ -121,6 +113,7 @@ Use Claude CLI, OpenCode, or plain terminal sessions in a clean tabbed interface
 - Automatic updates via Sparkle framework
 - Compact native title bar with contextual window title
 - Terminal interaction mode (Host Selection for text selection, App Mouse for TUI forwarding)
+- Terminal input injection subsystem for programmatic command delivery
 - Native macOS integration
 
 ![](/docs/assets/select_working_folder.png)
@@ -153,9 +146,8 @@ Download the latest DMG from [GitHub Releases](https://github.com/maximgorbatyuk
 ### Tabs
 | Action | Shortcut |
 |--------|----------|
-| New Chat Tab (Claude) | `Cmd+T` |
-| New Claude TUI Tab | `Cmd+Shift+T` |
-| New OpenCode Chat Tab | `Cmd+Option+T` |
+| New Session | `Cmd+T` |
+| New Session in Split View | `Cmd+Option+T` |
 | New Terminal Tab | `Cmd+Shift+Option+T` |
 | Close Tab | `Cmd+W` |
 | Next Tab | `Cmd+Shift+]` |
@@ -182,10 +174,6 @@ Access settings via `Cmd+,` or **SlothyTerminal → Settings**.
 ### Agent Settings
 - Custom executable paths for Claude CLI and OpenCode
 - Installation verification
-
-### Chat Settings
-- Markdown rendering mode (Markdown / Plain)
-- Chat send key behavior (Enter vs Shift+Enter)
 
 ### Appearance Settings
 - Terminal font family (monospaced fonts)
@@ -269,45 +257,57 @@ SlothyTerminal/
 │   ├── SlothyTerminalApp.swift    # App entry point and menu commands
 │   ├── AppState.swift             # Global state management
 │   └── AppDelegate.swift          # macOS app delegate
+├── Agents/
+│   ├── AIAgent.swift              # Agent protocol and factory
+│   ├── ClaudeAgent.swift          # Claude CLI integration
+│   ├── OpenCodeAgent.swift        # OpenCode CLI integration
+│   └── TerminalAgent.swift        # Plain terminal agent
+├── Injection/
+│   ├── Models/                    # InjectionPayload, InjectionRequest, InjectionTarget
+│   ├── Orchestrator/              # Per-tab FIFO injection queues
+│   └── Registry/                  # TerminalSurfaceRegistry for live surfaces
+├── Models/
+│   ├── Tab.swift                  # Tab model (terminal/git modes)
+│   ├── AgentType.swift            # Agent type enum (Terminal/Claude/OpenCode)
+│   ├── Workspace.swift            # Workspace model for tab grouping
+│   ├── GitStats.swift             # Git statistics and graph models
+│   ├── GitTab.swift               # Git client sub-tab enum
+│   ├── SavedPrompt.swift          # Saved prompt model
+│   ├── LaunchType.swift           # Session launch type enum
+│   └── AppConfig.swift            # Configuration model
+├── Services/
+│   ├── ConfigManager.swift        # Configuration persistence
+│   ├── GitService.swift           # Async git operations
+│   ├── GitStatsService.swift      # Repository statistics
+│   ├── GitProcessRunner.swift     # Git command runner (deadlock-safe)
+│   ├── GitWorkingTreeService.swift# Working tree change detection
+│   ├── GraphLaneCalculator.swift  # Revision graph lane assignment
+│   ├── OpenCodeCLIService.swift   # OpenCode CLI wrapper
+│   ├── ANSIStripper.swift         # ANSI escape sequence removal
+│   ├── DirectoryTreeManager.swift # Directory tree scanning
+│   ├── ExternalAppManager.swift   # External app integration
+│   ├── RecentFoldersManager.swift # Recent folders tracking
+│   ├── UpdateManager.swift        # Sparkle update manager
+│   └── BuildConfig.swift          # Build environment config
+├── Terminal/
+│   ├── GhosttyApp.swift           # Libghostty app singleton and callbacks
+│   └── GhosttySurfaceView.swift   # NSView subclass for terminal surfaces
 ├── Views/
 │   ├── MainView.swift             # Main window layout
 │   ├── TabBarView.swift           # Tab bar with agent indicators
 │   ├── TerminalView.swift         # Libghostty SwiftUI bridge
 │   ├── TerminalContainerView.swift# Terminal display container
 │   ├── SidebarView.swift          # Session statistics sidebar
+│   ├── WorkspacesSidebarView.swift# Workspace management sidebar
+│   ├── PromptsSidebarView.swift   # Saved prompts sidebar
+│   ├── GitClientView.swift        # Git client container
+│   ├── MakeCommitView.swift       # Commit composer
+│   ├── RevisionGraphView.swift    # Commit history graph
+│   ├── GitChangesView.swift       # Working tree changes
+│   ├── StartupPageView.swift      # New session startup page
 │   ├── SettingsView.swift         # Settings window
 │   ├── AboutView.swift            # About window
-│   ├── FolderSelectorModal.swift  # Folder browser modal
-│   └── Telegram/                  # Telegram sidebar and controls
-├── Models/
-│   ├── Tab.swift                  # Tab model for chat/cli modes
-│   ├── AgentType.swift            # Agent type enum (Terminal/Claude/OpenCode)
-│   ├── UsageStats.swift           # Session statistics tracking
-│   └── AppConfig.swift            # Configuration model
-├── Chat/
-│   ├── Engine/                    # Chat state machine and commands
-│   ├── Transport/                 # Provider transports (Claude/OpenCode)
-│   ├── OpenCode/                  # OpenCode parser/mapper/transport
-│   ├── Storage/                   # Session snapshot persistence
-│   ├── Parser/                    # Stream event parser types
-│   ├── Models/                    # Chat/domain models
-│   └── Views/                     # Chat UI, markdown, tool rendering
-├── Agents/
-│   ├── AIAgent.swift              # Agent protocol and factory
-│   ├── ClaudeAgent.swift          # Claude CLI integration
-│   ├── OpenCodeAgent.swift        # OpenCode CLI integration
-│   └── TerminalAgent.swift        # Plain terminal agent
-├── Services/
-│   ├── ConfigManager.swift        # Configuration persistence
-│   ├── RecentFoldersManager.swift # Recent folders tracking
-│   ├── StatsParser.swift          # Output parsing for stats
-│   ├── UpdateManager.swift        # Sparkle update manager
-│   ├── DirectoryTreeManager.swift # Directory tree scanning
-│   ├── ExternalAppManager.swift   # External app integration
-│   └── BuildConfig.swift          # Build environment config
-├── Terminal/
-│   ├── GhosttyApp.swift           # Libghostty app singleton and callbacks
-│   └── GhosttySurfaceView.swift   # NSView subclass for terminal surfaces
+│   └── FolderSelectorModal.swift  # Folder browser modal
 └── Resources/
     ├── Config.debug.json          # Debug build configuration
     └── Config.release.json        # Release build configuration
@@ -315,7 +315,6 @@ SlothyTerminal/
 
 ## Documentation
 
-- [Authentication](docs/authentication.md) - API key and OAuth authentication for the Native Agent System
 - [Release Process](docs/RELEASE.md) - Full step-by-step release instructions
 - [UI Guidelines](docs/ui-guideline.md) - Design guidelines
 - [Roadmap](docs/roadmap.md) - Project roadmap
@@ -355,4 +354,3 @@ MIT License - see [LICENSE](LICENSE) for details.
 
 - [Ghostty](https://github.com/ghostty-org/ghostty) by Mitchell Hashimoto - GPU-accelerated terminal rendering via libghostty
 - [Sparkle](https://github.com/sparkle-project/Sparkle) for the update framework
-
