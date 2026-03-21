@@ -119,14 +119,37 @@ echo "  Step 3: Update appcast.xml"
 echo "==========================================="
 echo ""
 
-sed -i '' "s|sparkle:edSignature=\"SIGNATURE_HERE\"|sparkle:edSignature=\"$SIGNATURE\"|" appcast.xml
-sed -i '' "s|length=\"FILE_SIZE_IN_BYTES\"|length=\"$DMG_SIZE_BYTES\"|" appcast.xml
+## Replace placeholders only in the <item> block for this specific version.
+## The template comment in appcast.xml also contains these strings — skip it.
+awk -v sig="$SIGNATURE" -v size="$DMG_SIZE_BYTES" -v ver="$VERSION" '
+  /shortVersionString>/ && index($0, ver) { in_version = 1 }
+  in_version && /SIGNATURE_HERE/ {
+    gsub(/SIGNATURE_HERE/, sig)
+    in_version_sig_done = 1
+  }
+  in_version && /FILE_SIZE_IN_BYTES/ {
+    gsub(/FILE_SIZE_IN_BYTES/, size)
+    in_version = 0
+  }
+  { print }
+' appcast.xml > appcast.xml.tmp && mv appcast.xml.tmp appcast.xml
 
 echo "Updated appcast.xml with signature and file size."
 
-# Verify the placeholders were replaced.
-if grep -q "SIGNATURE_HERE" appcast.xml || grep -q "FILE_SIZE_IN_BYTES" appcast.xml; then
-  echo "ERROR: appcast.xml still contains placeholder values after update"
+## Verify: the real entry should have the signature, but the template comment may still have placeholders.
+## Check that the version-specific enclosure no longer has placeholders.
+VERSION_BLOCK=$(awk -v ver="$VERSION" '
+  /shortVersionString>/ && index($0, ver) { in_ver = 1 }
+  in_ver { print }
+  in_ver && /<\/item>/ { exit }
+' appcast.xml)
+
+if echo "$VERSION_BLOCK" | grep -q "SIGNATURE_HERE"; then
+  echo "ERROR: appcast.xml entry for $VERSION still contains SIGNATURE_HERE"
+  exit 1
+fi
+if echo "$VERSION_BLOCK" | grep -q "FILE_SIZE_IN_BYTES"; then
+  echo "ERROR: appcast.xml entry for $VERSION still contains FILE_SIZE_IN_BYTES"
   exit 1
 fi
 
@@ -218,23 +241,32 @@ RELEASE_URL=$(gh release view "$TAG" --json url -q '.url')
 echo ""
 echo "Release published: $RELEASE_URL"
 
-# ── Step 8: Push ──────────────────────────────────────────────────
+# ── Step 8: Push & merge to main ──────────────────────────────────
 
 echo ""
 echo "==========================================="
-echo "  Step 8: Push"
+echo "  Step 8: Push & Merge to Main"
 echo "==========================================="
 echo ""
 
 BRANCH=$(git branch --show-current)
 echo "Current branch: $BRANCH"
-read -p "Push to origin/$BRANCH? [y/N] " PUSH_CONFIRM
 
-if [[ "$PUSH_CONFIRM" =~ ^[Yy]$ ]]; then
-  git push origin "$BRANCH"
-  echo "Pushed to origin/$BRANCH"
-else
-  echo "Skipped push. Run manually: git push origin $BRANCH"
+git push origin "$BRANCH"
+echo "Pushed to origin/$BRANCH"
+
+if [ "$BRANCH" != "main" ]; then
+  echo ""
+  echo "Merging $BRANCH into main..."
+  git checkout main
+  git pull origin main
+  git merge "$BRANCH" --no-edit
+  git push origin main
+  echo "Merged and pushed to origin/main"
+
+  ## Switch back to the original branch.
+  git checkout "$BRANCH"
+  echo "Switched back to $BRANCH"
 fi
 
 # ── Done ──────────────────────────────────────────────────────────
@@ -249,6 +281,5 @@ echo "  Tag: $TAG"
 echo "  DMG: $DMG_PATH"
 echo "  Release: $RELEASE_URL"
 echo ""
-echo "  Sparkle auto-update will pick up the new version"
-echo "  once appcast.xml is on the main branch."
+echo "  Sparkle auto-update is now live (appcast.xml on main)."
 echo ""
