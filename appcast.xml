@@ -23,8 +23,8 @@
       <enclosure
         url="https://github.com/maximgorbatyuk/slothy-terminal/releases/download/vX.X.X/SlothyTerminal-X.X.X.dmg"
         type="application/octet-stream"
-        sparkle:edSignature="SIGNATURE_HERE"
-        length="FILE_SIZE_IN_BYTES"
+        sparkle:edSignature="VPFj53qVzSNz4SsxWptuRNawruXCPw+OYCy6IRextBQ70zmLNiW5dwUN8fkExnk7PfQZJQrriAb5s5YY/dxnAA=="
+        length="19933431"
       />
     </item>
     -->
@@ -49,8 +49,8 @@
       <enclosure
         url="https://github.com/maximgorbatyuk/slothy-terminal/releases/download/v2026.2.15/SlothyTerminal-2026.2.15.dmg"
         type="application/octet-stream"
-        sparkle:edSignature="SIGNATURE_HERE"
-        length="FILE_SIZE_IN_BYTES"
+        sparkle:edSignature="VPFj53qVzSNz4SsxWptuRNawruXCPw+OYCy6IRextBQ70zmLNiW5dwUN8fkExnk7PfQZJQrriAb5s5YY/dxnAA=="
+        length="19933431"
       />
     </item>
 
