@@ -48,7 +48,7 @@ class GhosttySurfaceView: NSView, NSTextInputClient {
   /// Set on each GHOSTTY_ACTION_RENDER, cleared by poller after reading.
   private(set) var hasNewRenderSinceLastRead = false
 
-  private var isTabActive = true
+  private(set) var isTabActive = true
   private var lastViewportSnapshot = ""
   private var viewportSnapshotGeneration: UInt64 = 0
   private var activityDetectionWorkItem: DispatchWorkItem?
