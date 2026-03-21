@@ -593,6 +593,21 @@ class AppState {
     return .end
   }
 
+  // MARK: - Workspace Reordering
+
+  /// Swaps two workspaces in the list. Used for drag-drop reordering in a vertical list,
+  /// where step-by-step swaps produce the correct final order regardless of drag direction.
+  func swapWorkspaces(_ idA: UUID, _ idB: UUID) {
+    guard idA != idB,
+          let indexA = workspaces.firstIndex(where: { $0.id == idA }),
+          let indexB = workspaces.firstIndex(where: { $0.id == idB })
+    else {
+      return
+    }
+
+    workspaces.swapAt(indexA, indexB)
+  }
+
   /// Replaces tabs for a workspace while preserving other workspace positions.
   private func replaceTabs(in workspaceID: UUID, with reorderedTabs: [Tab]) {
     var reorderedIterator = reorderedTabs.makeIterator()

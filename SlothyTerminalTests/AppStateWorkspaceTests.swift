@@ -539,4 +539,95 @@ struct AppStateWorkspaceTests {
     let newActiveTab = try #require(appState.activeTab)
     #expect(newActiveTab.workspaceID == workspaceA.id)
   }
+
+  // MARK: - Workspace Reordering
+
+  @Test("Swapping adjacent workspaces reorders them")
+  @MainActor
+  func swapAdjacentWorkspaces() {
+    let appState = AppState()
+
+    let wsA = appState.createWorkspace(from: dirA)
+    let wsB = appState.createWorkspace(from: dirB)
+    let wsC = appState.createWorkspace(from: dirC)
+
+    /// Swap A and B → [B, A, C]
+    appState.swapWorkspaces(wsA.id, wsB.id)
+
+    #expect(appState.workspaces.map(\.id) == [wsB.id, wsA.id, wsC.id])
+  }
+
+  @Test("Swapping non-adjacent workspaces reorders them")
+  @MainActor
+  func swapNonAdjacentWorkspaces() {
+    let appState = AppState()
+
+    let wsA = appState.createWorkspace(from: dirA)
+    let wsB = appState.createWorkspace(from: dirB)
+    let wsC = appState.createWorkspace(from: dirC)
+
+    /// Swap A and C → [C, B, A]
+    appState.swapWorkspaces(wsA.id, wsC.id)
+
+    #expect(appState.workspaces.map(\.id) == [wsC.id, wsB.id, wsA.id])
+  }
+
+  @Test("Swapping workspace with itself is a no-op")
+  @MainActor
+  func swapWorkspaceSameIdNoOp() {
+    let appState = AppState()
+
+    let wsA = appState.createWorkspace(from: dirA)
+    appState.createWorkspace(from: dirB)
+
+    let originalOrder = appState.workspaces.map(\.id)
+    appState.swapWorkspaces(wsA.id, wsA.id)
+
+    #expect(appState.workspaces.map(\.id) == originalOrder)
+  }
+
+  @Test("Swapping workspace with invalid ID is a no-op")
+  @MainActor
+  func swapWorkspaceInvalidIdNoOp() {
+    let appState = AppState()
+
+    let wsA = appState.createWorkspace(from: dirA)
+    appState.createWorkspace(from: dirB)
+
+    let originalOrder = appState.workspaces.map(\.id)
+    appState.swapWorkspaces(UUID(), wsA.id)
+
+    #expect(appState.workspaces.map(\.id) == originalOrder)
+  }
+
+  @Test("Swapping workspaces does not affect active workspace")
+  @MainActor
+  func swapWorkspacePreservesActiveWorkspace() {
+    let appState = AppState()
+
+    appState.createWorkspace(from: dirA)
+    let wsB = appState.createWorkspace(from: dirB)
+    let wsC = appState.createWorkspace(from: dirC)
+
+    /// wsC is active (last created). Swap it with B.
+    appState.swapWorkspaces(wsC.id, wsB.id)
+
+    #expect(appState.activeWorkspaceID == wsC.id)
+  }
+
+  @Test("Step-by-step swaps simulate downward drag correctly")
+  @MainActor
+  func stepByStepDownwardDrag() {
+    let appState = AppState()
+
+    let wsA = appState.createWorkspace(from: dirA)
+    let wsB = appState.createWorkspace(from: dirB)
+    let wsC = appState.createWorkspace(from: dirC)
+
+    /// Drag A downward: A↔B, then A↔C → [B, C, A]
+    appState.swapWorkspaces(wsA.id, wsB.id)
+    appState.swapWorkspaces(wsA.id, wsC.id)
+
+    #expect(appState.workspaces.map(\.id) == [wsB.id, wsC.id, wsA.id])
+  }
 }
