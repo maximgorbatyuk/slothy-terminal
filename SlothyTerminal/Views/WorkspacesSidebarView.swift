@@ -1,10 +1,13 @@
 import AppKit
 import SwiftUI
+import UniformTypeIdentifiers
 
 /// Sidebar panel for workspace-level navigation and status.
 struct WorkspacesSidebarView: View {
   @Environment(AppState.self) private var appState
   @State private var closeError: String?
+  @State private var draggedWorkspaceID: UUID?
+  @State private var swapCooldown = false
 
   var body: some View {
     VStack(alignment: .leading, spacing: 16) {
@@ -20,6 +23,7 @@ struct WorkspacesSidebarView: View {
                 workspace: workspace,
                 isActive: workspace.id == appState.activeWorkspaceID,
                 tabCount: appState.tabs(in: workspace.id).count,
+                isDragging: draggedWorkspaceID == workspace.id,
                 onSelect: {
                   appState.switchWorkspace(id: workspace.id)
                   closeError = nil
@@ -27,6 +31,19 @@ struct WorkspacesSidebarView: View {
                 onClose: {
                   closeWorkspace(workspace.id)
                 }
+              )
+              .onDrag {
+                draggedWorkspaceID = workspace.id
+                return NSItemProvider(object: workspace.id.uuidString as NSString)
+              }
+              .onDrop(
+                of: [UTType.text],
+                delegate: WorkspaceReorderDropDelegate(
+                  targetWorkspaceID: workspace.id,
+                  appState: appState,
+                  draggedWorkspaceID: $draggedWorkspaceID,
+                  swapCooldown: $swapCooldown
+                )
               )
             }
           }
@@ -128,11 +145,14 @@ struct WorkspacesSidebarView: View {
   }
 }
 
+// MARK: - Workspace Row
+
 /// Row representing a workspace in the sidebar.
 private struct WorkspaceRowView: View {
   let workspace: Workspace
   let isActive: Bool
   let tabCount: Int
+  let isDragging: Bool
   let onSelect: () -> Void
   let onClose: () -> Void
 
@@ -206,8 +226,53 @@ private struct WorkspaceRowView: View {
     }
     .cornerRadius(10)
     .contentShape(Rectangle())
+    .opacity(isDragging ? 0.5 : 1.0)
     .onTapGesture {
       onSelect()
     }
   }
+}
+
+// MARK: - Drag & Drop
+
+/// Drop delegate that reorders workspaces when one is dragged over another.
+/// Uses a cooldown flag to prevent double-swaps caused by views animating
+/// through the cursor after a swap triggers a re-render.
+private struct WorkspaceReorderDropDelegate: DropDelegate {
+  let targetWorkspaceID: UUID
+  let appState: AppState
+  @Binding var draggedWorkspaceID: UUID?
+  @Binding var swapCooldown: Bool
+
+  func dropEntered(info: DropInfo) {
+    guard let draggedWorkspaceID,
+          draggedWorkspaceID != targetWorkspaceID,
+          !swapCooldown
+    else {
+      return
+    }
+
+    swapCooldown = true
+
+    withAnimation(.easeInOut(duration: 0.2)) {
+      appState.swapWorkspaces(draggedWorkspaceID, targetWorkspaceID)
+    }
+
+    /// Allow the next swap after the animation settles.
+    DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+      swapCooldown = false
+    }
+  }
+
+  func dropUpdated(info: DropInfo) -> DropProposal? {
+    DropProposal(operation: .move)
+  }
+
+  func performDrop(info: DropInfo) -> Bool {
+    draggedWorkspaceID = nil
+    swapCooldown = false
+    return true
+  }
+
+  func dropExited(info: DropInfo) {}
 }

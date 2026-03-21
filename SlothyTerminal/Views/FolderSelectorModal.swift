@@ -1,15 +1,21 @@
 import SwiftUI
 
 /// A modal view for selecting a working directory.
-/// Shows recent folders and provides access to the system folder picker.
+/// Shows recent folders with search and provides access to the system folder picker.
+///
+/// Two usage modes:
+/// - With `agent`: shows prompt picker, uses agent accent color.
+/// - Without `agent` (directory-only): no prompt picker, uses system accent color.
 struct FolderSelectorModal: View {
-  let agent: AgentType
-  let onSelect: (URL, SavedPrompt?) -> Void
+  private let agent: AgentType?
+  private let initialDirectory: URL?
+  private let onSelect: (URL, SavedPrompt?) -> Void
 
   @Environment(\.dismiss) private var dismiss
   private let recentFoldersManager = RecentFoldersManager.shared
   private let configManager = ConfigManager.shared
   @State private var selectedPromptID: UUID?
+  @State private var searchText = ""
 
   private var savedPrompts: [SavedPrompt] {
     configManager.config.savedPrompts
@@ -19,13 +25,61 @@ struct FolderSelectorModal: View {
     savedPrompts.find(by: selectedPromptID)
   }
 
+  private var accentColor: Color {
+    agent?.accentColor ?? .accentColor
+  }
+
+  /// Agent-based init — shows prompt picker when the agent supports it.
   init(agent: AgentType, onSelect: @escaping (URL, SavedPrompt?) -> Void) {
     self.agent = agent
+    self.initialDirectory = nil
     self.onSelect = onSelect
   }
 
+  /// Directory-only init — no prompt picker, simplified callback.
+  init(currentDirectory: URL? = nil, onSelect: @escaping (URL) -> Void) {
+    self.agent = nil
+    self.initialDirectory = currentDirectory
+    self.onSelect = { url, _ in onSelect(url) }
+  }
+
   private var showPromptPicker: Bool {
-    agent.supportsInitialPrompt && !savedPrompts.isEmpty
+    guard let agent else {
+      return false
+    }
+
+    return agent.supportsInitialPrompt && !savedPrompts.isEmpty
+  }
+
+  private var subtitle: String {
+    if let agent {
+      return "Choose a folder for your \(agent.rawValue) session"
+    }
+
+    return "Choose a working directory"
+  }
+
+  private var panelMessage: String {
+    if let agent {
+      return "Select a working directory for \(agent.rawValue)"
+    }
+
+    return "Select a working directory"
+  }
+
+  /// Folders used within the last 10 days, filtered by search text.
+  private var filteredFolders: [RecentFolderEntry] {
+    let recent = recentFoldersManager.foldersUsedWithin(days: 10)
+
+    guard !searchText.isEmpty else {
+      return recent
+    }
+
+    let query = searchText.lowercased()
+    return recent.filter { entry in
+      entry.url.lastPathComponent.lowercased().contains(query)
+        || entry.path.lowercased().contains(query)
+    }
   }
 
   var body: some View {
@@ -36,7 +90,7 @@ struct FolderSelectorModal: View {
           Text("Select Working Directory")
             .font(.headline)
 
-          Text("Choose a folder for your \(agent.rawValue) session")
+          Text(subtitle)
             .font(.subheadline)
             .foregroundColor(.secondary)
         }
@@ -65,25 +119,45 @@ struct FolderSelectorModal: View {
       }
 
       /// Recent folders section.
-      if !recentFoldersManager.recentFolders.isEmpty {
+      if !recentFoldersManager.entries.isEmpty {
         VStack(alignment: .leading, spacing: 12) {
           Text("RECENT FOLDERS")
             .font(.system(size: 11, weight: .semibold))
             .foregroundColor(.secondary)
 
-          VStack(spacing: 4) {
-            ForEach(recentFoldersManager.recentFolders.prefix(8), id: \.path) { folder in
-              RecentFolderButton(
-                folder: folder,
-                accentColor: agent.accentColor,
-                onSelect: {
-                  selectFolder(folder)
-                },
-                onRemove: {
-                  recentFoldersManager.removeRecentFolder(folder)
-                }
-              )
+          TextField("Search folders...", text: $searchText)
+            .textFieldStyle(.roundedBorder)
+            .font(.system(size: 12))
+
+          if filteredFolders.isEmpty {
+            HStack {
+              Spacer()
+
+              Text(searchText.isEmpty ? "No folders used in the last 10 days" : "No matching folders")
+                .font(.subheadline)
+                .foregroundColor(.secondary)
+                .padding(.vertical, 8)
+
+              Spacer()
             }
+          } else {
+            ScrollView {
+              VStack(spacing: 4) {
+                ForEach(filteredFolders, id: \.path) { entry in
+                  RecentFolderButton(
+                    folder: entry.url,
+                    accentColor: accentColor,
+                    onSelect: {
+                      selectFolder(entry.url)
+                    },
+                    onRemove: {
+                      recentFoldersManager.removeRecentFolder(entry.url)
+                    }
+                  )
+                }
+              }
+            }
+            .frame(maxHeight: 300)
           }
         }
         .padding(20)
@@ -93,7 +167,7 @@ struct FolderSelectorModal: View {
 
       /// Browse button section.
       VStack(spacing: 16) {
-        if recentFoldersManager.recentFolders.isEmpty {
+        if recentFoldersManager.entries.isEmpty {
           VStack(spacing: 12) {
             Image(systemName: "folder.badge.plus")
               .font(.system(size: 40))
@@ -116,7 +190,7 @@ struct FolderSelectorModal: View {
           .frame(maxWidth: .infinity)
         }
         .buttonStyle(.borderedProminent)
-        .tint(agent.accentColor)
+        .tint(accentColor)
         .controlSize(.large)
       }
       .padding(20)
@@ -135,7 +209,7 @@ struct FolderSelectorModal: View {
       .padding(16)
     }
     .frame(width: 400)
-    .fixedSize(horizontal: false, vertical: true)
+    .frame(idealHeight: 480)
     .background(appBackgroundColor)
   }
 
@@ -146,11 +220,13 @@ struct FolderSelectorModal: View {
     panel.canChooseDirectories = true
     panel.allowsMultipleSelection = false
     panel.canCreateDirectories = true
-    panel.message = "Select a working directory for \(agent.rawValue)"
+    panel.message = panelMessage
     panel.prompt = "Select"
 
-    /// Start in home directory or last used folder.
-    if let lastFolder = recentFoldersManager.recentFolders.first {
+    /// Start in the provided directory, last used folder, or home.
+    if let initialDirectory {
+      panel.directoryURL = initialDirectory
+    } else if let lastFolder = recentFoldersManager.recentFolders.first {
       panel.directoryURL = lastFolder
     } else {
       panel.directoryURL = FileManager.default.homeDirectoryForCurrentUser
@@ -358,14 +434,14 @@ private struct PromptMenuRow: View {
   }
 }
 
-#Preview("With Recent") {
+#Preview("With Agent") {
   FolderSelectorModal(agent: .claude) { url, prompt in
     print("Selected: \(url), prompt: \(prompt?.name ?? "none")")
   }
 }
 
-#Preview("Empty") {
-  FolderSelectorModal(agent: .opencode) { url, prompt in
-    print("Selected: \(url), prompt: \(prompt?.name ?? "none")")
+#Preview("Directory Only") {
+  FolderSelectorModal { url in
+    print("Selected: \(url)")
   }
 }

@@ -23,7 +23,7 @@ open SlothyTerminal.xcodeproj
 # Xcode CLI build (no signing — for verification without certs)
 xcodebuild -project SlothyTerminal.xcodeproj -scheme SlothyTerminal -configuration Debug build CODE_SIGNING_ALLOWED=NO
 
-# SPM build & test (chat core, parsers, engine — no UI)
+# SPM build & test (agents, models, services — no UI)
 swift build
 swift test
 # NOTE: Package.swift uses an explicit `sources:` list for the main library target (SlothyTerminalLib).
@@ -34,6 +34,19 @@ swift test
 # Release build with notarization (requires .env with Apple credentials)
 ./scripts/build-release.sh [VERSION]
 # Example: ./scripts/build-release.sh 2026.2.2
+
+# Full release: build + sign + notarize + update appcast + GitHub release + upload DMG
+# Requires: .env, sparkle-tools/bin/sign_update, gh CLI authenticated
+# Pre-requisite: appcast.xml and CHANGELOG.md entries for VERSION must exist before running
+./scripts/release.sh [VERSION]
+# Example: ./scripts/release.sh 2026.2.15
+#
+# Release workflow:
+#   1. Write CHANGELOG.md entry for the new version
+#   2. Add appcast.xml <item> with SIGNATURE_HERE and FILE_SIZE_IN_BYTES placeholders
+#   3. Bump sparkle:version (build number) in the new appcast entry
+#   4. Run ./scripts/release.sh VERSION
+#   The script handles: build, notarize, Sparkle sign, appcast update, commit, GitHub release, push, merge to main
 ```
 
 ## Architecture
@@ -48,24 +61,7 @@ User Action → AppState.createTab() → Tab (with AIAgent)
                                         ↓
                          GhosttySurfaceView spawns PTY via libghostty
                                         ↓
-                              Terminal output → StatsParser → UsageStats
-                                        ↓
                               TerminalView renders via libghostty surface
-
-Chat Tabs (Claude/OpenCode)
-User Action → AppState.createChatTab() → Tab(mode: .chat, ChatState)
-                                        ↓
-                                  ChatState.sendMessage()
-                                        ↓
-                          ChatSessionEngine handles lifecycle state
-                                        ↓
-          Transport: ClaudeCLITransport | OpenCodeCLITransport
-                                        ↓
-                         Stream parser → Engine events/commands
-                                        ↓
-                     ChatConversation update + snapshot persistence
-                                        ↓
-                        ChatView/MessageBubble render markdown/tools
 
 Git Client Tabs
 User Action → AppState.createGitTab() → Tab(mode: .git)
@@ -84,18 +80,12 @@ User Action → AppState.createGitTab() → Tab(mode: .git)
 ### Key Components
 
 - **AppState** (`App/AppState.swift`) - @Observable global state: tabs, active tab, sidebar, modals
-- **Tab** (`Models/Tab.swift`) - Session model supporting `.terminal`, `.chat`, and `.git` modes; plain terminal tabs show last submitted command in tab label via `commandLabel(from:)` (nonisolated pure parser)
+- **Tab** (`Models/Tab.swift`) - Session model supporting `.terminal` and `.git` modes; plain terminal tabs show last submitted command in tab label via `commandLabel(from:)` (nonisolated pure parser)
 - **GhosttyApp** (`Terminal/GhosttyApp.swift`) - Process-wide singleton managing the libghostty app instance and runtime callbacks
 - **GhosttySurfaceView** (`Terminal/GhosttySurfaceView.swift`) - NSView bridge to libghostty terminal surface; handles PTY, rendering, and input
 - **AIAgent protocol** (`Agents/AIAgent.swift`) - Defines agent interface; implementations: ClaudeAgent, OpenCodeAgent, TerminalAgent
 - **AgentFactory** (in `Agents/AIAgent.swift`) - Creates appropriate agent instance based on AgentType enum
 - **ConfigManager** (`Services/ConfigManager.swift`) - Singleton for persisting config to `~/Library/Application Support/SlothyTerminal/config.json`
-- **ChatState** (`Chat/State/ChatState.swift`) - View-facing coordinator: user intents, transport wiring, persistence triggers, model/mode UI state
-- **ChatSessionEngine** (`Chat/Engine/ChatSessionEngine.swift`) - Provider-agnostic chat state machine and event reducer
-- **ChatTransport** (`Chat/Transport/ChatTransport.swift`) - Transport protocol for provider backends
-- **ClaudeCLITransport** (`Chat/Transport/ClaudeCLITransport.swift`) - Claude stream-json process transport
-- **OpenCodeCLITransport** (`Chat/OpenCode/OpenCodeCLITransport.swift`) - OpenCode JSON event process transport
-- **ChatSessionStore** (`Chat/Storage/ChatSessionStore.swift`) - Snapshot persistence and restore for chat sessions
 - **TerminalCommandCaptureBuffer** (`Models/TerminalCommandCaptureBuffer.swift`) - Best-effort keystroke shadow buffer for approximating the current terminal command line (used for tab labels)
 - **Workspace** (`Models/Workspace.swift`) - Groups tabs under a named project directory
 - **ScriptScanner** (`Services/PythonScriptScanner.swift`) - Scans for `.py` and `.sh` scripts in project root (shallow) and `scripts/` folder (recursive)
@@ -113,17 +103,8 @@ User Action → AppState.createGitTab() → Tab(mode: .git)
 SlothyTerminal/
 ├── Agents/          # AIAgent protocol + implementations (Claude, OpenCode, Terminal)
 ├── App/             # AppState, AppDelegate, SlothyTerminalApp entry point
-├── Chat/            # Chat mode subsystem
-│   ├── Engine/      # State machine (ChatSessionEngine)
-│   ├── Models/      # ChatMessage, ChatConversation, ToolInput
-│   ├── OpenCode/    # OpenCode stream events, parser, mapper, transport
-│   ├── Parser/      # Claude stream-json event parser
-│   ├── State/       # ChatState (view-facing coordinator)
-│   ├── Storage/     # Snapshot persistence (ChatSessionStore)
-│   ├── Transport/   # ChatTransport protocol + ClaudeCLITransport
-│   └── Views/       # Chat UI (messages, markdown, tools, composer)
 ├── Injection/       # Terminal input injection (models, orchestrator, registry)
-├── Models/          # Tab, Workspace, AppConfig, AgentType, UsageStats, GitStats, GitTab, GitDiffModels, GitWorkingTreeModels, MakeCommitComposerState, SavedPrompt, LaunchType, WorkspaceSplitState
+├── Models/          # Tab, Workspace, AppConfig, AgentType, GitStats, GitTab, GitDiffModels, GitModifiedFile, GitWorkingTreeModels, CommitFileChange, MakeCommitComposerState, SavedPrompt, LaunchType, WorkspaceSplitState, SettingsSection, ChatModelMode
 ├── Services/        # ConfigManager, GitService, GitStatsService, GraphLaneCalculator, StatsParser, etc.
 ├── Terminal/        # GhosttyApp singleton + GhosttySurfaceView
 └── Views/           # SwiftUI views (main, sidebar, tab bar, git client)
@@ -136,7 +117,7 @@ SlothyTerminal/
 2. Implement: `command`, `defaultArgs`, `environmentVariables`, `contextWindowLimit`, `parseStats()`, `isAvailable()`
 3. Add case to `AgentType` enum
 4. Update `AgentFactory.createAgent()`
-5. Audit all exhaustive `switch` on `AgentType` — files include: `ConfigManager.swift`, `ChatComposerStatusBar.swift`
+5. Audit all exhaustive `switch` on `AgentType` — files include: `ConfigManager.swift`, `Tab.swift`
 
 ### Workspace Architecture
 
@@ -149,20 +130,6 @@ Workspaces are first-class tab containers. Each workspace maps to a project dire
 - `AppState.switchWorkspace(id:)` aligns the active tab to the target workspace (first tab, or nil if empty).
 - Empty workspaces show `EmptyTerminalView`.
 - **Empty workspace retargeting**: When the active workspace has no tabs and a new tab targets a different directory, `resolvedActiveWorkspaceID(for:)` retargets the workspace to the new directory. If another workspace already exists for that directory, the empty workspace is removed and the existing one is activated.
-
-## Core Architecture Notes
-
-- Keep **terminal agents** and **chat transports** conceptually separate:
-  - `AIAgent` is for PTY/CLI tab behavior.
-  - `ChatTransport` is for structured CLI-backed chat mode.
-- For any new chat-capable CLI backend, prefer this layering:
-  1. CLI event model/parser
-  2. CLI transport implementing `ChatTransport`
-  3. Mapper into `ChatSessionEngine` events
-  4. Reuse existing message/tool rendering blocks
-- Do not couple UI directly to CLI JSON shapes; normalize through engine events first.
-- Persist session metadata early (session id, selected model/mode) to ensure recovery after crashes/relaunch.
-- Provider/model capabilities come through OpenCode CLI (`opencode models`, `opencode export`).
 
 ## Swift Style Guidelines
 
@@ -186,24 +153,6 @@ Key rules:
 - **GhosttyKit** (xcframework) - Terminal emulation, PTY, and rendering via libghostty (built from source, gitignored)
 - **Sparkle** (2.8.1) - Automatic updates framework
 
-## Chat Engine Notes
-
-- Claude `-p --input-format stream-json --output-format stream-json` can emit multiple assistant segments in one user turn:
-  `tool_use` -> `message_stop` -> top-level `user` `tool_result` -> more assistant output -> final `result`.
-- Do **not** treat `message_stop` as full turn completion. Only finalize the turn on terminal `result` (or explicit terminal error/cancel).
-- Parser must support:
-  - `content_block_delta.delta.partial_json` for `input_json_delta`
-  - `content_block_start.content_block.name` for tool names
-  - top-level `type: "user"` events carrying `tool_result`
-- If these are mishandled, chat appears to "hang" after tool use even though Claude is still streaming valid events.
-
-### OpenCode chat specifics
-
-- OpenCode chat uses `opencode run --format json` per turn and maps events into engine-compatible events.
-- Do not treat intermediate completion (`tool-calls`) as final turn completion; finalize only on terminal stop.
-- OpenCode model catalog for UI should come from `opencode models` (dynamic), not hardcoded model lists.
-- OpenCode metadata reconciliation (resolved provider/model/mode) can be refreshed from `opencode export <sessionId>`.
-
 ## Xcode Project Convention
 
 The Xcode project uses `PBXFileSystemSynchronizedRootGroup` — it auto-discovers source files from the filesystem. **No manual `.pbxproj` edits are needed** when adding new Swift files. Only `Package.swift` requires manual source list updates for new SwiftPM-covered non-UI files.
@@ -221,6 +170,11 @@ The Xcode project uses `PBXFileSystemSynchronizedRootGroup` — it auto-discover
 - `ModalRouter` in `MainView.swift` maps `ModalType` cases to views — keep it in sync when adding new modal types
 - `AppState.pendingSettingsSection` allows pre-selecting a `SettingsSection` tab when the native Settings window opens
 - All git `Process` calls must go through `GitProcessRunner.run()` — it reads pipe data before `waitUntilExit()` to prevent deadlocks when output exceeds the 64KB pipe buffer
+- **Terminal focus in `updateNSView`** — `ghostty_surface_set_focus` must only be called on actual `isTabActive` transitions (not every SwiftUI view update). Redundant focus calls cause libghostty to re-evaluate the viewport scroll position, producing a visible scroll-to-top-then-bottom artifact when switching tabs.
+- **Drag-drop reordering in vertical lists** requires two mitigations that horizontal tab bars don't need:
+  1. **Use `swapAt` instead of `move(before:)`** — "insert before target" is a no-op when dragging downward (source is already before target). Swap works in both directions.
+  2. **Add a cooldown after each swap** — after `swapWorkspaces` triggers a `ForEach` re-render, the swapped view can animate through the cursor and fire `dropEntered` again, immediately undoing the swap. A ~300ms cooldown flag prevents this double-swap.
+  3. **Avoid `NSItemProvider`-wrapping classes with `deinit` cleanup** — `deinit` dispatches `Task { @MainActor }` which races with the next drag's `onDrag` closure, clearing `draggedID` after it was just set. Use plain `NSString` for the provider instead.
 
 ## Terminal Environment Variables
 
@@ -269,10 +223,9 @@ Key models in `Models/GitStats.swift`: `GraphCommit`, `LaneAssignment`, `LaneSta
 ## Testing
 
 ```bash
-swift test    # Runs all SPM tests (chat engine, parsers, transport, models)
+swift test    # Runs all SPM tests (agents, models, services)
 ```
 
-- **SPM-testable**: Everything in `Package.swift` `sources:` list — engine, parsers, transports, models, services
+- **SPM-testable**: Everything in `Package.swift` `sources:` list — models, services, agents
 - **UI-only** (Xcode only): Views, GhosttyApp, GhosttySurfaceView, UpdateManager, ExternalAppManager
 - Test target auto-discovers files in `SlothyTerminalTests/` — no manual list needed for new tests
-- Use `MockChatTransport` for engine/state tests without real CLI processes

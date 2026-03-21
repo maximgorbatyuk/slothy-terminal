@@ -216,7 +216,7 @@ struct StartSessionContentView: View {
       configManager.config.lastUsedOpenCodeModel = newValue
     }
     .sheet(isPresented: $showFolderSelector) {
-      FolderSelectorSheet(
+      FolderSelectorModal(
         currentDirectory: currentDirectory,
         onSelect: { url in
           selectedDirectory = url
@@ -688,128 +688,6 @@ struct StartSessionContentView: View {
 
     case .gitClient:
       return Color(red: 0.95, green: 0.55, blue: 0.15)
-    }
-  }
-}
-
-// MARK: - Folder Selector Sheet
-
-/// A sheet for selecting a working directory from recent folders or the system browser.
-private struct FolderSelectorSheet: View {
-  let currentDirectory: URL
-  let onSelect: (URL) -> Void
-
-  @Environment(\.dismiss) private var dismiss
-  private let recentFoldersManager = RecentFoldersManager.shared
-
-  var body: some View {
-    VStack(spacing: 0) {
-      HStack {
-        Text("Select Working Directory")
-          .font(.headline)
-
-        Spacer()
-
-        Button {
-          dismiss()
-        } label: {
-          Image(systemName: "xmark.circle.fill")
-            .font(.system(size: 20))
-            .foregroundColor(.secondary)
-        }
-        .buttonStyle(.plain)
-      }
-      .padding(20)
-
-      Divider()
-
-      if !recentFoldersManager.recentFolders.isEmpty {
-        VStack(alignment: .leading, spacing: 12) {
-          Text("RECENT FOLDERS")
-            .font(.system(size: 11, weight: .semibold))
-            .foregroundColor(.secondary)
-
-          VStack(spacing: 4) {
-            ForEach(recentFoldersManager.recentFolders.prefix(8), id: \.path) { folder in
-              RecentFolderButton(
-                folder: folder,
-                accentColor: .accentColor,
-                onSelect: {
-                  onSelect(folder)
-                  dismiss()
-                },
-                onRemove: {
-                  recentFoldersManager.removeRecentFolder(folder)
-                }
-              )
-            }
-          }
-        }
-        .padding(20)
-
-        Divider()
-      }
-
-      VStack(spacing: 16) {
-        if recentFoldersManager.recentFolders.isEmpty {
-          VStack(spacing: 12) {
-            Image(systemName: "folder.badge.plus")
-              .font(.system(size: 40))
-              .foregroundColor(.secondary)
-
-            Text("No recent folders")
-              .font(.subheadline)
-              .foregroundColor(.secondary)
-          }
-          .padding(.vertical, 20)
-        }
-
-        Button {
-          openSystemFolderPicker()
-        } label: {
-          HStack {
-            Image(systemName: "folder")
-            Text("Browse...")
-          }
-          .frame(maxWidth: .infinity)
-        }
-        .buttonStyle(.borderedProminent)
-        .controlSize(.large)
-      }
-      .padding(20)
-
-      Divider()
-
-      HStack {
-        Button("Cancel") {
-          dismiss()
-        }
-        .keyboardShortcut(.escape)
-
-        Spacer()
-      }
-      .padding(16)
-    }
-    .frame(width: 400)
-    .fixedSize(horizontal: false, vertical: true)
-    .background(appBackgroundColor)
-  }
-
-  private func openSystemFolderPicker() {
-    let panel = NSOpenPanel()
-    panel.canChooseFiles = false
-    panel.canChooseDirectories = true
-    panel.allowsMultipleSelection = false
-    panel.canCreateDirectories = true
-    panel.message = "Select a working directory"
-    panel.prompt = "Select"
-    panel.directoryURL = currentDirectory
-
-    panel.begin { response in
-      if response == .OK, let url = panel.url {
-        onSelect(url)
-        dismiss()
-      }
     }
   }
 }

@@ -20,7 +20,7 @@
 
   /* Typography */
   --font-display: 'Fraunces', Georgia, serif;
-  --font-body: 'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-body: 'JetBrains Mono', 'SF Mono', monospace;
   --font-mono: 'JetBrains Mono', 'SF Mono', monospace;
 
   /* Spacing */
@@ -860,7 +860,7 @@ body {
 
 .footer-brand {
   align-items: flex-start;
-  gap: 16px;
+  gap: 12px;
 }
 
 .footer-logo {
@@ -870,11 +870,31 @@ body {
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
 }
 
+.footer-ascii {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  line-height: 1.2;
+  color: var(--accent-primary);
+  margin: 0;
+  white-space: pre;
+  user-select: none;
+}
+
+.footer-copyright {
+  font-size: 0.85rem;
+  color: #94A3B8;
+  margin-top: 8px;
+}
+
+.footer-copyright .heart {
+  color: var(--accent-primary);
+}
+
 .footer-tagline {
   font-family: var(--font-display);
   font-style: italic;
-  font-size: 1.1rem;
-  color: #94A3B8;
+  font-size: 1.4rem;
+  color: #E2E8F0;
 }
 
 .footer-heading {
@@ -905,21 +925,11 @@ body {
   color: var(--accent-primary);
 }
 
-.footer-bottom {
-  text-align: center;
-  padding-top: 32px;
-  border-top: 1px solid rgba(148, 163, 184, 0.1);
-  color: #64748B;
-  font-size: 0.85rem;
-}
-
-.footer-bottom .heart {
-  color: var(--accent-primary);
-}
 
 .footer-license {
   margin-top: 8px;
   opacity: 0.7;
+  color: var(--accent-primary);
 }
 
 .footer-author-link {
@@ -1014,6 +1024,10 @@ body {
 @media (max-width: 480px) {
   .container {
     padding: 0 16px;
+  }
+
+  .footer-ascii {
+    font-size: 0.55rem;
   }
 
   .section-title {

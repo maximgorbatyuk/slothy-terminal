@@ -86,21 +86,27 @@ struct GhosttyTerminalViewRepresentable: NSViewRepresentable {
   }
 
   func updateNSView(_ nsView: GhosttySurfaceView, context: Context) {
-    /// Update focus state when tab visibility changes.
+    let wasActive = nsView.isTabActive
+
+    /// Update tab-active state (has its own dedup guard).
     nsView.setTabActive(isActive)
 
-    if isActive {
-      nsView.setFocused(true)
+    /// Only send focus changes on actual tab transitions to avoid
+    /// redundant ghostty_surface_set_focus calls that can cause
+    /// the terminal to re-evaluate scroll position (scroll-to-top-then-bottom).
+    if isActive != wasActive {
+      nsView.setFocused(isActive)
+    }
 
-      if nsView.window?.firstResponder !== nsView {
-        DispatchQueue.main.async {
-          if nsView.window?.firstResponder !== nsView {
-            nsView.window?.makeFirstResponder(nsView)
-          }
+    /// Ensure first responder is set when the tab is active.
+    if isActive,
+       nsView.window?.firstResponder !== nsView
+    {
+      DispatchQueue.main.async {
+        if nsView.window?.firstResponder !== nsView {
+          nsView.window?.makeFirstResponder(nsView)
         }
       }
-    } else {
-      nsView.setFocused(false)
     }
   }
 
