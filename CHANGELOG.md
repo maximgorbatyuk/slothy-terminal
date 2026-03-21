@@ -2,6 +2,22 @@
 
 All notable changes to SlothyTerminal will be documented in this file.
 
+## [2026.2.15] - 2026-03-21
+
+_Analysis range: `092e83b..HEAD` (3 commits, 6 files changed, 198 insertions, 75 deletions)._
+
+### Added
+- **Workspace drag-drop reordering** — workspaces in the sidebar can now be reordered by dragging. Uses `swapAt` semantics with a cooldown flag to prevent double-swaps caused by SwiftUI re-rendering views through the cursor during animation. Added `AppState.swapWorkspaces(_:_:)` and `WorkspaceReorderDropDelegate`.
+
+### Fixed
+- **Terminal scroll jump on tab switch** — switching to a tab where Claude CLI is running no longer causes a scroll-to-top-then-bottom artifact. Root cause: `updateNSView` called `ghostty_surface_set_focus` on every SwiftUI view update (not just tab transitions), causing libghostty to re-evaluate the viewport scroll position. Fix: focus changes are now gated to actual `isTabActive` transitions only.
+
+### Changed
+- **CLAUDE.md cleanup** — removed all stale references to the Chat subsystem (removed in 2026.2.14): Chat Tabs data flow diagram, 6 Chat Key Components entries, Chat/ directory structure, Chat Engine Notes section, OpenCode chat specifics section, and `MockChatTransport` test reference. Fixed "Adding a New Agent" step 5 to reference `Tab.swift` instead of deleted `ChatComposerStatusBar.swift`.
+
+### Tests
+- Added 6 workspace reorder tests: adjacent swap, non-adjacent swap, same-id no-op, invalid-id no-op, active workspace preservation, and step-by-step downward drag simulation.
+
 ## [2026.2.14] - 2026-03-20
 
 _Analysis range: `53ff684..HEAD` (7 commits, 90 files changed, 1787 insertions, 9241 deletions)._

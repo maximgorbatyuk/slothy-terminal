@@ -34,6 +34,12 @@ swift test
 # Release build with notarization (requires .env with Apple credentials)
 ./scripts/build-release.sh [VERSION]
 # Example: ./scripts/build-release.sh 2026.2.2
+
+# Full release: build + sign + notarize + update appcast + GitHub release + upload DMG
+# Requires: .env, sparkle-tools/bin/sign_update, gh CLI authenticated
+# Pre-requisite: appcast.xml and CHANGELOG.md entries for VERSION must exist before running
+./scripts/release.sh [VERSION]
+# Example: ./scripts/release.sh 2026.2.15
 ```
 
 ## Architecture
