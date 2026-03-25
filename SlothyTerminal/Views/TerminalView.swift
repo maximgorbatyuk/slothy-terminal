@@ -41,6 +41,9 @@ struct GhosttyTerminalViewRepresentable: NSViewRepresentable {
   /// Callback when the user clicks inside the terminal surface.
   var onMouseDown: (() -> Void)?
 
+  /// Callback that synchronously decides whether plain Enter should submit.
+  var onSubmitGate: (() -> TerminalSubmitGateDecision)?
+
   func makeNSView(context: Context) -> GhosttySurfaceView {
     let surfaceView = GhosttySurfaceView()
     context.coordinator.surfaceView = surfaceView
@@ -49,15 +52,7 @@ struct GhosttyTerminalViewRepresentable: NSViewRepresentable {
     /// Register surface for injection.
     TerminalSurfaceRegistry.shared.register(tabId: tabId, surface: surfaceView)
 
-    /// Wire callbacks.
-    surfaceView.onDirectoryChanged = onDirectoryChanged
-    surfaceView.onCommandEntered = onCommandEntered
-    surfaceView.onCommandSubmitted = onCommandSubmitted
-    surfaceView.onCommandFinished = onCommandFinished
-    surfaceView.onClosed = onClosed
-    surfaceView.onTerminalActivity = onTerminalActivity
-    surfaceView.onBackgroundActivity = onBackgroundActivity
-    surfaceView.onMouseDown = onMouseDown
+    configureCallbacks(for: surfaceView)
 
     let launchEnvironment = makeLaunchEnvironment(
       workingDirectory: workingDirectory,
@@ -86,6 +81,8 @@ struct GhosttyTerminalViewRepresentable: NSViewRepresentable {
   }
 
   func updateNSView(_ nsView: GhosttySurfaceView, context: Context) {
+    configureCallbacks(for: nsView)
+
     let wasActive = nsView.isTabActive
 
     /// Update tab-active state (has its own dedup guard).
@@ -117,6 +114,18 @@ struct GhosttyTerminalViewRepresentable: NSViewRepresentable {
   class Coordinator {
     weak var surfaceView: GhosttySurfaceView?
     var tabId: UUID?
+  }
+
+  private func configureCallbacks(for surfaceView: GhosttySurfaceView) {
+    surfaceView.onDirectoryChanged = onDirectoryChanged
+    surfaceView.onCommandEntered = onCommandEntered
+    surfaceView.onCommandSubmitted = onCommandSubmitted
+    surfaceView.onCommandFinished = onCommandFinished
+    surfaceView.onClosed = onClosed
+    surfaceView.onTerminalActivity = onTerminalActivity
+    surfaceView.onBackgroundActivity = onBackgroundActivity
+    surfaceView.onMouseDown = onMouseDown
+    surfaceView.onSubmitGate = onSubmitGate
   }
 
   private func makeLaunchEnvironment(
@@ -214,6 +223,9 @@ struct StandaloneTerminalView: View {
   /// Callback when the user clicks inside the terminal surface.
   var onMouseDown: (() -> Void)? = nil
 
+  /// Callback that synchronously decides whether plain Enter should submit.
+  var onSubmitGate: (() -> TerminalSubmitGateDecision)? = nil
+
   var body: some View {
     GhosttyTerminalViewRepresentable(
       workingDirectory: workingDirectory,
@@ -230,7 +242,8 @@ struct StandaloneTerminalView: View {
       onClosed: onClosed,
       onTerminalActivity: onTerminalActivity,
       onBackgroundActivity: onBackgroundActivity,
-      onMouseDown: onMouseDown
+      onMouseDown: onMouseDown,
+      onSubmitGate: onSubmitGate
     )
   }
 }

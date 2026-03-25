@@ -108,6 +108,10 @@ struct TerminalContainerView: View {
 
 /// Displays the terminal or chat for an active tab.
 struct ActiveTerminalView: View {
+  private enum ClaudeCooldownOverlay {
+    static let dismissDelayNanoseconds: UInt64 = 2_500_000_000
+  }
+
   let tab: Tab
   let isActive: Bool
 
@@ -117,6 +121,41 @@ struct ActiveTerminalView: View {
 
   @State private var isReady: Bool = false
   @State private var agentUnavailableError: String?
+  @State private var claudeSubmitDecision: ClaudeCooldownDecision?
+  @State private var claudeCooldownMessage: String?
+  @State private var isShowingClaudeCooldownOverlay: Bool = false
+  @State private var claudeCooldownOverlayToken: Int = 0
+
+  private var submitGate: (() -> TerminalSubmitGateDecision)? {
+    guard tab.agentType == .claude else {
+      return nil
+    }
+
+    return {
+      let decision = ClaudeCooldownService.shared.attemptSubmission()
+      claudeSubmitDecision = decision
+
+      switch decision {
+      case .allowed:
+        claudeCooldownMessage = nil
+        isShowingClaudeCooldownOverlay = false
+
+      case .blocked(let remainingSeconds):
+        let formattedRemaining = ClaudeCooldownService.formatRemaining(seconds: remainingSeconds)
+        claudeCooldownMessage = "Claude cooldown active - try again in \(formattedRemaining)"
+        isShowingClaudeCooldownOverlay = true
+        claudeCooldownOverlayToken += 1
+      }
+
+      switch decision {
+      case .allowed:
+        return .allow
+
+      case .blocked:
+        return .block
+      }
+    }
+  }
 
   var body: some View {
     ZStack {
@@ -161,13 +200,55 @@ struct ActiveTerminalView: View {
           },
           onMouseDown: {
             onPaneFocused?()
-          }
+          },
+          onSubmitGate: submitGate
         )
         .environment(\.colorScheme, .dark)
       } else {
         ProgressView("Starting \(tab.agent?.displayName ?? "session")...")
           .environment(\.colorScheme, .dark)
       }
+
+      if isShowingClaudeCooldownOverlay,
+         let claudeCooldownMessage
+      {
+        VStack {
+          HStack {
+            Label(claudeCooldownMessage, systemImage: "clock.badge.exclamationmark")
+              .font(.system(size: 12, weight: .semibold))
+              .foregroundStyle(Color.white)
+              .padding(.horizontal, 12)
+              .padding(.vertical, 8)
+              .background(
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                  .fill(Color.orange.opacity(0.92))
+              )
+              .shadow(color: Color.black.opacity(0.18), radius: 10, y: 4)
+
+            Spacer(minLength: 0)
+          }
+
+          Spacer()
+        }
+        .padding(.top, 12)
+        .padding(.horizontal, 12)
+        .transition(.move(edge: .top).combined(with: .opacity))
+        .allowsHitTesting(false)
+      }
+    }
+    .animation(.easeOut(duration: 0.18), value: isShowingClaudeCooldownOverlay)
+    .task(id: claudeCooldownOverlayToken) {
+      guard claudeCooldownOverlayToken > 0 else {
+        return
+      }
+
+      try? await Task.sleep(nanoseconds: ClaudeCooldownOverlay.dismissDelayNanoseconds)
+
+      guard !Task.isCancelled else {
+        return
+      }
+
+      isShowingClaudeCooldownOverlay = false
     }
     .task {
       // Git mode renders its own content; no PTY or chat setup needed.
