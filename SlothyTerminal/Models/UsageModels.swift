@@ -3,6 +3,7 @@ import Foundation
 /// Supported usage stats providers.
 enum UsageProvider: String, Codable, CaseIterable {
   case claude
+  case codex
   case opencode
 
   var displayName: String {
@@ -10,10 +11,16 @@ enum UsageProvider: String, Codable, CaseIterable {
     case .claude:
       return "Claude"
 
+    case .codex:
+      return "Codex"
+
     case .opencode:
       return "OpenCode"
     }
   }
+
+  /// Providers shown as subtabs in the sidebar usage block.
+  static let sidebarProviders: [UsageProvider] = [.claude, .codex]
 }
 
 /// The kind of authentication source used for usage fetching.

@@ -1,47 +1,51 @@
 import SwiftUI
 
 /// Compact usage stats block for the sidebar.
-/// Displays when the active tab is an AI-backed terminal.
+/// Always visible with Claude/Codex subtabs for switching providers.
 struct UsageStatsView: View {
-  let tab: Tab
   @State private var isExpanded = true
+  @State private var selectedProvider: UsageProvider = .claude
 
   private var usageService: UsageService { UsageService.shared }
 
-  private var provider: UsageProvider? {
-    tab.usageProvider
-  }
-
   var body: some View {
-    if let provider {
-      VStack(alignment: .leading, spacing: 8) {
-        /// Collapsible header.
-        Button {
-          isExpanded.toggle()
-        } label: {
-          HStack {
-            Image(systemName: "chart.bar.fill")
-              .font(.system(size: 10))
+    VStack(alignment: .leading, spacing: 8) {
+      /// Collapsible header.
+      Button {
+        isExpanded.toggle()
+      } label: {
+        HStack {
+          Image(systemName: "chart.bar.fill")
+            .font(.system(size: 10))
 
-            Text("Usage")
-              .font(.system(size: 10, weight: .semibold))
+          Text("Usage")
+            .font(.system(size: 10, weight: .semibold))
 
-            Spacer()
+          Spacer()
 
-            Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
-              .font(.system(size: 10))
+          Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
+            .font(.system(size: 10))
+        }
+        .foregroundColor(.secondary)
+      }
+      .buttonStyle(.plain)
+
+      if isExpanded {
+        /// Provider subtabs.
+        Picker("Provider", selection: $selectedProvider) {
+          ForEach(UsageProvider.sidebarProviders, id: \.self) { provider in
+            Text(provider.displayName).tag(provider)
           }
-          .foregroundColor(.secondary)
         }
-        .buttonStyle(.plain)
+        .pickerStyle(.segmented)
+        .labelsHidden()
 
-        if isExpanded {
-          usageContent(provider: provider)
-        }
+        /// Content for the selected provider.
+        usageContent(provider: selectedProvider)
       }
-      .task(id: provider) {
-        await loadUsage(provider: provider)
-      }
+    }
+    .task {
+      await loadAllUsage()
     }
   }
 
@@ -275,7 +279,7 @@ struct UsageStatsView: View {
 
   // MARK: - Helpers
 
-  private func loadUsage(provider: UsageProvider) async {
+  private func loadAllUsage() async {
     let prefs = ConfigManager.shared.config.usagePreferences
 
     guard prefs.isEnabled else {
@@ -283,7 +287,7 @@ struct UsageStatsView: View {
     }
 
     usageService.resolveAuthSources()
-    await usageService.fetch(provider: provider)
+    await usageService.fetchAll()
   }
 
   private func sourceBadgeColor(for kind: UsageSourceKind) -> Color {

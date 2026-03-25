@@ -21,7 +21,12 @@ final class UsageModelsTests: XCTestCase {
 
   func testUsageProviderDisplayName() {
     XCTAssertEqual(UsageProvider.claude.displayName, "Claude")
+    XCTAssertEqual(UsageProvider.codex.displayName, "Codex")
     XCTAssertEqual(UsageProvider.opencode.displayName, "OpenCode")
+  }
+
+  func testUsageSidebarProviders() {
+    XCTAssertEqual(UsageProvider.sidebarProviders, [.claude, .codex])
   }
 
   func testUsageAuthSourceExperimental() {

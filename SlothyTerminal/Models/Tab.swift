@@ -352,18 +352,6 @@ class Tab: Identifiable {
     agent?.isAvailable() ?? false
   }
 
-  /// The usage provider for this tab.
-  /// Only AI-backed terminal tabs have a usage provider.
-  var usageProvider: UsageProvider? {
-    guard mode == .terminal,
-          let agentType
-    else {
-      return nil
-    }
-
-    return UsageService.provider(for: agentType)
-  }
-
   /// Whether this tab is actively executing work.
   var isExecuting: Bool {
     switch mode {
