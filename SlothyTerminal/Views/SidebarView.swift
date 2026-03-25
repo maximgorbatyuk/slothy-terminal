@@ -59,6 +59,11 @@ struct TerminalSidebarView: View {
       /// Directory tree.
       DirectoryTreeView(rootDirectory: tab.workingDirectory)
 
+      /// Usage stats for AI-backed tabs.
+      if tab.usageProvider != nil {
+        UsageStatsView(tab: tab)
+      }
+
       /// Project docs.
       ProjectDocsView(workingDirectory: tab.workingDirectory)
     }

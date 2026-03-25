@@ -95,6 +95,11 @@ struct AppConfig: Codable, Equatable {
   /// Custom keyboard shortcuts.
   var shortcuts: [String: String] = [:]
 
+  // MARK: - Usage Stats
+
+  /// User preferences for usage stats.
+  var usagePreferences: UsagePreferences = UsagePreferences()
+
   // MARK: - Window State
 
   /// Saved window state for restoration.
@@ -150,6 +155,8 @@ struct AppConfig: Codable, Equatable {
     lastUsedOpenCodeAskModeEnabled = (try? c.decode(Bool.self, forKey: .lastUsedOpenCodeAskModeEnabled)) ?? d.lastUsedOpenCodeAskModeEnabled
 
     shortcuts = (try? c.decode([String: String].self, forKey: .shortcuts)) ?? d.shortcuts
+
+    usagePreferences = (try? c.decode(UsagePreferences.self, forKey: .usagePreferences)) ?? d.usagePreferences
 
     windowState = try? c.decode(WindowState.self, forKey: .windowState)
   }

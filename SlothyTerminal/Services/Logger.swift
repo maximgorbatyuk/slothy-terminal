@@ -28,4 +28,7 @@ extension Logger {
 
   /// Logger for terminal injection operations.
   static let injection = Logger(subsystem: subsystem, category: "Injection")
+
+  /// Logger for usage stats operations.
+  static let usage = Logger(subsystem: subsystem, category: "Usage")
 }

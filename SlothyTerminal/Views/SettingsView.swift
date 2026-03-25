@@ -31,6 +31,9 @@ struct SettingsView: View {
         case .prompts:
           PromptsSettingsTab()
 
+        case .usage:
+          UsageSettingsTab()
+
         case .licenses:
           LicensesSettingsTab()
         }
