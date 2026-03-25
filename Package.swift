@@ -57,7 +57,6 @@ let package = Package(
         "Services/UsageService.swift",
         "Models/AgentType.swift",
         "Models/GitDiffModels.swift",
-        "Models/GitModifiedFile.swift",
         "Models/GitWorkingTreeModels.swift",
         "Models/MakeCommitComposerState.swift",
         "Models/GitStats.swift",

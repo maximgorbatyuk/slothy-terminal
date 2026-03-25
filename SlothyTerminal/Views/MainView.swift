@@ -175,10 +175,45 @@ struct StatusBarView: View {
     appState.activeTab?.workingDirectory
   }
 
+  /// Installed developer apps for "Open in" menu.
+  private var installedApps: [ExternalApp] {
+    ExternalAppManager.shared.installedApps
+  }
+
+  /// Display path with ~ prefix for home directory.
+  private var displayPath: String? {
+    guard let directory = activeDirectory else {
+      return nil
+    }
+
+    let homeDir = FileManager.default.homeDirectoryForCurrentUser.path
+    let fullPath = directory.path
+
+    if fullPath.hasPrefix(homeDir) {
+      return "~" + fullPath.dropFirst(homeDir.count)
+    }
+    return fullPath
+  }
+
   var body: some View {
-    HStack(spacing: 8) {
-      /// Git branch on the left.
+    HStack(spacing: 12) {
+      /// Working directory path.
+      if let path = displayPath {
+        HStack(spacing: 4) {
+          Image(systemName: "folder.fill")
+            .font(.system(size: 9))
+          Text(path)
+            .font(.system(size: 10))
+            .lineLimit(1)
+            .truncationMode(.middle)
+        }
+        .foregroundColor(.secondary)
+      }
+
+      /// Git branch.
       if let branch = gitBranch {
+        statusSeparator
+
         HStack(spacing: 4) {
           Image(systemName: "arrow.triangle.branch")
             .font(.system(size: 9))
@@ -186,6 +221,39 @@ struct StatusBarView: View {
             .font(.system(size: 10))
         }
         .foregroundColor(.secondary)
+      }
+
+      /// Open in external app menu.
+      if let directory = activeDirectory, !installedApps.isEmpty {
+        statusSeparator
+
+        Menu {
+          ForEach(installedApps) { app in
+            Button {
+              ExternalAppManager.shared.openDirectory(directory, in: app)
+            } label: {
+              if let appIcon = app.appIcon {
+                Label {
+                  Text(app.name)
+                } icon: {
+                  Image(nsImage: appIcon)
+                }
+              } else {
+                Label(app.name, systemImage: app.icon)
+              }
+            }
+          }
+        } label: {
+          HStack(spacing: 3) {
+            Image(systemName: "arrow.up.forward.app")
+              .font(.system(size: 9))
+            Text("Open in...")
+              .font(.system(size: 10))
+          }
+          .foregroundColor(.secondary)
+        }
+        .menuStyle(.borderlessButton)
+        .fixedSize()
       }
 
       Spacer()
@@ -213,6 +281,12 @@ struct StatusBarView: View {
     .task(id: appState.gitBranchRefreshContext) {
       await updateGitBranch()
     }
+  }
+
+  private var statusSeparator: some View {
+    Text("|")
+      .font(.system(size: 10))
+      .foregroundColor(.secondary.opacity(0.5))
   }
 
   /// Updates the git branch for the current directory.

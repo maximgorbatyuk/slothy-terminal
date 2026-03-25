@@ -50,12 +50,6 @@ struct TerminalSidebarView: View {
 
   var body: some View {
     VStack(spacing: 16) {
-      /// Working directory.
-      WorkingDirectoryCard(path: tab.workingDirectory)
-
-      /// Open in external app button.
-      OpenInAppButton(directory: tab.workingDirectory)
-
       /// Directory tree.
       DirectoryTreeView(rootDirectory: tab.workingDirectory)
 
@@ -64,88 +58,6 @@ struct TerminalSidebarView: View {
 
       /// Project docs.
       ProjectDocsView(workingDirectory: tab.workingDirectory)
-    }
-  }
-}
-
-/// Card showing the current working directory.
-struct WorkingDirectoryCard: View {
-  let path: URL
-
-  private var displayPath: String {
-    let homeDir = FileManager.default.homeDirectoryForCurrentUser.path
-    let fullPath = path.path
-
-    if fullPath.hasPrefix(homeDir) {
-      return "~" + fullPath.dropFirst(homeDir.count)
-    }
-    return fullPath
-  }
-
-  var body: some View {
-    VStack(alignment: .leading, spacing: 4) {
-      HStack(spacing: 4) {
-        Image(systemName: "folder.fill")
-          .font(.system(size: 10))
-          .foregroundColor(.secondary)
-
-        Text("Working Directory")
-          .font(.system(size: 10, weight: .medium))
-          .foregroundColor(.secondary)
-      }
-
-      Text(displayPath)
-        .font(.system(size: 11))
-        .lineLimit(2)
-        .truncationMode(.middle)
-    }
-    .padding(10)
-    .frame(maxWidth: .infinity, alignment: .leading)
-    .background(appCardColor)
-    .cornerRadius(8)
-  }
-}
-
-/// Button that shows a dropdown menu of installed developer apps.
-struct OpenInAppButton: View {
-  let directory: URL
-
-  private var installedApps: [ExternalApp] {
-    ExternalAppManager.shared.installedApps
-  }
-
-  var body: some View {
-    if !installedApps.isEmpty {
-      Menu {
-        ForEach(installedApps) { app in
-          Button {
-            ExternalAppManager.shared.openDirectory(directory, in: app)
-          } label: {
-            if let appIcon = app.appIcon {
-              Label {
-                Text(app.name)
-              } icon: {
-                Image(nsImage: appIcon)
-              }
-            } else {
-              Label(app.name, systemImage: app.icon)
-            }
-          }
-        }
-      } label: {
-        HStack {
-          Image(systemName: "arrow.up.forward.app")
-          Text("Open in...")
-          Spacer()
-          Image(systemName: "chevron.down")
-        }
-        .font(.system(size: 11))
-        .padding(10)
-        .background(appCardColor)
-        .cornerRadius(8)
-      }
-      .menuStyle(.borderlessButton)
-      .frame(maxWidth: .infinity, alignment: .leading)
     }
   }
 }

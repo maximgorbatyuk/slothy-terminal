@@ -43,7 +43,7 @@ struct UsageStatsView: View {
         /// Scrollable content with fixed height (1/4 of sidebar).
         GeometryReader { geometry in
           ScrollView {
-            usageContent(provider: selectedProvider)
+            usageContent(provider: selectedProvider, minHeight: geometry.size.height)
           }
         }
         .frame(height: sidebarQuarterHeight)
@@ -61,7 +61,7 @@ struct UsageStatsView: View {
   }
 
   @ViewBuilder
-  private func usageContent(provider: UsageProvider) -> some View {
+  private func usageContent(provider: UsageProvider, minHeight: CGFloat) -> some View {
     let status = usageService.status(for: provider)
 
     VStack(spacing: 6) {
@@ -86,6 +86,7 @@ struct UsageStatsView: View {
         unavailableView(reason)
       }
     }
+    .frame(maxWidth: .infinity, minHeight: minHeight, alignment: .top)
     .padding(10)
     .background(appCardColor)
     .cornerRadius(8)
