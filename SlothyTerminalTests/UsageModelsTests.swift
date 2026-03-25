@@ -119,6 +119,20 @@ final class UsageModelsTests: XCTestCase {
     XCTAssertEqual(prefs.refreshInterval, 60.0)
   }
 
+  func testUsageStatsContentHeightAddsExtraSpace() {
+    XCTAssertEqual(
+      UsageStatsLayout.contentHeight(forSidebarHeight: 600),
+      170
+    )
+  }
+
+  func testUsageStatsContentHeightHonorsMinimumHeight() {
+    XCTAssertEqual(
+      UsageStatsLayout.contentHeight(forSidebarHeight: 320),
+      140
+    )
+  }
+
   // MARK: - Error Descriptions
 
   func testUsageFetchErrorDescriptions() {

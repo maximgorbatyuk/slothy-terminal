@@ -221,7 +221,6 @@ enum SidebarPosition: String, Codable, CaseIterable {
 enum SidebarTab: String, Codable, CaseIterable, Identifiable {
   case workspaces
   case explorer
-  case gitChanges
   case prompts
   case automation
 
@@ -234,9 +233,6 @@ enum SidebarTab: String, Codable, CaseIterable, Identifiable {
 
     case .explorer:
       return "folder"
-
-    case .gitChanges:
-      return "arrow.triangle.branch"
 
     case .prompts:
       return "text.bubble"
@@ -253,9 +249,6 @@ enum SidebarTab: String, Codable, CaseIterable, Identifiable {
 
     case .explorer:
       return "Current directory"
-
-    case .gitChanges:
-      return "Git Changes"
 
     case .prompts:
       return "Prompts"

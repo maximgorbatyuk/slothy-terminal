@@ -2,6 +2,27 @@
 
 All notable changes to SlothyTerminal will be documented in this file.
 
+## [2026.2.17] - 2026-03-25
+
+_Analysis range: `cd737c50351b159d0e003a5c10d31db323da44a6..19ca5df` (1 commit, 9 files changed, 266 insertions, 16 deletions)._
+
+### Added
+- **Claude submission cooldown service** — added `ClaudeCooldownService`, a shared app-side guard for Claude terminal sessions that blocks repeated plain Enter submissions for 180 seconds and returns human-readable remaining time.
+- **Cooldown warning overlay** — Claude tabs now show a temporary inline warning banner when a blocked submission is attempted, with automatic dismissal after a short delay.
+- **SwiftPM coverage for cooldown service** — added `ClaudeCooldownService.swift` to `Package.swift` so the new behavior is covered by `swift build` and `swift test`.
+
+### Changed
+- **Terminal submit-gate plumbing** — `GhosttyTerminalViewRepresentable`, `StandaloneTerminalView`, and `GhosttySurfaceView` now support a synchronous `onSubmitGate` callback that can block plain Enter before it is forwarded to the terminal session.
+- **Usage stats card sizing** — extracted shared `UsageStatsLayout.contentHeight(forSidebarHeight:)` and increased the sidebar usage card height slightly to improve readability.
+
+### Fixed
+- **Accidental duplicate Claude submits** — rapid repeat Enter presses in Claude tabs are now intercepted before they reach the underlying session.
+- **Stale terminal callback wiring** — `TerminalView.updateNSView` now reapplies callbacks during SwiftUI updates, preventing submit-gate and terminal event closures from drifting out of sync.
+
+### Tests
+- Added `ClaudeCooldownServiceTests` (6 tests) covering first submission, cooldown blocking, exact boundary behavior, reset behavior, shared-instance blocking, and remaining-time formatting.
+- Added `UsageModelsTests` additions (2 tests) covering the shared usage stats layout height rules.
+
 ## [2026.2.16] - 2026-03-25
 
 _15 files changed, ~2750 insertions._

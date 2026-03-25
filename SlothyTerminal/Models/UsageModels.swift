@@ -139,6 +139,13 @@ struct UsagePreferences: Codable, Equatable {
   }
 }
 
+/// Layout values for the sidebar usage stats card.
+enum UsageStatsLayout {
+  static func contentHeight(forSidebarHeight sidebarHeight: CGFloat) -> CGFloat {
+    max(140, sidebarHeight / 4 + 20)
+  }
+}
+
 // MARK: - API Response Models
 
 /// Anthropic organizations list response.

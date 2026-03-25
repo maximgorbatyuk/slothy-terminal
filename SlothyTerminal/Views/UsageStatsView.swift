@@ -40,13 +40,13 @@ struct UsageStatsView: View {
         .pickerStyle(.segmented)
         .labelsHidden()
 
-        /// Scrollable content with fixed height (1/4 of sidebar).
+        /// Scrollable content with a slightly taller fixed height than 1/4 of the sidebar.
         GeometryReader { geometry in
           ScrollView {
-            usageContent(provider: selectedProvider)
+            usageContent(provider: selectedProvider, minHeight: geometry.size.height)
           }
         }
-        .frame(height: sidebarQuarterHeight)
+        .frame(height: usageContentHeight)
       }
     }
     .task {
@@ -54,14 +54,14 @@ struct UsageStatsView: View {
     }
   }
 
-  /// Fixed height for the usage content area: 1/4 of sidebar height.
-  private var sidebarQuarterHeight: CGFloat {
+  /// Fixed height for the usage content area, slightly taller than 1/4 of the sidebar.
+  private var usageContentHeight: CGFloat {
     let sidebarHeight = NSApp.keyWindow?.contentView?.frame.height ?? 600
-    return max(120, sidebarHeight / 4)
+    return UsageStatsLayout.contentHeight(forSidebarHeight: sidebarHeight)
   }
 
   @ViewBuilder
-  private func usageContent(provider: UsageProvider) -> some View {
+  private func usageContent(provider: UsageProvider, minHeight: CGFloat) -> some View {
     let status = usageService.status(for: provider)
 
     VStack(spacing: 6) {
@@ -86,6 +86,7 @@ struct UsageStatsView: View {
         unavailableView(reason)
       }
     }
+    .frame(maxWidth: .infinity, minHeight: minHeight, alignment: .top)
     .padding(10)
     .background(appCardColor)
     .cornerRadius(8)

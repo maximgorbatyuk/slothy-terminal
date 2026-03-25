@@ -4,6 +4,11 @@ import GhosttyKit
 import QuartzCore
 import os
 
+enum TerminalSubmitGateDecision {
+  case allow
+  case block
+}
+
 /// NSView subclass that hosts a single libghostty terminal surface.
 /// Handles keyboard/mouse input, sizing, focus, and lifecycle.
 /// One instance per terminal tab.
@@ -44,6 +49,7 @@ class GhosttySurfaceView: NSView, NSTextInputClient {
   var onTerminalActivity: (() -> Void)?
   var onBackgroundActivity: (() -> Void)?
   var onMouseDown: (() -> Void)?
+  var onSubmitGate: (() -> TerminalSubmitGateDecision)?
 
   /// Set on each GHOSTTY_ACTION_RENDER, cleared by poller after reading.
   private(set) var hasNewRenderSinceLastRead = false
@@ -444,6 +450,10 @@ class GhosttySurfaceView: NSView, NSTextInputClient {
       return
     }
 
+    if shouldBlockSubmission(for: event) {
+      return
+    }
+
     let action: ghostty_input_action_e = event.isARepeat ? GHOSTTY_ACTION_REPEAT : GHOSTTY_ACTION_PRESS
     keyTextAccumulator = []
 
@@ -617,6 +627,14 @@ class GhosttySurfaceView: NSView, NSTextInputClient {
 
     let disallowed: NSEvent.ModifierFlags = [.command, .control, .option]
     return event.modifierFlags.intersection(disallowed).isEmpty
+  }
+
+  private func shouldBlockSubmission(for event: NSEvent) -> Bool {
+    guard shouldCountCommandEntry(for: event) else {
+      return false
+    }
+
+    return onSubmitGate?() == .block
   }
 
   private func shouldClearCommandCapture(for event: NSEvent) -> Bool {

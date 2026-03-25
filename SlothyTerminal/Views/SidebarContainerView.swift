@@ -27,9 +27,6 @@ struct SidebarContainerView: View {
       case .explorer:
         SidebarView()
 
-      case .gitChanges:
-        GitChangesView()
-
       case .prompts:
         PromptsSidebarView()
 
