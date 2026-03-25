@@ -53,6 +53,8 @@ let package = Package(
         "Services/GitStatsService.swift",
         "Services/GraphLaneCalculator.swift",
         "Services/ANSIStripper.swift",
+        "Services/UsageKeychainStore.swift",
+        "Services/UsageService.swift",
         "Models/AgentType.swift",
         "Models/GitDiffModels.swift",
         "Models/GitModifiedFile.swift",
@@ -75,6 +77,7 @@ let package = Package(
         "Models/SavedPrompt.swift",
         "Models/LaunchType.swift",
         "Models/ChatModelMode.swift",
+        "Models/UsageModels.swift",
 
         /// Injection — Models, Registry, Orchestrator.
         "Injection/Models/InjectionPayload.swift",

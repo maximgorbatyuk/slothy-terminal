@@ -30,6 +30,37 @@
     -->
 
     <item>
+      <title>Version 2026.2.16</title>
+      <pubDate>Tue, 25 Mar 2026 12:00:00 +0000</pubDate>
+      <sparkle:version>18</sparkle:version>
+      <sparkle:shortVersionString>2026.2.16</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
+      <description><![CDATA[
+        <h2>What's New — Usage Stats</h2>
+        <p>See your Claude and Codex usage directly in the sidebar — no need to switch to a browser.</p>
+        <h3>Features</h3>
+        <ul>
+          <li><b>Live usage dashboard</b> — a new "Usage" section in the sidebar shows session and weekly rate limits with reset countdowns, always visible on every tab</li>
+          <li><b>Claude &amp; Codex tabs</b> — switch between providers with a segmented picker to see each account's stats at a glance</li>
+          <li><b>Claude: session &amp; weekly limits</b> — reads your Claude Code login automatically from Keychain, shows 5-hour session and 7-day weekly utilization, model-specific windows (Sonnet/Opus), and extra usage spend</li>
+          <li><b>Codex: session &amp; weekly limits</b> — reads your Codex CLI login from ~/.codex, shows plan, session and weekly utilization with reset countdowns, and credit balance</li>
+          <li><b>Usage settings</b> — enable/disable stats, opt into experimental sources, import browser sessions, configure refresh interval</li>
+        </ul>
+        <h3>Security</h3>
+        <ul>
+          <li>Secrets stored in macOS Keychain only — never in config files</li>
+          <li>Browser/private source flows are opt-in and labeled as experimental</li>
+        </ul>
+      ]]></description>
+      <enclosure
+        url="https://github.com/maximgorbatyuk/slothy-terminal/releases/download/v2026.2.16/SlothyTerminal-2026.2.16.dmg"
+        type="application/octet-stream"
+        sparkle:edSignature="H/wP0CwnwREuEFSjAQPBGN/KNPcYp5307XuIwTep/BqLUGjyuFSYUZhNOKuoP+K/Hh5cEwxnnW1DPyLZlBCaDw=="
+        length="20043291"
+      />
+    </item>
+
+    <item>
       <title>Version 2026.2.15</title>
       <pubDate>Fri, 21 Mar 2026 12:00:00 +0000</pubDate>
       <sparkle:version>17</sparkle:version>
