@@ -2,6 +2,32 @@
 
 All notable changes to SlothyTerminal will be documented in this file.
 
+## [2026.2.16] - 2026-03-25
+
+_15 files changed, ~2750 insertions._
+
+### Added
+- **Provider usage stats in sidebar** — new "Usage" section in the Working Directory sidebar tab shows real-time session and weekly rate limits for Claude and Codex (OpenAI/ChatGPT). Always visible on every tab with a Claude | Codex segmented picker. Content area has fixed height (1/4 sidebar) with scrolling.
+- **Claude usage via OAuth** — reads Claude Code OAuth credentials from macOS Keychain (`Claude Code-credentials`), calls `api.anthropic.com/api/oauth/usage` with `anthropic-beta: oauth-2025-04-20`. Shows session (5h) and weekly (7d) utilization percentages with reset countdowns, model-specific windows (Sonnet/Opus), and extra usage spend. Falls back to `ANTHROPIC_API_KEY` admin API or browser session import.
+- **Codex usage via ChatGPT backend** — reads Codex CLI OAuth tokens from `~/.codex/auth.json` (supports both API key and ChatGPT OAuth `tokens.access_token` modes), calls `chatgpt.com/backend-api/wham/usage` with `ChatGPT-Account-Id` header. Shows plan, session and weekly utilization with reset countdowns, and credit balance.
+- **Keychain-backed secret storage** — `UsageKeychainStore` stores imported browser session keys in Keychain with `kSecAttrAccessibleWhenUnlockedThisDeviceOnly`. Secrets are never persisted in `config.json`.
+- **Usage settings section** — new "Usage" tab in Settings with enable/disable toggle, experimental source opt-in, browser session import (with input validation), refresh interval picker (1m–30m or manual), and clear data/auth actions.
+- **Usage domain models** — `UsageProvider` (claude, codex, opencode), `UsageSourceKind` (apiKey, cliOAuth, browser, experimental), `UsageAuthSource`, `UsageFetchStatus`, `UsageSnapshot`, `UsageMetric`, `UsagePreferences`. All non-UI types are SwiftPM-covered.
+- **26 new tests** — model types, preferences coding, token formatting, provider mapping, Anthropic/Claude console/Codex response parsing, snapshot equality, API response model decoding.
+
+### Security
+- All HTTP header values (OAuth tokens, session keys, account IDs) validated for CRLF/null injection before use.
+- `responseBodyPreview` only extracts error `type`/`message` fields from API responses — never logs raw bodies that could contain tokens.
+- Browser/private source flows are opt-in only and clearly labeled as experimental in both code and UI.
+- Imported session keys are sanitized (trimmed, control characters rejected) at import time and at fetch time.
+
+### Changed
+- `SettingsSection` — added `.usage` case with `chart.bar` icon.
+- `AppConfig` — added `usagePreferences: UsagePreferences` with resilient decoding.
+- `SidebarView` — `UsageStatsView()` inserted between `DirectoryTreeView` and `ProjectDocsView`.
+- `Package.swift` — added `UsageModels.swift`, `UsageKeychainStore.swift`, `UsageService.swift` to SwiftPM sources.
+- `Logger` — added `.usage` category for all usage-related OSLog output.
+
 ## [2026.2.15] - 2026-03-21
 
 _Analysis range: `092e83b..HEAD` (3 commits, 6 files changed, 198 insertions, 75 deletions)._
