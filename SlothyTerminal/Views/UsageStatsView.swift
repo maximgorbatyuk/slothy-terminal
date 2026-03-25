@@ -40,13 +40,24 @@ struct UsageStatsView: View {
         .pickerStyle(.segmented)
         .labelsHidden()
 
-        /// Content for the selected provider.
-        usageContent(provider: selectedProvider)
+        /// Scrollable content with fixed height (1/4 of sidebar).
+        GeometryReader { geometry in
+          ScrollView {
+            usageContent(provider: selectedProvider)
+          }
+        }
+        .frame(height: sidebarQuarterHeight)
       }
     }
     .task {
       await loadAllUsage()
     }
+  }
+
+  /// Fixed height for the usage content area: 1/4 of sidebar height.
+  private var sidebarQuarterHeight: CGFloat {
+    let sidebarHeight = NSApp.keyWindow?.contentView?.frame.height ?? 600
+    return max(120, sidebarHeight / 4)
   }
 
   @ViewBuilder

@@ -286,7 +286,7 @@ class UsageService {
 
   // MARK: - Credential Paths
 
-  static let claudeCredentialPaths = [
+  nonisolated static let claudeCredentialPaths = [
     "\(NSHomeDirectory())/.claude/.credentials.json",
     "\(NSHomeDirectory())/.claude/credentials.json",
   ]
@@ -373,6 +373,12 @@ class UsageService {
       "[claude] Keychain OAuth: subscription=\(creds.subscriptionType ?? "nil"), tier=\(creds.rateLimitTier ?? "nil")"
     )
 
+    // Validate token doesn't contain header-injection characters.
+    guard !creds.token.contains(where: { $0.isNewline || $0 == "\r" || $0 == "\0" }) else {
+      Logger.usage.error("[claude] OAuth token contains invalid characters")
+      throw UsageFetchError.invalidCredentials
+    }
+
     guard let url = URL(string: "https://api.anthropic.com/api/oauth/usage") else {
       throw UsageFetchError.invalidURL
     }
@@ -445,7 +451,7 @@ class UsageService {
 
     // Session window (five_hour).
     if let fiveHour = json["five_hour"] as? [String: Any] {
-      let utilization = fiveHour["utilization"] as? Double ?? 0
+      let utilization = Self.normalizeUtilization(fiveHour["utilization"] as? Double ?? 0)
       let resetsAt = fiveHour["resets_at"] as? String
       let resetLabel = resetsAt.flatMap { Self.formatISO8601ResetTime($0) }
 
@@ -466,7 +472,7 @@ class UsageService {
 
     // Weekly window (seven_day).
     if let sevenDay = json["seven_day"] as? [String: Any] {
-      let utilization = sevenDay["utilization"] as? Double ?? 0
+      let utilization = Self.normalizeUtilization(sevenDay["utilization"] as? Double ?? 0)
       let resetsAt = sevenDay["resets_at"] as? String
       let resetLabel = resetsAt.flatMap { Self.formatISO8601ResetTime($0) }
 
@@ -559,6 +565,16 @@ class UsageService {
     }
 
     return formatResetDate(resetDate)
+  }
+
+  /// Normalizes a utilization value to a 0-100 percentage.
+  /// Handles both 0-1 fraction and 0-100 percentage conventions defensively.
+  nonisolated private static func normalizeUtilization(_ value: Double) -> Double {
+    if value > 0 && value <= 1.0 {
+      return value * 100
+    }
+
+    return value
   }
 
   /// Formats a reset Date to "in Xh Ym" relative string.
@@ -785,8 +801,8 @@ class UsageService {
     }
 
     let authMode = json["auth_mode"] as? String ?? "unknown"
-    Logger.usage.info(
-      "[codex] Credential file keys: \(json.keys.sorted().joined(separator: ", ")), auth_mode=\(authMode)"
+    Logger.usage.debug(
+      "[codex] Credential file auth_mode=\(authMode)"
     )
 
     // 1. Check for a direct API key (non-null string).
@@ -806,9 +822,7 @@ class UsageService {
 
     // 2. Check for ChatGPT OAuth tokens (tokens.access_token).
     if let tokens = json["tokens"] as? [String: Any] {
-      Logger.usage.info(
-        "[codex] Found tokens dict with keys: \(tokens.keys.sorted().joined(separator: ", "))"
-      )
+      Logger.usage.debug("[codex] Found tokens dict in credential file")
 
       if let accessToken = tokens["access_token"] as? String,
          !accessToken.isEmpty
@@ -837,6 +851,12 @@ class UsageService {
   private func fetchCodexUsageWithOAuthToken(
     _ token: String
   ) async throws -> UsageSnapshot {
+    // Validate token doesn't contain header-injection characters.
+    guard !token.contains(where: { $0.isNewline || $0 == "\r" || $0 == "\0" }) else {
+      Logger.usage.error("[codex] OAuth token contains invalid characters")
+      throw UsageFetchError.invalidCredentials
+    }
+
     // Read account_id from the credential file for the header.
     let accountId = Self.readCodexAccountId()
 
@@ -849,7 +869,9 @@ class UsageService {
     request.setValue("application/json", forHTTPHeaderField: "Accept")
     request.setValue("SlothyTerminal", forHTTPHeaderField: "User-Agent")
 
-    if let accountId {
+    if let accountId,
+       !accountId.contains(where: { $0.isNewline || $0 == "\r" || $0 == "\0" })
+    {
       request.setValue(accountId, forHTTPHeaderField: "ChatGPT-Account-Id")
     }
 
@@ -1123,9 +1145,6 @@ class UsageService {
       throw UsageFetchError.httpError(httpResponse.statusCode)
     }
 
-    Logger.usage.info(
-      "[codex] Organization response body: \(Self.responseBodyPreview(orgData))"
-    )
     return Self.parseCodexOrgResponse(data: orgData)
   }
 
@@ -1362,10 +1381,14 @@ class UsageService {
   // MARK: - Auto Refresh
 
   private func startAutoRefresh(interval: TimeInterval) {
-    stopAll()
+    // Cancel only existing refresh tasks, not the startup task.
+    for (_, task) in refreshTasks {
+      task.cancel()
+    }
+    refreshTasks.removeAll()
 
     // Minimum 30s to prevent abusive refresh from corrupted config.
-    // 0 means manual-only (handled by stopAll above clearing timers).
+    // 0 means manual-only.
     guard interval >= 30 else {
       return
     }
@@ -1388,22 +1411,28 @@ class UsageService {
 
   // MARK: - Private
 
-  /// Returns the first 500 chars of a response body for logging.
-  /// Never logs full bodies to avoid leaking secrets in large responses.
+  /// Returns a safe summary of a response body for logging.
+  /// Only logs HTTP status-relevant info — never raw bodies that could contain tokens.
   nonisolated private static func responseBodyPreview(_ data: Data) -> String {
-    let raw = String(data: data, encoding: .utf8) ?? "<non-UTF8 \(data.count) bytes>"
-    if raw.count > 500 {
-      return String(raw.prefix(500)) + "…"
+    guard String(data: data, encoding: .utf8) != nil else {
+      return "<non-UTF8 \(data.count) bytes>"
     }
 
-    return raw
+    // Only extract error type/message fields from JSON error responses.
+    if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+      if let error = json["error"] as? [String: Any] {
+        let type = error["type"] as? String ?? "unknown"
+        let message = error["message"] as? String ?? ""
+        let safeMessage = String(message.prefix(200))
+        return "error: \(type) — \(safeMessage)"
+      }
+
+      if let detail = json["detail"] as? String {
+        return "detail: \(String(detail.prefix(200)))"
+      }
+    }
+
+    return "\(data.count) bytes"
   }
 
-  private static let isoDateFormatter: DateFormatter = {
-    let formatter = DateFormatter()
-    formatter.dateFormat = "yyyy-MM-dd"
-    formatter.locale = Locale(identifier: "en_US_POSIX")
-    formatter.calendar = Calendar(identifier: .gregorian)
-    return formatter
-  }()
 }
