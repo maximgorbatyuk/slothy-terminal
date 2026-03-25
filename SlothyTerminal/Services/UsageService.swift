@@ -1,5 +1,6 @@
 import Foundation
 import OSLog
+import Security
 
 /// Manages usage data fetching for AI providers.
 /// Handles auth source discovery, credential resolution, and API requests.
@@ -182,11 +183,21 @@ class UsageService {
   }
 
   /// Resolves Claude auth in priority order:
-  /// 1. ANTHROPIC_API_KEY env var
-  /// 2. Claude CLI OAuth tokens (~/.claude/)
+  /// 1. Claude Code OAuth from macOS Keychain (preferred — has session/weekly limits)
+  /// 2. ANTHROPIC_API_KEY env var (admin API — token-level usage only)
   /// 3. Imported browser session (opt-in, experimental)
   func resolveClaudeAuth(allowExperimental: Bool) -> UsageAuthSource? {
-    // 1. API key from environment.
+    // 1. Claude Code OAuth credentials from Keychain.
+    if Self.readClaudeCodeKeychainToken() != nil {
+      return UsageAuthSource(
+        provider: .claude,
+        kind: .cliOAuth,
+        label: "Claude Code",
+        detail: "OAuth from Keychain"
+      )
+    }
+
+    // 2. API key from environment.
     if let apiKey = ProcessInfo.processInfo.environment["ANTHROPIC_API_KEY"],
        !apiKey.isEmpty
     {
@@ -196,18 +207,6 @@ class UsageService {
         label: "API Key",
         detail: "ANTHROPIC_API_KEY environment variable"
       )
-    }
-
-    // 2. Claude CLI OAuth credentials.
-    for path in Self.claudeCredentialPaths {
-      if FileManager.default.fileExists(atPath: path) {
-        return UsageAuthSource(
-          provider: .claude,
-          kind: .cliOAuth,
-          label: "CLI Auth",
-          detail: "Claude CLI credentials"
-        )
-      }
     }
 
     // 3. Imported browser session (experimental, opt-in).
@@ -317,11 +316,11 @@ class UsageService {
 
   private func fetchClaudeUsage(source: UsageAuthSource) async throws -> UsageSnapshot {
     switch source.kind {
-    case .apiKey:
-      return try await fetchClaudeUsageViaAPI()
-
     case .cliOAuth:
-      return try await fetchClaudeUsageViaCLIAuth()
+      return try await fetchClaudeUsageViaOAuth()
+
+    case .apiKey:
+      return try await fetchClaudeUsageViaAPIKey()
 
     case .browser:
       return try await fetchClaudeUsageViaBrowser()
@@ -332,8 +331,250 @@ class UsageService {
     }
   }
 
-  /// Fetches usage via the Anthropic API (ANTHROPIC_API_KEY).
-  private func fetchClaudeUsageViaAPI() async throws -> UsageSnapshot {
+  /// Reads Claude Code OAuth credentials from macOS Keychain.
+  /// Claude Code stores them under service "Claude Code-credentials".
+  nonisolated private static func readClaudeCodeKeychainToken() -> (
+    token: String, subscriptionType: String?, rateLimitTier: String?
+  )? {
+    let query: [String: Any] = [
+      kSecClass as String: kSecClassGenericPassword,
+      kSecAttrService as String: "Claude Code-credentials",
+      kSecReturnData as String: true,
+      kSecMatchLimit as String: kSecMatchLimitOne,
+    ]
+
+    var result: AnyObject?
+    let status = SecItemCopyMatching(query as CFDictionary, &result)
+
+    guard status == errSecSuccess,
+          let data = result as? Data,
+          let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+          let oauth = json["claudeAiOauth"] as? [String: Any],
+          let token = oauth["accessToken"] as? String,
+          !token.isEmpty
+    else {
+      return nil
+    }
+
+    let subType = oauth["subscriptionType"] as? String
+    let tier = oauth["rateLimitTier"] as? String
+    return (token, subType, tier)
+  }
+
+  /// Fetches usage via the Claude Code OAuth token from Keychain.
+  /// Calls https://api.anthropic.com/api/oauth/usage for session/weekly limits.
+  private func fetchClaudeUsageViaOAuth() async throws -> UsageSnapshot {
+    guard let creds = Self.readClaudeCodeKeychainToken() else {
+      Logger.usage.error("[claude] No OAuth token found in Keychain (Claude Code-credentials)")
+      throw UsageFetchError.noCredentials
+    }
+
+    Logger.usage.info(
+      "[claude] Keychain OAuth: subscription=\(creds.subscriptionType ?? "nil"), tier=\(creds.rateLimitTier ?? "nil")"
+    )
+
+    guard let url = URL(string: "https://api.anthropic.com/api/oauth/usage") else {
+      throw UsageFetchError.invalidURL
+    }
+
+    var request = URLRequest(url: url)
+    request.setValue("Bearer \(creds.token)", forHTTPHeaderField: "Authorization")
+    request.setValue("application/json", forHTTPHeaderField: "Accept")
+    request.setValue("oauth-2025-04-20", forHTTPHeaderField: "anthropic-beta")
+    request.setValue("SlothyTerminal", forHTTPHeaderField: "User-Agent")
+
+    Logger.usage.info("[claude] Requesting OAuth usage from api.anthropic.com")
+    let (data, response) = try await URLSession.shared.data(for: request)
+
+    guard let httpResponse = response as? HTTPURLResponse else {
+      Logger.usage.error("[claude] Non-HTTP response from OAuth usage endpoint")
+      throw UsageFetchError.invalidResponse
+    }
+
+    Logger.usage.info("[claude] OAuth usage response: HTTP \(httpResponse.statusCode)")
+
+    guard httpResponse.statusCode == 200 else {
+      let body = Self.responseBodyPreview(data)
+      Logger.usage.error(
+        "[claude] OAuth usage failed HTTP \(httpResponse.statusCode): \(body)"
+      )
+      throw UsageFetchError.httpError(httpResponse.statusCode)
+    }
+
+    return Self.parseClaudeOAuthUsageResponse(
+      data: data,
+      subscriptionType: creds.subscriptionType,
+      rateLimitTier: creds.rateLimitTier
+    )
+  }
+
+  /// Parses the Claude OAuth usage response.
+  /// Response has five_hour, seven_day, extra_usage windows.
+  nonisolated static func parseClaudeOAuthUsageResponse(
+    data: Data,
+    subscriptionType: String?,
+    rateLimitTier: String?
+  ) -> UsageSnapshot {
+    guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+      Logger.usage.error("[claude] Failed to parse OAuth usage response")
+      return UsageSnapshot(
+        provider: .claude,
+        sourceKind: .cliOAuth,
+        sourceLabel: "Claude Code",
+        account: nil,
+        quotaWindow: nil,
+        used: "Parse error",
+        limit: nil,
+        remaining: nil,
+        percentUsed: nil,
+        metrics: [],
+        fetchedAt: Date()
+      )
+    }
+
+    var metrics: [UsageMetric] = []
+
+    // Plan from credential metadata.
+    if let subType = subscriptionType {
+      metrics.append(UsageMetric(
+        label: "Plan",
+        value: subType.capitalized,
+        style: .normal
+      ))
+    }
+
+    // Session window (five_hour).
+    if let fiveHour = json["five_hour"] as? [String: Any] {
+      let utilization = fiveHour["utilization"] as? Double ?? 0
+      let resetsAt = fiveHour["resets_at"] as? String
+      let resetLabel = resetsAt.flatMap { Self.formatISO8601ResetTime($0) }
+
+      metrics.append(UsageMetric(
+        label: "Session (5h)",
+        value: "\(Int(utilization))% used",
+        style: utilization >= 90 ? .warning : utilization >= 70 ? .cost : .normal
+      ))
+
+      if utilization > 0, let resetLabel {
+        metrics.append(UsageMetric(
+          label: "Session resets",
+          value: resetLabel,
+          style: .normal
+        ))
+      }
+    }
+
+    // Weekly window (seven_day).
+    if let sevenDay = json["seven_day"] as? [String: Any] {
+      let utilization = sevenDay["utilization"] as? Double ?? 0
+      let resetsAt = sevenDay["resets_at"] as? String
+      let resetLabel = resetsAt.flatMap { Self.formatISO8601ResetTime($0) }
+
+      metrics.append(UsageMetric(
+        label: "Weekly (7d)",
+        value: "\(Int(utilization))% used",
+        style: utilization >= 90 ? .warning : utilization >= 70 ? .cost : .normal
+      ))
+
+      if utilization > 0, let resetLabel {
+        metrics.append(UsageMetric(
+          label: "Weekly resets",
+          value: resetLabel,
+          style: .normal
+        ))
+      }
+    }
+
+    // Model-specific weekly windows.
+    if let sonnet = json["seven_day_sonnet"] as? [String: Any],
+       let util = sonnet["utilization"] as? Double,
+       util > 0
+    {
+      metrics.append(UsageMetric(
+        label: "Sonnet (7d)",
+        value: "\(Int(util))% used",
+        style: util >= 90 ? .warning : .normal
+      ))
+    }
+
+    if let opus = json["seven_day_opus"] as? [String: Any],
+       let util = opus["utilization"] as? Double,
+       util > 0
+    {
+      metrics.append(UsageMetric(
+        label: "Opus (7d)",
+        value: "\(Int(util))% used",
+        style: util >= 90 ? .warning : .normal
+      ))
+    }
+
+    // Extra usage (monthly spend).
+    if let extra = json["extra_usage"] as? [String: Any] {
+      let isEnabled = extra["is_enabled"] as? Bool ?? false
+
+      if isEnabled {
+        let limit = extra["monthly_limit"] as? Double ?? 0
+        let used = extra["used_credits"] as? Double ?? 0
+
+        metrics.append(UsageMetric(
+          label: "Extra usage",
+          value: String(format: "$%.0f / $%.0f", used, limit),
+          style: used >= limit ? .warning : .normal
+        ))
+      }
+    }
+
+    // Determine main "used" label from session utilization.
+    let sessionUtil = (json["five_hour"] as? [String: Any])?["utilization"] as? Double ?? 0
+
+    return UsageSnapshot(
+      provider: .claude,
+      sourceKind: .cliOAuth,
+      sourceLabel: "Claude Code",
+      account: subscriptionType?.capitalized,
+      quotaWindow: nil,
+      used: "\(Int(sessionUtil))% session",
+      limit: nil,
+      remaining: nil,
+      percentUsed: sessionUtil / 100.0,
+      metrics: metrics,
+      fetchedAt: Date()
+    )
+  }
+
+  /// Formats an ISO 8601 reset timestamp to a human-readable "in Xh Ym" string.
+  nonisolated private static func formatISO8601ResetTime(_ isoString: String) -> String? {
+    let formatter = ISO8601DateFormatter()
+    formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+
+    guard let resetDate = formatter.date(from: isoString) else {
+      // Try without fractional seconds.
+      formatter.formatOptions = [.withInternetDateTime]
+
+      guard let resetDate = formatter.date(from: isoString) else {
+        return nil
+      }
+
+      return formatResetDate(resetDate)
+    }
+
+    return formatResetDate(resetDate)
+  }
+
+  /// Formats a reset Date to "in Xh Ym" relative string.
+  nonisolated private static func formatResetDate(_ date: Date) -> String {
+    let seconds = Int(date.timeIntervalSinceNow)
+
+    if seconds <= 0 {
+      return "now"
+    }
+
+    return formatResetTime(seconds)
+  }
+
+  /// Fetches usage via the Anthropic admin API (ANTHROPIC_API_KEY).
+  /// Fallback for users with API keys but no Claude Code OAuth.
+  private func fetchClaudeUsageViaAPIKey() async throws -> UsageSnapshot {
     guard let apiKey = ProcessInfo.processInfo.environment["ANTHROPIC_API_KEY"] else {
       Logger.usage.error("[claude] ANTHROPIC_API_KEY not set in environment")
       throw UsageFetchError.noCredentials
@@ -347,7 +588,7 @@ class UsageService {
     orgRequest.setValue(apiKey, forHTTPHeaderField: "x-api-key")
     orgRequest.setValue("2023-06-01", forHTTPHeaderField: "anthropic-version")
 
-    Logger.usage.info("[claude] Requesting organizations from Anthropic API")
+    Logger.usage.info("[claude] Requesting organizations from Anthropic admin API")
     let (orgData, orgResponse) = try await URLSession.shared.data(for: orgRequest)
 
     guard let httpResponse = orgResponse as? HTTPURLResponse else {
@@ -357,7 +598,6 @@ class UsageService {
 
     Logger.usage.info("[claude] Organizations response: HTTP \(httpResponse.statusCode)")
 
-    // If the key lacks admin access, return a limited snapshot.
     if httpResponse.statusCode == 403 || httpResponse.statusCode == 401 {
       let body = Self.responseBodyPreview(orgData)
       Logger.usage.warning(
@@ -374,11 +614,7 @@ class UsageService {
         remaining: nil,
         percentUsed: nil,
         metrics: [
-          UsageMetric(
-            label: "Status",
-            value: "Admin access required for usage data",
-            style: .normal
-          )
+          UsageMetric(label: "Status", value: "Admin access required", style: .normal)
         ],
         fetchedAt: Date()
       )
@@ -387,7 +623,7 @@ class UsageService {
     guard httpResponse.statusCode == 200 else {
       let body = Self.responseBodyPreview(orgData)
       Logger.usage.error(
-        "[claude] Organizations request failed HTTP \(httpResponse.statusCode): \(body)"
+        "[claude] Organizations failed HTTP \(httpResponse.statusCode): \(body)"
       )
       throw UsageFetchError.httpError(httpResponse.statusCode)
     }
@@ -397,143 +633,25 @@ class UsageService {
     )
 
     guard let org = orgInfo.data.first else {
-      Logger.usage.error("[claude] Organizations response contained no orgs")
+      Logger.usage.error("[claude] No organization found")
       throw UsageFetchError.noOrganization
     }
 
-    Logger.usage.info("[claude] Organization: \(org.name) (\(org.id))")
-
-    // Build usage request for current month.
-    let now = Date()
-    let components = Calendar(identifier: .gregorian).dateComponents(
-      [.year, .month], from: now
-    )
-
-    guard let year = components.year,
-          let month = components.month
-    else {
-      throw UsageFetchError.invalidURL
-    }
-
-    let monthStart = String(format: "%04d-%02d-01", year, month)
-    let today = Self.isoDateFormatter.string(from: now)
-
-    // Use URLComponents to safely construct the usage URL.
-    var usageComponents = URLComponents(
-      string: "https://api.anthropic.com/v1/organizations"
-    )!
-    usageComponents.path += "/\(org.id)/usage"
-    usageComponents.queryItems = [
-      URLQueryItem(name: "start_date", value: monthStart),
-      URLQueryItem(name: "end_date", value: today),
-    ]
-
-    guard let usageURL = usageComponents.url else {
-      throw UsageFetchError.invalidURL
-    }
-
-    var usageRequest = URLRequest(url: usageURL)
-    usageRequest.setValue(apiKey, forHTTPHeaderField: "x-api-key")
-    usageRequest.setValue("2023-06-01", forHTTPHeaderField: "anthropic-version")
-
-    Logger.usage.info("[claude] Requesting usage for \(monthStart) to \(today)")
-    let (usageData, usageResponse) = try await URLSession.shared.data(for: usageRequest)
-
-    guard let usageHTTP = usageResponse as? HTTPURLResponse,
-          usageHTTP.statusCode == 200
-    else {
-      let status = (usageResponse as? HTTPURLResponse)?.statusCode ?? -1
-      let body = Self.responseBodyPreview(usageData)
-      Logger.usage.warning(
-        "[claude] Usage endpoint returned HTTP \(status): \(body)"
-      )
-      // Org fetched but usage endpoint inaccessible.
-      return UsageSnapshot(
-        provider: .claude,
-        sourceKind: .apiKey,
-        sourceLabel: "API Key",
-        account: org.name,
-        quotaWindow: UsageQuotaWindow(name: "Monthly", resetLabel: nil),
-        used: "Unavailable",
-        limit: nil,
-        remaining: nil,
-        percentUsed: nil,
-        metrics: [],
-        fetchedAt: Date()
-      )
-    }
-
-    return Self.parseAnthropicUsageResponse(data: usageData, orgName: org.name)
-  }
-
-  /// Fetches usage via Claude CLI OAuth tokens.
-  private func fetchClaudeUsageViaCLIAuth() async throws -> UsageSnapshot {
-    var credData: Data?
-    var credPath: String?
-    for path in Self.claudeCredentialPaths {
-      if let data = FileManager.default.contents(atPath: path) {
-        credData = data
-        credPath = path
-        break
-      }
-    }
-
-    guard let data = credData else {
-      Logger.usage.error("[claude] No CLI credential file found at known paths")
-      throw UsageFetchError.noCredentials
-    }
-
-    Logger.usage.info("[claude] Reading CLI credentials from \(credPath ?? "unknown")")
-
-    guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
-      Logger.usage.error("[claude] CLI credential file is not valid JSON")
-      throw UsageFetchError.invalidCredentials
-    }
-
-    Logger.usage.info(
-      "[claude] Credential file keys: \(json.keys.sorted().joined(separator: ", "))"
-    )
-
-    // Look for an OAuth access token in common credential formats.
-    let token = json["accessToken"] as? String
-      ?? json["access_token"] as? String
-      ?? (json["claude.ai"] as? [String: Any])?["accessToken"] as? String
-
-    guard let oauthToken = token,
-          !oauthToken.isEmpty
-    else {
-      Logger.usage.error("[claude] No accessToken found in CLI credential file")
-      throw UsageFetchError.noCredentials
-    }
-
-    guard let url = URL(string: "https://api.claude.ai/api/organizations") else {
-      throw UsageFetchError.invalidURL
-    }
-
-    var request = URLRequest(url: url)
-    request.setValue("Bearer \(oauthToken)", forHTTPHeaderField: "Authorization")
-    request.setValue("application/json", forHTTPHeaderField: "Accept")
-
-    Logger.usage.info("[claude] Requesting organizations from claude.ai console API")
-    let (responseData, response) = try await URLSession.shared.data(for: request)
-
-    guard let httpResponse = response as? HTTPURLResponse else {
-      Logger.usage.error("[claude] Non-HTTP response from console API")
-      throw UsageFetchError.invalidResponse
-    }
-
-    Logger.usage.info("[claude] Console API response: HTTP \(httpResponse.statusCode)")
-
-    guard httpResponse.statusCode == 200 else {
-      let body = Self.responseBodyPreview(responseData)
-      Logger.usage.error(
-        "[claude] Console API failed HTTP \(httpResponse.statusCode): \(body)"
-      )
-      throw UsageFetchError.httpError(httpResponse.statusCode)
-    }
-
-    return Self.parseClaudeConsoleOrgsResponse(
-      data: responseData, sourceKind: .cliOAuth
+    return UsageSnapshot(
+      provider: .claude,
+      sourceKind: .apiKey,
+      sourceLabel: "API Key",
+      account: org.name,
+      quotaWindow: nil,
+      used: "Connected",
+      limit: nil,
+      remaining: nil,
+      percentUsed: nil,
+      metrics: [
+        UsageMetric(label: "Org", value: org.name, style: .normal),
+        UsageMetric(label: "Note", value: "Use Claude Code login for session/weekly limits", style: .normal),
+      ],
+      fetchedAt: Date()
     )
   }
 
@@ -547,7 +665,6 @@ class UsageService {
       throw UsageFetchError.noCredentials
     }
 
-    // Reject values with control characters to prevent header injection.
     let sanitized = sessionKey.trimmingCharacters(in: .whitespacesAndNewlines)
 
     guard !sanitized.isEmpty,
@@ -557,7 +674,7 @@ class UsageService {
       throw UsageFetchError.invalidCredentials
     }
 
-    guard let url = URL(string: "https://api.claude.ai/api/organizations") else {
+    guard let url = URL(string: "https://claude.ai/api/organizations") else {
       throw UsageFetchError.invalidURL
     }
 
@@ -569,7 +686,6 @@ class UsageService {
     let (responseData, response) = try await URLSession.shared.data(for: request)
 
     guard let httpResponse = response as? HTTPURLResponse else {
-      Logger.usage.error("[claude] Non-HTTP response from browser session request")
       throw UsageFetchError.invalidResponse
     }
 
