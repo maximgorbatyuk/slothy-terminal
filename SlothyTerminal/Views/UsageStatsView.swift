@@ -50,7 +50,7 @@ struct UsageStatsView: View {
       }
     }
     .task {
-      await loadAllUsage()
+      usageService.ensureStarted()
     }
   }
 
@@ -181,7 +181,7 @@ struct UsageStatsView: View {
     HStack {
       Spacer()
 
-      Text("Updated \(snapshot.fetchedAt.formatted(.relative(presentation: .named)))")
+      Text("Updated \(snapshot.fetchedAt.formatted(.dateTime.hour().minute().second()))")
         .font(.system(size: 9))
         .foregroundColor(.secondary.opacity(0.7))
     }
@@ -290,17 +290,6 @@ struct UsageStatsView: View {
   }
 
   // MARK: - Helpers
-
-  private func loadAllUsage() async {
-    let prefs = ConfigManager.shared.config.usagePreferences
-
-    guard prefs.isEnabled else {
-      return
-    }
-
-    usageService.resolveAuthSources()
-    await usageService.fetchAll()
-  }
 
   private func sourceBadgeColor(for kind: UsageSourceKind) -> Color {
     switch kind {

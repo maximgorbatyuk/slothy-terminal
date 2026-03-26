@@ -2,6 +2,17 @@
 
 All notable changes to SlothyTerminal will be documented in this file.
 
+## [2026.2.18] - 2026-03-26
+
+_Analysis range: `622a851..c5c8e7f` (1 commit, 2 files changed, 18 insertions, 13 deletions)._
+
+### Fixed
+- **Usage stats re-fetching on tab/workspace/sidebar switch** — usage data is now fetched once and shared across all tabs, workspaces, and sidebar panels. Switching between them no longer triggers redundant API calls or resets the "updated" timer. `UsageService.ensureStarted()` is idempotent; views are pure readers of the singleton's observable state.
+- **Auto-refresh restart after settings change** — `startIfEnabled()` now marks the service as started, preventing `ensureStarted()` from duplicating the fetch cycle when the sidebar view appears after a settings change.
+
+### Changed
+- **Usage timestamp format** — the "Updated ..." label in the usage stats card now shows the local time of the last refresh (HH:mm:ss) instead of a relative duration that did not auto-update.
+
 ## [2026.2.17] - 2026-03-25
 
 _Analysis range: `cd737c50351b159d0e003a5c10d31db323da44a6..19ca5df` (1 commit, 9 files changed, 266 insertions, 16 deletions)._
