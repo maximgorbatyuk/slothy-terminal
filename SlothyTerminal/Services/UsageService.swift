@@ -24,9 +24,23 @@ class UsageService {
   @ObservationIgnored
   private var startupTask: Task<Void, Never>?
 
+  @ObservationIgnored
+  private var isStarted = false
+
   private init() {}
 
   // MARK: - Public API
+
+  /// Starts the fetch + auto-refresh cycle if not already running.
+  /// Idempotent — safe to call from multiple views.
+  func ensureStarted() {
+    guard !isStarted else {
+      return
+    }
+
+    isStarted = true
+    startIfEnabled()
+  }
 
   /// Resolves auth sources and starts fetching if usage is enabled.
   func startIfEnabled() {
@@ -37,6 +51,7 @@ class UsageService {
       return
     }
 
+    isStarted = true
     startupTask?.cancel()
     startupTask = Task {
       resolveAuthSources()
@@ -54,6 +69,7 @@ class UsageService {
   func stopAll() {
     startupTask?.cancel()
     startupTask = nil
+    isStarted = false
 
     for (_, task) in refreshTasks {
       task.cancel()
