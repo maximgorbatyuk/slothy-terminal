@@ -2,6 +2,14 @@
 
 All notable changes to SlothyTerminal will be documented in this file.
 
+## [2026.2.20] - 2026-03-27
+
+### Changed
+- **Usage stats vertical tab strip** — replaced the horizontal segmented picker (Claude | Codex) with a vertical icon tab strip on the left side of the usage card. Each provider is represented by an SF Symbol (`brain.head.profile` for Claude, `curlybraces` for Codex) with a tooltip on hover showing the provider name. Selected tab uses an accent-colored pill; unselected icons use `primary.opacity(0.5)` for consistent visibility in both light and dark modes.
+- **Unified usage card background** — the `appCardColor` background and corner radius now wrap the entire usage block (tab strip + divider + content) instead of the content area alone, giving a cohesive card appearance.
+- **Animated tab transitions** — switching between provider tabs now animates with `easeInOut(duration: 0.15)` for a smooth content transition.
+- **`UsageProvider.iconName`** — added a computed property to `UsageProvider` returning the SF Symbol name for each provider, keeping icon mapping in the model rather than the view.
+
 ## [2026.2.19] - 2026-03-27
 
 ### Fixed
