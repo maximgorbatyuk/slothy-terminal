@@ -4,6 +4,9 @@ All notable changes to SlothyTerminal will be documented in this file.
 
 ## [2026.2.20] - 2026-03-27
 
+### Fixed
+- **TUI app resize on tab switch** — switching to a tab running a TUI app (opencode, codex) no longer causes the terminal to render with an incorrect grid size (tiny text). The root cause was that SwiftUI does not guarantee `NSView.layout()` when a hidden tab's frame expands from zero to full size, leaving `GhosttySurfaceView.contentSize` stale. On tab activation, the surface metrics cache is now invalidated and a layout pass is forced so `ghostty_surface_set_size()` receives correct pixel dimensions.
+
 ### Changed
 - **Usage stats vertical tab strip** — replaced the horizontal segmented picker (Claude | Codex) with a vertical icon tab strip on the left side of the usage card. Each provider is represented by an SF Symbol (`brain.head.profile` for Claude, `curlybraces` for Codex) with a tooltip on hover showing the provider name. Selected tab uses an accent-colored pill; unselected icons use `primary.opacity(0.5)` for consistent visibility in both light and dark modes.
 - **Unified usage card background** — the `appCardColor` background and corner radius now wrap the entire usage block (tab strip + divider + content) instead of the content area alone, giving a cohesive card appearance.

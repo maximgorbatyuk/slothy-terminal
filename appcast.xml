@@ -37,6 +37,10 @@
       <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
       <description><![CDATA[
         <h2>What's New</h2>
+        <h3>Bug fix</h3>
+        <ul>
+          <li>Fixed a bug where switching to a tab running a TUI app (opencode, codex) could cause text to appear very small due to an incorrect terminal grid size</li>
+        </ul>
         <h3>Usage stats redesign</h3>
         <ul>
           <li>Provider switcher is now a vertical icon strip on the left side of the usage card — hover over each icon to see the provider name</li>
