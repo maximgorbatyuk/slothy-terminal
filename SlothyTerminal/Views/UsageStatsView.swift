@@ -36,11 +36,13 @@ struct UsageStatsView: View {
           VStack(spacing: 4) {
             ForEach(UsageProvider.sidebarProviders, id: \.self) { provider in
               Button {
-                selectedProvider = provider
+                withAnimation(.easeInOut(duration: 0.15)) {
+                  selectedProvider = provider
+                }
               } label: {
                 Image(systemName: provider.iconName)
                   .font(.system(size: 11))
-                  .foregroundColor(selectedProvider == provider ? .white : .secondary)
+                  .foregroundColor(selectedProvider == provider ? .white : .primary.opacity(0.5))
                   .frame(width: 26, height: 26)
                   .background(
                     RoundedRectangle(cornerRadius: 6)
@@ -69,6 +71,8 @@ struct UsageStatsView: View {
           .frame(maxWidth: .infinity)
         }
         .frame(height: usageContentHeight)
+        .background(appCardColor)
+        .cornerRadius(8)
       }
     }
     .task {
@@ -110,8 +114,6 @@ struct UsageStatsView: View {
     }
     .frame(maxWidth: .infinity, minHeight: minHeight, alignment: .top)
     .padding(10)
-    .background(appCardColor)
-    .cornerRadius(8)
   }
 
   @ViewBuilder
