@@ -153,10 +153,6 @@ struct DirectoryTreeView: View {
       let loadGeneration = rootLoadGeneration
       isLoading = true
 
-      if lastLoadedRootDirectory != directory {
-        items = []
-      }
-
       let loadedItems = await DirectoryTreeManager.shared.loadItems(in: directory)
 
       guard !Task.isCancelled,
@@ -292,12 +288,6 @@ struct FileItemRow: View {
     .onDisappear {
       childLoadTask?.cancel()
       childLoadTask = nil
-
-      if item.isLoadingChildren {
-        item.childLoadGeneration += 1
-        item.isExpanded = false
-        item.isLoadingChildren = false
-      }
     }
   }
 
