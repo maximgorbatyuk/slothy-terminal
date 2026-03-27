@@ -28,10 +28,16 @@ struct MainView: View {
       HStack(spacing: 0) {
         /// Sidebar on the left.
         if appState.isSidebarVisible && sidebarPosition == .left {
-          SidebarContainerView()
-            .frame(width: appState.sidebarWidth)
-            .padding(.vertical, 8)
-            .padding(.leading, 8)
+          VStack(spacing: 0) {
+            SidebarContainerView()
+              .frame(maxHeight: .infinity)
+
+            UsageStatsView()
+              .padding(.top, 8)
+          }
+          .frame(width: appState.sidebarWidth)
+          .padding(.vertical, 8)
+          .padding(.leading, 8)
 
           sidebarResizeHandle(totalWidth: containerWidth)
         }
@@ -45,10 +51,16 @@ struct MainView: View {
         if appState.isSidebarVisible && sidebarPosition == .right {
           sidebarResizeHandle(totalWidth: containerWidth)
 
-          SidebarContainerView()
-            .frame(width: appState.sidebarWidth)
-            .padding(.vertical, 8)
-            .padding(.trailing, 8)
+          VStack(spacing: 0) {
+            SidebarContainerView()
+              .frame(maxHeight: .infinity)
+
+            UsageStatsView()
+              .padding(.top, 8)
+          }
+          .frame(width: appState.sidebarWidth)
+          .padding(.vertical, 8)
+          .padding(.trailing, 8)
         }
       }
       .background {

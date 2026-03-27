@@ -53,9 +53,6 @@ struct TerminalSidebarView: View {
       /// Directory tree.
       DirectoryTreeView(rootDirectory: tab.workingDirectory)
 
-      /// Usage stats.
-      UsageStatsView()
-
       /// Project docs.
       ProjectDocsView(workingDirectory: tab.workingDirectory)
     }

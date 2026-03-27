@@ -31,20 +31,42 @@ struct UsageStatsView: View {
       .buttonStyle(.plain)
 
       if isExpanded {
-        /// Provider subtabs.
-        Picker("Provider", selection: $selectedProvider) {
-          ForEach(UsageProvider.sidebarProviders, id: \.self) { provider in
-            Text(provider.displayName).tag(provider)
-          }
-        }
-        .pickerStyle(.segmented)
-        .labelsHidden()
+        HStack(spacing: 0) {
+          /// Vertical provider tab strip.
+          VStack(spacing: 4) {
+            ForEach(UsageProvider.sidebarProviders, id: \.self) { provider in
+              Button {
+                selectedProvider = provider
+              } label: {
+                Image(systemName: provider.iconName)
+                  .font(.system(size: 11))
+                  .foregroundColor(selectedProvider == provider ? .white : .secondary)
+                  .frame(width: 26, height: 26)
+                  .background(
+                    RoundedRectangle(cornerRadius: 6)
+                      .fill(selectedProvider == provider ? Color.accentColor : Color.clear)
+                  )
+              }
+              .buttonStyle(.plain)
+              .help(provider.displayName)
+            }
 
-        /// Scrollable content with a slightly taller fixed height than 1/4 of the sidebar.
-        GeometryReader { geometry in
-          ScrollView {
-            usageContent(provider: selectedProvider, minHeight: geometry.size.height)
+            Spacer()
           }
+          .padding(.top, 4)
+          .frame(width: 30)
+
+          /// Thin divider between tabs and content.
+          Divider()
+            .padding(.vertical, 4)
+
+          /// Scrollable content.
+          GeometryReader { geometry in
+            ScrollView {
+              usageContent(provider: selectedProvider, minHeight: geometry.size.height)
+            }
+          }
+          .frame(maxWidth: .infinity)
         }
         .frame(height: usageContentHeight)
       }

@@ -8,33 +8,6 @@ struct ClaudeOAuthCredentials: Equatable {
   let rateLimitTier: String?
 }
 
-struct ClaudeOAuthCredentialCache {
-  typealias Loader = () -> ClaudeOAuthCredentials?
-
-  private let loader: Loader
-  private var cachedCredentials: ClaudeOAuthCredentials?
-
-  init(loader: @escaping Loader) {
-    self.loader = loader
-  }
-
-  mutating func credentials() -> ClaudeOAuthCredentials? {
-    if let cachedCredentials {
-      return cachedCredentials
-    }
-
-    guard let credentials = loader() else {
-      return nil
-    }
-
-    cachedCredentials = credentials
-    return credentials
-  }
-
-  mutating func invalidate() {
-    cachedCredentials = nil
-  }
-}
 
 /// Manages usage data fetching for AI providers.
 /// Handles auth source discovery, credential resolution, and API requests.
@@ -60,11 +33,6 @@ class UsageService {
 
   @ObservationIgnored
   private var isStarted = false
-
-  @ObservationIgnored
-  private var claudeOAuthCredentialCache = ClaudeOAuthCredentialCache(loader: {
-    UsageService.readClaudeCodeKeychainToken()
-  })
 
   private init() {}
 
@@ -109,8 +77,6 @@ class UsageService {
     startupTask?.cancel()
     startupTask = nil
     isStarted = false
-    claudeOAuthCredentialCache.invalidate()
-
     for (_, task) in refreshTasks {
       task.cancel()
     }
@@ -196,10 +162,6 @@ class UsageService {
     fetchStatuses.removeValue(forKey: provider)
     resolvedSources.removeValue(forKey: provider)
 
-    if provider == .claude {
-      claudeOAuthCredentialCache.invalidate()
-    }
-
     UsageKeychainStore.deleteAll(provider: provider)
   }
 
@@ -249,7 +211,7 @@ class UsageService {
   /// 3. Imported browser session (opt-in, experimental)
   func resolveClaudeAuth(allowExperimental: Bool) -> UsageAuthSource? {
     // 1. Claude Code OAuth credentials from Keychain.
-    if claudeOAuthCredentialCache.credentials() != nil {
+    if Self.readClaudeCodeKeychainToken() != nil {
       return UsageAuthSource(
         provider: .claude,
         kind: .cliOAuth,
@@ -425,7 +387,7 @@ class UsageService {
   /// Fetches usage via the Claude Code OAuth token from Keychain.
   /// Calls https://api.anthropic.com/api/oauth/usage for session/weekly limits.
   private func fetchClaudeUsageViaOAuth() async throws -> UsageSnapshot {
-    guard let creds = claudeOAuthCredentialCache.credentials() else {
+    guard let creds = Self.readClaudeCodeKeychainToken() else {
       Logger.usage.error("[claude] No OAuth token found in Keychain (Claude Code-credentials)")
       throw UsageFetchError.noCredentials
     }
