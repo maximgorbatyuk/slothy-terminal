@@ -93,6 +93,16 @@ struct GhosttyTerminalViewRepresentable: NSViewRepresentable {
     /// the terminal to re-evaluate scroll position (scroll-to-top-then-bottom).
     if isActive != wasActive {
       nsView.setFocused(isActive)
+
+      /// When a tab becomes visible, SwiftUI expands its frame from zero
+      /// to full size but may not trigger NSView.layout(). Force a layout
+      /// pass so contentSize is refreshed and Ghostty receives the correct
+      /// pixel dimensions — otherwise TUI apps (opencode, codex) render
+      /// with a stale grid size, making text appear tiny.
+      if isActive {
+        nsView.invalidateSurfaceMetrics()
+        nsView.needsLayout = true
+      }
     }
 
     /// Ensure first responder is set when the tab is active.

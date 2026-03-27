@@ -21,6 +21,20 @@ enum UsageProvider: String, Codable, CaseIterable {
 
   /// Providers shown as subtabs in the sidebar usage block.
   static let sidebarProviders: [UsageProvider] = [.claude, .codex]
+
+  /// SF Symbol icon name for the sidebar usage tab strip.
+  var iconName: String {
+    switch self {
+    case .claude:
+      return "brain.head.profile"
+
+    case .codex:
+      return "curlybraces"
+
+    case .opencode:
+      return "chevron.left.forwardslash.chevron.right"
+    }
+  }
 }
 
 /// The kind of authentication source used for usage fetching.

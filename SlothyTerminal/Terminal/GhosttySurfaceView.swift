@@ -388,6 +388,13 @@ class GhosttySurfaceView: NSView, NSTextInputClient {
     refreshViewportSnapshot()
   }
 
+  /// Resets the dedup cache so the next layout pass re-sends size to Ghostty
+  /// even if the pixel dimensions haven't changed. Called on tab activation
+  /// to ensure contentSize is refreshed from actual bounds.
+  func invalidateSurfaceMetrics() {
+    surfaceMetricsCache.reset()
+  }
+
   override func becomeFirstResponder() -> Bool {
     let result = super.becomeFirstResponder()
     if result {
