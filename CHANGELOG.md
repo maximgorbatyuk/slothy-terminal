@@ -2,6 +2,18 @@
 
 All notable changes to SlothyTerminal will be documented in this file.
 
+## [2026.2.19] - 2026-03-27
+
+### Fixed
+- **Sidebar directory tree flicker** — removed premature clearing of directory tree items when the root directory changes, and removed unnecessary child-loading state cleanup in `onDisappear`, eliminating a visual flash when switching directories.
+
+### Changed
+- **Claude OAuth credential caching** — Keychain reads for Claude Code OAuth tokens are now cached in a dedicated `ClaudeOAuthCredentialCache`. The cache is invalidated on service stop/reset and when the Claude provider is removed, eliminating repeated `SecItemCopyMatching` calls during auth resolution and usage fetches.
+- **Extracted `ClaudeOAuthCredentials` struct** — replaced the inline tuple `(token, subscriptionType, rateLimitTier)` with a named `Equatable` struct for type safety and testability.
+
+### Tests
+- Added `ClaudeOAuthCredentialCacheTests` verifying single-load semantics and invalidation behavior.
+
 ## [2026.2.18] - 2026-03-26
 
 _Analysis range: `622a851..c5c8e7f` (1 commit, 2 files changed, 18 insertions, 13 deletions)._
