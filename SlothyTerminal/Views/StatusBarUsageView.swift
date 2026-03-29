@@ -28,6 +28,10 @@ struct StatusBarUsageBars: View {
           providerBar(provider)
         }
       }
+      .onTapGesture {
+        hoverTask?.cancel()
+        isPopoverPresented.toggle()
+      }
       .onHover { hovering in
         handleHover(hovering)
       }
