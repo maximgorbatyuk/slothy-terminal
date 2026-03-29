@@ -37,16 +37,16 @@ swift test
 
 # Full release: build + sign + notarize + update appcast + GitHub release + upload DMG
 # Requires: .env, sparkle-tools/bin/sign_update, gh CLI authenticated
-# Pre-requisite: appcast.xml and CHANGELOG.md entries for VERSION must exist before running
+# Pre-requisite: appcast.xml entry (with BUILD_NUMBER/SIGNATURE_HERE/FILE_SIZE_IN_BYTES placeholders) and CHANGELOG.md entry for VERSION must exist before running
 ./scripts/release.sh [VERSION]
 # Example: ./scripts/release.sh 2026.2.15
 #
 # Release workflow:
 #   1. Write CHANGELOG.md entry for the new version
 #   2. Add appcast.xml <item> with SIGNATURE_HERE and FILE_SIZE_IN_BYTES placeholders
-#   3. Bump sparkle:version (build number) in the new appcast entry
+#   3. Use BUILD_NUMBER placeholder for sparkle:version in the new appcast entry (auto-incremented by script)
 #   4. Run ./scripts/release.sh VERSION
-#   The script handles: build, notarize, Sparkle sign, appcast update, commit, GitHub release, push, merge to main
+#   The script handles: Xcode version bump, build number increment, build, notarize, Sparkle sign, appcast update, commit, GitHub release, push, merge to main
 ```
 
 ## Compact Instructions

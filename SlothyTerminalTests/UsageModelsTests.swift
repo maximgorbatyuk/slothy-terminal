@@ -25,8 +25,8 @@ final class UsageModelsTests: XCTestCase {
     XCTAssertEqual(UsageProvider.opencode.displayName, "OpenCode")
   }
 
-  func testUsageSidebarProviders() {
-    XCTAssertEqual(UsageProvider.sidebarProviders, [.claude, .codex])
+  func testUsageStatusBarProviders() {
+    XCTAssertEqual(UsageProvider.statusBarProviders, [.claude, .codex])
   }
 
   func testUsageAuthSourceExperimental() {
@@ -119,19 +119,6 @@ final class UsageModelsTests: XCTestCase {
     XCTAssertEqual(prefs.refreshInterval, 60.0)
   }
 
-  func testUsageStatsContentHeightAddsExtraSpace() {
-    XCTAssertEqual(
-      UsageStatsLayout.contentHeight(forSidebarHeight: 600),
-      170
-    )
-  }
-
-  func testUsageStatsContentHeightHonorsMinimumHeight() {
-    XCTAssertEqual(
-      UsageStatsLayout.contentHeight(forSidebarHeight: 320),
-      140
-    )
-  }
 
   // MARK: - Error Descriptions
 
