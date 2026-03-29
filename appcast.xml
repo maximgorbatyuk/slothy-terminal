@@ -30,6 +30,34 @@
     -->
 
     <item>
+      <title>Version 2026.2.21</title>
+      <pubDate>Sat, 29 Mar 2026 12:00:00 +0000</pubDate>
+      <sparkle:version>23</sparkle:version>
+      <sparkle:shortVersionString>2026.2.21</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
+      <description><![CDATA[
+        <h2>What's New</h2>
+        <h3>Usage stats in the status bar</h3>
+        <ul>
+          <li>Usage stats moved from the sidebar to the bottom status bar — compact colored bars show session utilization at a glance</li>
+          <li>Hover over the bars to see full usage details in a popover with provider tabs, metrics, and refresh</li>
+          <li>Sidebar is now cleaner with more space for the directory tree</li>
+        </ul>
+        <h3>No more keychain prompts</h3>
+        <ul>
+          <li>Fixed repeated "wants to access your keychain" dialogs — credentials are now cached after the first read</li>
+          <li>Stale tokens are automatically refreshed on authentication errors</li>
+        </ul>
+      ]]></description>
+      <enclosure
+        url="https://github.com/maximgorbatyuk/slothy-terminal/releases/download/v2026.2.21/SlothyTerminal-2026.2.21.dmg"
+        type="application/octet-stream"
+        sparkle:edSignature="zrPh86jeKGOwaIDVYr0LvLUTuKmPMHSXZCG8OvswxV56fWNj/LLJa+QNIuuRLDX9hnjZLxdjqIDRGBXlAyuGDw=="
+        length="20048153"
+      />
+    </item>
+
+    <item>
       <title>Version 2026.2.20</title>
       <pubDate>Thu, 27 Mar 2026 12:00:00 +0000</pubDate>
       <sparkle:version>22</sparkle:version>

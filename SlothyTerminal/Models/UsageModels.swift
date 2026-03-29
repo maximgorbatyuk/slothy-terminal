@@ -19,10 +19,10 @@ enum UsageProvider: String, Codable, CaseIterable {
     }
   }
 
-  /// Providers shown as subtabs in the sidebar usage block.
-  static let sidebarProviders: [UsageProvider] = [.claude, .codex]
+  /// Providers shown in the status bar usage area.
+  static let statusBarProviders: [UsageProvider] = [.claude, .codex]
 
-  /// SF Symbol icon name for the sidebar usage tab strip.
+  /// SF Symbol icon name for the usage display.
   var iconName: String {
     switch self {
     case .claude:
@@ -150,13 +150,6 @@ struct UsagePreferences: Codable, Equatable {
   /// Refresh interval as TimeInterval, clamped to non-negative.
   var refreshInterval: TimeInterval {
     max(0, TimeInterval(refreshIntervalSeconds))
-  }
-}
-
-/// Layout values for the sidebar usage stats card.
-enum UsageStatsLayout {
-  static func contentHeight(forSidebarHeight sidebarHeight: CGFloat) -> CGFloat {
-    max(140, sidebarHeight / 4 + 20)
   }
 }
 

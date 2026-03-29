@@ -1,93 +1,176 @@
 import SwiftUI
 
-/// Compact usage stats block for the sidebar.
-/// Always visible with Claude/Codex subtabs for switching providers.
-struct UsageStatsView: View {
-  @State private var isExpanded = true
+/// Compact usage bars for the status bar.
+/// Shows a small progress bar per provider; hover reveals a detail popover.
+struct StatusBarUsageBars: View {
+  private var usageService: UsageService { UsageService.shared }
+
+  @State private var isPopoverPresented = false
+  @State private var hoverTask: Task<Void, Never>?
+
+  /// Providers that have a non-idle status.
+  private var activeProviders: [UsageProvider] {
+    UsageProvider.statusBarProviders.filter { provider in
+      switch usageService.status(for: provider) {
+      case .idle:
+        return false
+
+      default:
+        return true
+      }
+    }
+  }
+
+  var body: some View {
+    if !activeProviders.isEmpty {
+      HStack(spacing: 8) {
+        ForEach(activeProviders, id: \.self) { provider in
+          providerBar(provider)
+        }
+      }
+      .onHover { hovering in
+        handleHover(hovering)
+      }
+      .popover(isPresented: $isPopoverPresented) {
+        UsagePopoverView()
+          .onHover { hovering in
+            handleHover(hovering)
+          }
+      }
+    }
+  }
+
+  @ViewBuilder
+  private func providerBar(_ provider: UsageProvider) -> some View {
+    let status = usageService.status(for: provider)
+
+    HStack(spacing: 4) {
+      Image(systemName: provider.iconName)
+        .font(.system(size: 9))
+        .foregroundColor(.secondary)
+
+      switch status {
+      case .loading:
+        ProgressView()
+          .controlSize(.mini)
+          .scaleEffect(0.6)
+          .frame(width: 40)
+
+      case .loaded:
+        if let snapshot = usageService.snapshot(for: provider),
+           let percent = snapshot.percentUsed
+        {
+          usageBarCapsule(percent: percent)
+
+          Text("\(Int(min(percent, 9.99) * 100))%")
+            .font(.system(size: 9).monospacedDigit())
+            .foregroundColor(.secondary)
+        } else {
+          Text("--")
+            .font(.system(size: 9))
+            .foregroundColor(.secondary)
+        }
+
+      case .failed:
+        Image(systemName: "exclamationmark.triangle.fill")
+          .font(.system(size: 8))
+          .foregroundColor(.orange)
+
+      case .unavailable:
+        Image(systemName: "minus.circle")
+          .font(.system(size: 8))
+          .foregroundColor(.secondary.opacity(0.5))
+
+      case .idle:
+        EmptyView()
+      }
+    }
+  }
+
+  private func usageBarCapsule(percent: Double) -> some View {
+    ZStack(alignment: .leading) {
+      Capsule()
+        .fill(Color.secondary.opacity(0.2))
+        .frame(width: 40, height: 4)
+
+      Capsule()
+        .fill(barColor(percent: percent))
+        .frame(width: 40 * min(percent, 1.0), height: 4)
+    }
+  }
+
+  private func barColor(percent: Double) -> Color {
+    if percent > 0.9 {
+      return .red
+    } else if percent > 0.7 {
+      return .orange
+    }
+
+    return .green
+  }
+
+  private func handleHover(_ hovering: Bool) {
+    hoverTask?.cancel()
+
+    if hovering {
+      hoverTask = Task {
+        try? await Task.sleep(nanoseconds: 300_000_000)
+
+        guard !Task.isCancelled else {
+          return
+        }
+
+        isPopoverPresented = true
+      }
+    } else {
+      hoverTask = Task {
+        try? await Task.sleep(nanoseconds: 300_000_000)
+
+        guard !Task.isCancelled else {
+          return
+        }
+
+        isPopoverPresented = false
+      }
+    }
+  }
+}
+
+// MARK: - Usage Popover
+
+/// Full usage detail popover shown on hover.
+struct UsagePopoverView: View {
   @State private var selectedProvider: UsageProvider = .claude
 
   private var usageService: UsageService { UsageService.shared }
 
   var body: some View {
-    VStack(alignment: .leading, spacing: 8) {
-      /// Collapsible header.
-      Button {
-        isExpanded.toggle()
-      } label: {
-        HStack {
-          Image(systemName: "chart.bar.fill")
-            .font(.system(size: 10))
-
-          Text("Usage")
-            .font(.system(size: 10, weight: .semibold))
-
-          Spacer()
-
-          Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
-            .font(.system(size: 10))
+    VStack(spacing: 0) {
+      /// Provider tabs.
+      Picker("Provider", selection: $selectedProvider) {
+        ForEach(UsageProvider.statusBarProviders, id: \.self) { provider in
+          Text(provider.displayName).tag(provider)
         }
-        .foregroundColor(.secondary)
       }
-      .buttonStyle(.plain)
+      .pickerStyle(.segmented)
+      .padding(.horizontal, 12)
+      .padding(.top, 12)
+      .padding(.bottom, 8)
 
-      if isExpanded {
-        HStack(spacing: 0) {
-          /// Vertical provider tab strip.
-          VStack(spacing: 4) {
-            ForEach(UsageProvider.sidebarProviders, id: \.self) { provider in
-              Button {
-                withAnimation(.easeInOut(duration: 0.15)) {
-                  selectedProvider = provider
-                }
-              } label: {
-                Image(systemName: provider.iconName)
-                  .font(.system(size: 11))
-                  .foregroundColor(selectedProvider == provider ? .white : .primary.opacity(0.5))
-                  .frame(width: 26, height: 26)
-                  .background(
-                    RoundedRectangle(cornerRadius: 6)
-                      .fill(selectedProvider == provider ? Color.accentColor : Color.clear)
-                  )
-              }
-              .buttonStyle(.plain)
-              .help(provider.displayName)
-            }
+      Divider()
 
-            Spacer()
-          }
-          .padding(.top, 4)
-          .frame(width: 30)
-
-          /// Thin divider between tabs and content.
-          Divider()
-            .padding(.vertical, 4)
-
-          /// Scrollable content.
-          GeometryReader { geometry in
-            ScrollView {
-              usageContent(provider: selectedProvider, minHeight: geometry.size.height)
-            }
-          }
-          .frame(maxWidth: .infinity)
-        }
-        .frame(height: usageContentHeight)
-        .background(appCardColor)
-        .cornerRadius(8)
+      /// Content area.
+      ScrollView {
+        popoverContent(provider: selectedProvider)
+          .padding(12)
       }
+      .frame(maxHeight: 320)
     }
-    .task {
-      usageService.ensureStarted()
-    }
-  }
-
-  /// Fixed height for the usage content area, slightly taller than 1/4 of the sidebar.
-  private var usageContentHeight: CGFloat {
-    let sidebarHeight = NSApp.keyWindow?.contentView?.frame.height ?? 600
-    return UsageStatsLayout.contentHeight(forSidebarHeight: sidebarHeight)
+    .frame(width: 320)
   }
 
   @ViewBuilder
-  private func usageContent(provider: UsageProvider, minHeight: CGFloat) -> some View {
+  private func popoverContent(provider: UsageProvider) -> some View {
     let status = usageService.status(for: provider)
 
     VStack(spacing: 6) {
@@ -112,9 +195,10 @@ struct UsageStatsView: View {
         unavailableView(reason)
       }
     }
-    .frame(maxWidth: .infinity, minHeight: minHeight, alignment: .top)
-    .padding(10)
+    .frame(maxWidth: .infinity, alignment: .top)
   }
+
+  // MARK: - Snapshot View
 
   @ViewBuilder
   private func snapshotView(
@@ -124,7 +208,7 @@ struct UsageStatsView: View {
     /// Source badge row.
     HStack {
       Text(snapshot.provider.displayName)
-        .font(.system(size: 10, weight: .medium))
+        .font(.system(size: 11, weight: .medium))
         .foregroundColor(.primary)
 
       Spacer()
@@ -155,34 +239,34 @@ struct UsageStatsView: View {
           ZStack(alignment: .leading) {
             RoundedRectangle(cornerRadius: 2)
               .fill(Color.secondary.opacity(0.2))
-              .frame(height: 4)
+              .frame(height: 6)
 
             RoundedRectangle(cornerRadius: 2)
               .fill(usageBarColor(percent: percent))
               .frame(
                 width: geometry.size.width * min(percent, 1.0),
-                height: 4
+                height: 6
               )
           }
         }
-        .frame(height: 4)
+        .frame(height: 6)
 
         HStack {
           Text(snapshot.used)
-            .font(.system(size: 10))
+            .font(.system(size: 11))
             .foregroundColor(.primary)
 
           Spacer()
 
           if let limit = snapshot.limit {
             Text("/ \(limit)")
-              .font(.system(size: 10))
+              .font(.system(size: 11))
               .foregroundColor(.secondary)
           }
         }
       }
     } else {
-      /// No percentage — show raw used value.
+      /// No percentage -- show raw used value.
       StatRow(label: "Used", value: snapshot.used, isHighlighted: true)
     }
 
@@ -201,32 +285,36 @@ struct UsageStatsView: View {
       )
     }
 
-    /// Last updated timestamp.
-    HStack {
-      Spacer()
+    Divider()
+      .padding(.vertical, 4)
 
+    /// Footer: timestamp + refresh.
+    HStack {
       Text("Updated \(snapshot.fetchedAt.formatted(.dateTime.hour().minute().second()))")
         .font(.system(size: 9))
         .foregroundColor(.secondary.opacity(0.7))
-    }
 
-    /// Refresh button.
-    Button {
-      Task {
-        await usageService.fetch(provider: provider)
-      }
-    } label: {
-      HStack(spacing: 4) {
-        Image(systemName: "arrow.clockwise")
-          .font(.system(size: 9))
+      Spacer()
 
-        Text("Refresh")
-          .font(.system(size: 10))
+      Button {
+        Task {
+          await usageService.fetch(provider: provider)
+        }
+      } label: {
+        HStack(spacing: 4) {
+          Image(systemName: "arrow.clockwise")
+            .font(.system(size: 9))
+
+          Text("Refresh")
+            .font(.system(size: 10))
+        }
+        .foregroundColor(.secondary)
       }
-      .foregroundColor(.secondary)
+      .buttonStyle(.plain)
     }
-    .buttonStyle(.plain)
   }
+
+  // MARK: - Status Views
 
   @ViewBuilder
   private func loadingView() -> some View {
@@ -238,20 +326,21 @@ struct UsageStatsView: View {
         .font(.system(size: 11))
         .foregroundColor(.secondary)
     }
+    .padding(.vertical, 20)
   }
 
   @ViewBuilder
   private func errorView(_ message: String, provider: UsageProvider) -> some View {
-    VStack(spacing: 6) {
+    VStack(spacing: 8) {
       HStack(spacing: 6) {
         Image(systemName: "exclamationmark.triangle")
-          .font(.system(size: 10))
+          .font(.system(size: 11))
           .foregroundColor(.orange)
 
         Text(message)
           .font(.system(size: 11))
           .foregroundColor(.secondary)
-          .lineLimit(2)
+          .lineLimit(3)
       }
 
       Button {
@@ -265,13 +354,14 @@ struct UsageStatsView: View {
       .buttonStyle(.bordered)
       .controlSize(.small)
     }
+    .padding(.vertical, 12)
   }
 
   @ViewBuilder
   private func unavailableView(_ reason: String) -> some View {
     HStack(spacing: 6) {
       Image(systemName: "info.circle")
-        .font(.system(size: 10))
+        .font(.system(size: 11))
         .foregroundColor(.secondary)
 
       Text(reason)
@@ -279,19 +369,21 @@ struct UsageStatsView: View {
         .foregroundColor(.secondary)
         .lineLimit(2)
     }
+    .padding(.vertical, 20)
   }
 
   @ViewBuilder
   private func noDataView() -> some View {
     HStack(spacing: 6) {
       Image(systemName: "chart.bar")
-        .font(.system(size: 10))
+        .font(.system(size: 11))
         .foregroundColor(.secondary)
 
       Text("No usage data")
         .font(.system(size: 11))
         .foregroundColor(.secondary)
     }
+    .padding(.vertical, 20)
   }
 
   @ViewBuilder
@@ -299,7 +391,7 @@ struct UsageStatsView: View {
     VStack(spacing: 4) {
       HStack(spacing: 6) {
         Image(systemName: "chart.bar")
-          .font(.system(size: 10))
+          .font(.system(size: 11))
           .foregroundColor(.secondary)
 
         Text("Usage stats disabled")
@@ -311,6 +403,7 @@ struct UsageStatsView: View {
         .font(.system(size: 10))
         .foregroundColor(.secondary.opacity(0.7))
     }
+    .padding(.vertical, 20)
   }
 
   // MARK: - Helpers

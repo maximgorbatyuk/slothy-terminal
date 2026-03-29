@@ -28,7 +28,7 @@ struct UsageSettingsTab: View {
 
         Text(
           "When enabled, SlothyTerminal fetches usage data directly from provider APIs. "
-          + "Stats appear in the sidebar for AI-backed tabs."
+          + "Stats appear in the status bar."
         )
         .font(.system(size: 11))
         .foregroundColor(.secondary)

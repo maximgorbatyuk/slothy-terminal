@@ -11,8 +11,13 @@ set -e
 #   - .env file with Apple credentials (APPLE_ID, APP_SPECIFIC_PASSWORD, TEAM_ID)
 #   - sparkle-tools/bin/sign_update (Sparkle EdDSA signing tool)
 #   - gh CLI authenticated (brew install gh && gh auth login)
-#   - appcast.xml entry for VERSION already exists with SIGNATURE_HERE / FILE_SIZE_IN_BYTES placeholders
+#   - appcast.xml entry for VERSION already exists with BUILD_NUMBER / SIGNATURE_HERE / FILE_SIZE_IN_BYTES placeholders
 #   - CHANGELOG.md entry for VERSION already exists
+#
+# The script automatically:
+#   - Bumps MARKETING_VERSION in the Xcode project to VERSION
+#   - Increments CURRENT_PROJECT_VERSION (build number) by 1
+#   - Replaces BUILD_NUMBER placeholder in appcast.xml with the new build number
 
 VERSION="${1}"
 
@@ -61,7 +66,11 @@ if [ ! -f "scripts/build-release.sh" ]; then
   exit 1
 fi
 
-if ! grep -q "SIGNATURE_HERE" appcast.xml; then
+## Check that appcast.xml has at least one real (non-template) entry with placeholders.
+## The template comment always has these strings, so look outside the comment block.
+APPCAST_ITEMS=$(awk '/^    <item>/,/<\/item>/' appcast.xml)
+
+if ! echo "$APPCAST_ITEMS" | grep -q "SIGNATURE_HERE"; then
   echo "ERROR: appcast.xml does not contain SIGNATURE_HERE placeholder for this release."
   echo "Add the appcast entry with placeholders before running this script."
   exit 1
@@ -75,11 +84,31 @@ fi
 
 echo "All preflight checks passed."
 
-# ── Step 1: Build, sign, notarize ─────────────────────────────────
+# ── Step 1: Bump Xcode project version ───────────────────────────
 
 echo ""
 echo "==========================================="
-echo "  Step 1: Build & Notarize"
+echo "  Step 1: Bump Xcode Project Version"
+echo "==========================================="
+echo ""
+
+CURRENT_BUILD=$(grep -m1 "CURRENT_PROJECT_VERSION" "$PBXPROJ" | sed 's/.*= \([0-9]*\);/\1/')
+NEW_BUILD=$((CURRENT_BUILD + 1))
+CURRENT_MARKETING=$(grep -m1 "MARKETING_VERSION" "$PBXPROJ" | sed 's/.*= \(.*\);/\1/' | tr -d ' ')
+
+echo "MARKETING_VERSION: $CURRENT_MARKETING → $VERSION"
+echo "CURRENT_PROJECT_VERSION: $CURRENT_BUILD → $NEW_BUILD"
+
+sed -i '' "s/MARKETING_VERSION = .*;/MARKETING_VERSION = $VERSION;/g" "$PBXPROJ"
+sed -i '' "s/CURRENT_PROJECT_VERSION = [0-9]*;/CURRENT_PROJECT_VERSION = $NEW_BUILD;/g" "$PBXPROJ"
+
+echo "Updated $PBXPROJ"
+
+# ── Step 2: Build, sign, notarize ─────────────────────────────────
+
+echo ""
+echo "==========================================="
+echo "  Step 2: Build & Notarize"
 echo "==========================================="
 echo ""
 
@@ -90,11 +119,11 @@ if [ ! -f "$DMG_PATH" ]; then
   exit 1
 fi
 
-# ── Step 2: Sparkle signature ─────────────────────────────────────
+# ── Step 3: Sparkle signature ─────────────────────────────────────
 
 echo ""
 echo "==========================================="
-echo "  Step 2: Sparkle Signing"
+echo "  Step 3: Sparkle Signing"
 echo "==========================================="
 echo ""
 
@@ -111,39 +140,48 @@ fi
 echo "Signature: $SIGNATURE"
 echo "File size: $DMG_SIZE_BYTES bytes"
 
-# ── Step 3: Update appcast.xml ────────────────────────────────────
+# ── Step 4: Update appcast.xml ────────────────────────────────────
 
 echo ""
 echo "==========================================="
-echo "  Step 3: Update appcast.xml"
+echo "  Step 4: Update appcast.xml"
 echo "==========================================="
 echo ""
 
 ## Replace placeholders only in the <item> block for this specific version.
 ## The template comment in appcast.xml also contains these strings — skip it.
-awk -v sig="$SIGNATURE" -v size="$DMG_SIZE_BYTES" -v ver="$VERSION" '
-  /shortVersionString>/ && index($0, ver) { in_version = 1 }
-  in_version && /SIGNATURE_HERE/ {
-    gsub(/SIGNATURE_HERE/, sig)
-    in_version_sig_done = 1
+## BUILD_NUMBER appears before shortVersionString, so buffer each <item> block.
+awk -v sig="$SIGNATURE" -v size="$DMG_SIZE_BYTES" -v ver="$VERSION" -v build="$NEW_BUILD" '
+  /<item>/ { in_item = 1; buf = "" }
+  in_item {
+    buf = buf $0 "\n"
   }
-  in_version && /FILE_SIZE_IN_BYTES/ {
-    gsub(/FILE_SIZE_IN_BYTES/, size)
-    in_version = 0
+  in_item && /<\/item>/ {
+    in_item = 0
+    if (index(buf, ver)) {
+      gsub(/BUILD_NUMBER/, build, buf)
+      gsub(/SIGNATURE_HERE/, sig, buf)
+      gsub(/FILE_SIZE_IN_BYTES/, size, buf)
+    }
+    printf "%s", buf
+    next
   }
-  { print }
+  !in_item { print }
 ' appcast.xml > appcast.xml.tmp && mv appcast.xml.tmp appcast.xml
 
-echo "Updated appcast.xml with signature and file size."
+echo "Updated appcast.xml with build number ($NEW_BUILD), signature, and file size."
 
-## Verify: the real entry should have the signature, but the template comment may still have placeholders.
-## Check that the version-specific enclosure no longer has placeholders.
+## Verify: the real entry should have real values, template comment may still have placeholders.
 VERSION_BLOCK=$(awk -v ver="$VERSION" '
   /shortVersionString>/ && index($0, ver) { in_ver = 1 }
   in_ver { print }
   in_ver && /<\/item>/ { exit }
 ' appcast.xml)
 
+if echo "$VERSION_BLOCK" | grep -q "BUILD_NUMBER"; then
+  echo "ERROR: appcast.xml entry for $VERSION still contains BUILD_NUMBER"
+  exit 1
+fi
 if echo "$VERSION_BLOCK" | grep -q "SIGNATURE_HERE"; then
   echo "ERROR: appcast.xml entry for $VERSION still contains SIGNATURE_HERE"
   exit 1
@@ -151,30 +189,6 @@ fi
 if echo "$VERSION_BLOCK" | grep -q "FILE_SIZE_IN_BYTES"; then
   echo "ERROR: appcast.xml entry for $VERSION still contains FILE_SIZE_IN_BYTES"
   exit 1
-fi
-
-# ── Step 4: Bump build number in Xcode project ───────────────────
-
-echo ""
-echo "==========================================="
-echo "  Step 4: Bump Build Number"
-echo "==========================================="
-echo ""
-
-## Extract the build number from the appcast entry for this version.
-BUILD_NUMBER=$(grep -B1 "shortVersionString>$VERSION<" appcast.xml | grep "sparkle:version" | sed 's/.*>\([0-9]*\)<.*/\1/')
-
-if [ -n "$BUILD_NUMBER" ]; then
-  CURRENT_BUILD=$(grep -m1 "CURRENT_PROJECT_VERSION" "$PBXPROJ" | sed 's/.*= \([0-9]*\);/\1/')
-
-  if [ "$CURRENT_BUILD" != "$BUILD_NUMBER" ]; then
-    sed -i '' "s/CURRENT_PROJECT_VERSION = [0-9]*;/CURRENT_PROJECT_VERSION = $BUILD_NUMBER;/g" "$PBXPROJ"
-    echo "Bumped CURRENT_PROJECT_VERSION: $CURRENT_BUILD → $BUILD_NUMBER"
-  else
-    echo "CURRENT_PROJECT_VERSION already set to $BUILD_NUMBER"
-  fi
-else
-  echo "WARNING: Could not extract build number from appcast.xml, skipping pbxproj update"
 fi
 
 # ── Step 5: Extract release notes from CHANGELOG.md ──────────────
@@ -211,8 +225,8 @@ if git diff --cached --quiet; then
 else
   git commit -m "chore: release $VERSION
 
-Update appcast.xml with Sparkle signature and file size.
-Bump CURRENT_PROJECT_VERSION to $BUILD_NUMBER."
+Bump MARKETING_VERSION to $VERSION, CURRENT_PROJECT_VERSION to $NEW_BUILD.
+Update appcast.xml with build number, Sparkle signature, and file size."
 
   echo "Committed release changes."
 fi

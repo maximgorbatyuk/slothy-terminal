@@ -163,6 +163,10 @@ class UsageService {
     resolvedSources.removeValue(forKey: provider)
 
     UsageKeychainStore.deleteAll(provider: provider)
+
+    if provider == .claude {
+      Self.clearCachedClaudeOAuth()
+    }
   }
 
   /// Clears all cached data and imported auth material.
@@ -172,6 +176,7 @@ class UsageService {
     fetchStatuses.removeAll()
     resolvedSources.removeAll()
     UsageKeychainStore.deleteAll()
+    Self.clearCachedClaudeOAuth()
   }
 
   // MARK: - Auth Resolution
@@ -192,7 +197,7 @@ class UsageService {
       resolvedSources[.opencode] = resolveOpenCodeAuth()
     }
 
-    for provider in UsageProvider.sidebarProviders {
+    for provider in UsageProvider.statusBarProviders {
       if let source = resolvedSources[provider] {
         Logger.usage.info(
           "[\(provider.rawValue)] Auth resolved: \(source.kind.rawValue) — \(source.label)"
@@ -354,9 +359,33 @@ class UsageService {
     }
   }
 
-  /// Reads Claude Code OAuth credentials from macOS Keychain.
-  /// Claude Code stores them under service "Claude Code-credentials".
+  /// Reads Claude Code OAuth credentials, checking the app's own cache first
+  /// to avoid repeated keychain permission prompts.
+  ///
+  /// Flow:
+  /// 1. Check app's data-protection keychain cache (no prompt)
+  /// 2. If missing or expired, read from Claude Code's keychain (one-time prompt)
+  /// 3. Cache the result in the app's own keychain for future reads
   nonisolated private static func readClaudeCodeKeychainToken() -> ClaudeOAuthCredentials? {
+    if let cached = readCachedClaudeOAuth(), cached.expiresAt > Date() {
+      return cached.credentials
+    }
+
+    guard let (creds, expiresAt) = readClaudeCodeKeychainTokenDirect() else {
+      return nil
+    }
+
+    cacheClaudeOAuth(creds, expiresAt: expiresAt)
+    return creds
+  }
+
+  // MARK: - Claude Code Keychain (Direct)
+
+  /// Reads directly from Claude Code's keychain entry.
+  /// This triggers the macOS keychain permission prompt.
+  nonisolated private static func readClaudeCodeKeychainTokenDirect()
+    -> (ClaudeOAuthCredentials, expiresAt: Date)?
+  {
     let query: [String: Any] = [
       kSecClass as String: kSecClassGenericPassword,
       kSecAttrService as String: "Claude Code-credentials",
@@ -377,26 +406,170 @@ class UsageService {
       return nil
     }
 
-    return ClaudeOAuthCredentials(
+    let expiresAtMs = oauth["expiresAt"] as? Double ?? 0
+    let expiresAt = Date(timeIntervalSince1970: expiresAtMs / 1000)
+
+    let creds = ClaudeOAuthCredentials(
       token: token,
       subscriptionType: oauth["subscriptionType"] as? String,
       rateLimitTier: oauth["rateLimitTier"] as? String
     )
+
+    return (creds, expiresAt)
+  }
+
+  // MARK: - OAuth Cache (App's Own Keychain)
+
+  nonisolated private static let oauthCacheService = "com.slothyterminal.claude-oauth-cache"
+  nonisolated private static let oauthCacheAccount = "claude-code-oauth"
+
+  private struct CachedOAuth {
+    let credentials: ClaudeOAuthCredentials
+    let expiresAt: Date
+  }
+
+  /// Reads cached OAuth credentials from the app's own data-protection keychain.
+  nonisolated private static func readCachedClaudeOAuth() -> CachedOAuth? {
+    let query: [String: Any] = [
+      kSecClass as String: kSecClassGenericPassword,
+      kSecAttrService as String: oauthCacheService,
+      kSecAttrAccount as String: oauthCacheAccount,
+      kSecReturnData as String: true,
+      kSecMatchLimit as String: kSecMatchLimitOne,
+      kSecUseDataProtectionKeychain as String: true,
+    ]
+
+    var result: AnyObject?
+    let status = SecItemCopyMatching(query as CFDictionary, &result)
+
+    guard status == errSecSuccess,
+          let data = result as? Data,
+          let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+          let token = json["token"] as? String,
+          let expiresAtMs = json["expiresAt"] as? Double
+    else {
+      return nil
+    }
+
+    let creds = ClaudeOAuthCredentials(
+      token: token,
+      subscriptionType: json["subscriptionType"] as? String,
+      rateLimitTier: json["rateLimitTier"] as? String
+    )
+
+    return CachedOAuth(
+      credentials: creds,
+      expiresAt: Date(timeIntervalSince1970: expiresAtMs / 1000)
+    )
+  }
+
+  /// Caches OAuth credentials in the app's own data-protection keychain.
+  nonisolated private static func cacheClaudeOAuth(
+    _ creds: ClaudeOAuthCredentials,
+    expiresAt: Date
+  ) {
+    var payload: [String: Any] = [
+      "token": creds.token,
+      "expiresAt": expiresAt.timeIntervalSince1970 * 1000,
+    ]
+    if let sub = creds.subscriptionType { payload["subscriptionType"] = sub }
+    if let tier = creds.rateLimitTier { payload["rateLimitTier"] = tier }
+
+    guard let data = try? JSONSerialization.data(withJSONObject: payload) else {
+      return
+    }
+
+    // Delete existing cache entry.
+    let deleteQuery: [String: Any] = [
+      kSecClass as String: kSecClassGenericPassword,
+      kSecAttrService as String: oauthCacheService,
+      kSecAttrAccount as String: oauthCacheAccount,
+      kSecUseDataProtectionKeychain as String: true,
+    ]
+    SecItemDelete(deleteQuery as CFDictionary)
+
+    let addQuery: [String: Any] = [
+      kSecClass as String: kSecClassGenericPassword,
+      kSecAttrService as String: oauthCacheService,
+      kSecAttrAccount as String: oauthCacheAccount,
+      kSecValueData as String: data,
+      kSecAttrAccessible as String: kSecAttrAccessibleWhenUnlockedThisDeviceOnly,
+      kSecUseDataProtectionKeychain as String: true,
+    ]
+
+    let status = SecItemAdd(addQuery as CFDictionary, nil)
+    if status != errSecSuccess {
+      Logger.usage.error("Failed to cache Claude OAuth credentials: \(status)")
+    }
+  }
+
+  /// Clears the cached Claude OAuth credentials.
+  nonisolated static func clearCachedClaudeOAuth() {
+    let query: [String: Any] = [
+      kSecClass as String: kSecClassGenericPassword,
+      kSecAttrService as String: oauthCacheService,
+      kSecAttrAccount as String: oauthCacheAccount,
+      kSecUseDataProtectionKeychain as String: true,
+    ]
+    SecItemDelete(query as CFDictionary)
   }
 
   /// Fetches usage via the Claude Code OAuth token from Keychain.
   /// Calls https://api.anthropic.com/api/oauth/usage for session/weekly limits.
+  /// On 401, invalidates the cached token and retries once from Claude Code's keychain.
   private func fetchClaudeUsageViaOAuth() async throws -> UsageSnapshot {
     guard let creds = Self.readClaudeCodeKeychainToken() else {
       Logger.usage.error("[claude] No OAuth token found in Keychain (Claude Code-credentials)")
       throw UsageFetchError.noCredentials
     }
 
+    let (statusCode, data) = try await performClaudeOAuthRequest(creds: creds)
+
+    if statusCode == 401 {
+      Logger.usage.warning("[claude] Got 401 — cached token is stale, retrying from Claude Code keychain")
+      Self.clearCachedClaudeOAuth()
+
+      guard let freshCreds = Self.readClaudeCodeKeychainToken() else {
+        Logger.usage.error("[claude] No fresh OAuth token found after cache invalidation")
+        throw UsageFetchError.noCredentials
+      }
+
+      let (retryStatus, retryData) = try await performClaudeOAuthRequest(creds: freshCreds)
+
+      guard retryStatus == 200 else {
+        let body = Self.responseBodyPreview(retryData)
+        Logger.usage.error("[claude] OAuth usage retry failed HTTP \(retryStatus): \(body)")
+        throw UsageFetchError.httpError(retryStatus)
+      }
+
+      return Self.parseClaudeOAuthUsageResponse(
+        data: retryData,
+        subscriptionType: freshCreds.subscriptionType,
+        rateLimitTier: freshCreds.rateLimitTier
+      )
+    }
+
+    guard statusCode == 200 else {
+      let body = Self.responseBodyPreview(data)
+      Logger.usage.error("[claude] OAuth usage failed HTTP \(statusCode): \(body)")
+      throw UsageFetchError.httpError(statusCode)
+    }
+
+    return Self.parseClaudeOAuthUsageResponse(
+      data: data,
+      subscriptionType: creds.subscriptionType,
+      rateLimitTier: creds.rateLimitTier
+    )
+  }
+
+  /// Performs the HTTP request to the Claude OAuth usage endpoint.
+  private func performClaudeOAuthRequest(
+    creds: ClaudeOAuthCredentials
+  ) async throws -> (statusCode: Int, data: Data) {
     Logger.usage.info(
       "[claude] Keychain OAuth: subscription=\(creds.subscriptionType ?? "nil"), tier=\(creds.rateLimitTier ?? "nil")"
     )
 
-    // Validate token doesn't contain header-injection characters.
     guard !creds.token.contains(where: { $0.isNewline || $0 == "\r" || $0 == "\0" }) else {
       Logger.usage.error("[claude] OAuth token contains invalid characters")
       throw UsageFetchError.invalidCredentials
@@ -421,20 +594,7 @@ class UsageService {
     }
 
     Logger.usage.info("[claude] OAuth usage response: HTTP \(httpResponse.statusCode)")
-
-    guard httpResponse.statusCode == 200 else {
-      let body = Self.responseBodyPreview(data)
-      Logger.usage.error(
-        "[claude] OAuth usage failed HTTP \(httpResponse.statusCode): \(body)"
-      )
-      throw UsageFetchError.httpError(httpResponse.statusCode)
-    }
-
-    return Self.parseClaudeOAuthUsageResponse(
-      data: data,
-      subscriptionType: creds.subscriptionType,
-      rateLimitTier: creds.rateLimitTier
-    )
+    return (httpResponse.statusCode, data)
   }
 
   /// Parses the Claude OAuth usage response.

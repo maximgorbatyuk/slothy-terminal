@@ -2,6 +2,17 @@
 
 All notable changes to SlothyTerminal will be documented in this file.
 
+## [2026.2.21] - 2026-03-29
+
+### Fixed
+- **Keychain permission prompts** — the app no longer repeatedly asks for keychain access. Claude Code OAuth credentials are now cached in the app's own data-protection keychain (`kSecUseDataProtectionKeychain`) after the first successful read, avoiding legacy keychain ACL prompts on every refresh cycle and app relaunch. On 401 (stale token), the cache is automatically invalidated and a fresh token is read from Claude Code's keychain with a single retry.
+- **Own keychain items use data-protection keychain** — all `UsageKeychainStore` queries now set `kSecUseDataProtectionKeychain`, preventing legacy keychain prompts when the app is re-signed between builds.
+
+### Changed
+- **Usage stats moved to status bar** — usage stats are no longer in the sidebar. Compact colored progress bars (green/orange/red by utilization) now appear in the bottom status bar next to the version label, one per provider. Hovering over the bars reveals a popover with full usage details, provider tabs (segmented picker), metrics, and a refresh button.
+- **Removed `UsageStatsView`** — the sidebar usage card, vertical icon tab strip, and `UsageStatsLayout` height calculation have been removed. All rendering logic migrated to `StatusBarUsageView.swift`.
+- **Renamed `sidebarProviders` → `statusBarProviders`** on `UsageProvider` to reflect the new display location.
+
 ## [2026.2.20] - 2026-03-27
 
 ### Fixed

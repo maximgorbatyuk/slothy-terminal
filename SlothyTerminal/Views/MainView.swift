@@ -28,14 +28,9 @@ struct MainView: View {
       HStack(spacing: 0) {
         /// Sidebar on the left.
         if appState.isSidebarVisible && sidebarPosition == .left {
-          VStack(spacing: 0) {
-            SidebarContainerView()
-              .frame(maxHeight: .infinity)
-
-            UsageStatsView()
-              .padding(.top, 8)
-          }
-          .frame(width: appState.sidebarWidth)
+          SidebarContainerView()
+            .frame(maxHeight: .infinity)
+            .frame(width: appState.sidebarWidth)
           .padding(.vertical, 8)
           .padding(.leading, 8)
 
@@ -51,14 +46,9 @@ struct MainView: View {
         if appState.isSidebarVisible && sidebarPosition == .right {
           sidebarResizeHandle(totalWidth: containerWidth)
 
-          VStack(spacing: 0) {
-            SidebarContainerView()
-              .frame(maxHeight: .infinity)
-
-            UsageStatsView()
-              .padding(.top, 8)
-          }
-          .frame(width: appState.sidebarWidth)
+          SidebarContainerView()
+            .frame(maxHeight: .infinity)
+            .frame(width: appState.sidebarWidth)
           .padding(.vertical, 8)
           .padding(.trailing, 8)
         }
@@ -270,6 +260,11 @@ struct StatusBarView: View {
 
       Spacer()
 
+      /// Usage bars (hover for detail popover).
+      StatusBarUsageBars()
+
+      statusSeparator
+
       /// Version info on the right.
       HStack(spacing: 6) {
         Text("v\(appVersion)")
@@ -292,6 +287,9 @@ struct StatusBarView: View {
     .background(appCardColor)
     .task(id: appState.gitBranchRefreshContext) {
       await updateGitBranch()
+    }
+    .task {
+      UsageService.shared.ensureStarted()
     }
   }
 
