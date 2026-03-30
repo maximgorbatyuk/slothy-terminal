@@ -2,6 +2,11 @@
 
 All notable changes to SlothyTerminal will be documented in this file.
 
+## [2026.2.22] - 2026-03-30
+
+### Changed
+- **Usage popover opens on click only** — the stats popover no longer appears on hover; it now requires an explicit click on the status bar usage bars. Added a close (X) button to the popover header for dismissal.
+
 ## [2026.2.21] - 2026-03-29
 
 ### Fixed

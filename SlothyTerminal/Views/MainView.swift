@@ -260,7 +260,7 @@ struct StatusBarView: View {
 
       Spacer()
 
-      /// Usage bars (hover for detail popover).
+      /// Usage bars (click for detail popover).
       StatusBarUsageBars()
 
       statusSeparator
