@@ -1,12 +1,11 @@
 import SwiftUI
 
 /// Compact usage bars for the status bar.
-/// Shows a small progress bar per provider; hover reveals a detail popover.
+/// Shows a small progress bar per provider; click reveals a detail popover.
 struct StatusBarUsageBars: View {
   private var usageService: UsageService { UsageService.shared }
 
   @State private var isPopoverPresented = false
-  @State private var hoverTask: Task<Void, Never>?
 
   /// Providers that have a non-idle status.
   private var activeProviders: [UsageProvider] {
@@ -29,17 +28,10 @@ struct StatusBarUsageBars: View {
         }
       }
       .onTapGesture {
-        hoverTask?.cancel()
         isPopoverPresented.toggle()
       }
-      .onHover { hovering in
-        handleHover(hovering)
-      }
       .popover(isPresented: $isPopoverPresented) {
-        UsagePopoverView()
-          .onHover { hovering in
-            handleHover(hovering)
-          }
+        UsagePopoverView(isPresented: $isPopoverPresented)
       }
     }
   }
@@ -112,51 +104,37 @@ struct StatusBarUsageBars: View {
 
     return .green
   }
-
-  private func handleHover(_ hovering: Bool) {
-    hoverTask?.cancel()
-
-    if hovering {
-      hoverTask = Task {
-        try? await Task.sleep(nanoseconds: 300_000_000)
-
-        guard !Task.isCancelled else {
-          return
-        }
-
-        isPopoverPresented = true
-      }
-    } else {
-      hoverTask = Task {
-        try? await Task.sleep(nanoseconds: 300_000_000)
-
-        guard !Task.isCancelled else {
-          return
-        }
-
-        isPopoverPresented = false
-      }
-    }
-  }
 }
 
 // MARK: - Usage Popover
 
-/// Full usage detail popover shown on hover.
+/// Full usage detail popover shown on click.
 struct UsagePopoverView: View {
+  @Binding var isPresented: Bool
   @State private var selectedProvider: UsageProvider = .claude
 
   private var usageService: UsageService { UsageService.shared }
 
   var body: some View {
     VStack(spacing: 0) {
-      /// Provider tabs.
-      Picker("Provider", selection: $selectedProvider) {
-        ForEach(UsageProvider.statusBarProviders, id: \.self) { provider in
-          Text(provider.displayName).tag(provider)
+      /// Header: provider tabs + close button.
+      HStack(alignment: .center) {
+        Picker("Provider", selection: $selectedProvider) {
+          ForEach(UsageProvider.statusBarProviders, id: \.self) { provider in
+            Text(provider.displayName).tag(provider)
+          }
         }
+        .pickerStyle(.segmented)
+
+        Button {
+          isPresented = false
+        } label: {
+          Image(systemName: "xmark")
+            .font(.system(size: 9, weight: .medium))
+            .foregroundColor(.secondary)
+        }
+        .buttonStyle(.plain)
       }
-      .pickerStyle(.segmented)
       .padding(.horizontal, 12)
       .padding(.top, 12)
       .padding(.bottom, 8)
