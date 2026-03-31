@@ -92,6 +92,7 @@ enum UsageFetchStatus: Equatable {
   case loaded(Date)
   case failed(String)
   case unavailable(String)
+  case tokenExpired
 }
 
 /// A billing or quota window.
@@ -178,6 +179,7 @@ enum UsageFetchError: LocalizedError {
   case noOrganization
   case parseError
   case unsupportedSource
+  case tokenExpired
 
   var errorDescription: String? {
     switch self {
@@ -204,6 +206,9 @@ enum UsageFetchError: LocalizedError {
 
     case .unsupportedSource:
       return "Unsupported auth source"
+
+    case .tokenExpired:
+      return "OAuth token expired"
     }
   }
 }
