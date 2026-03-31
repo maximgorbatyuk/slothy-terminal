@@ -72,6 +72,11 @@ struct StatusBarUsageBars: View {
           .font(.system(size: 8))
           .foregroundColor(.orange)
 
+      case .tokenExpired:
+        Image(systemName: "key.slash")
+          .font(.system(size: 9))
+          .foregroundColor(.orange)
+
       case .unavailable:
         Image(systemName: "minus.circle")
           .font(.system(size: 8))
@@ -169,6 +174,9 @@ struct UsagePopoverView: View {
         } else {
           noDataView()
         }
+
+      case .tokenExpired:
+        tokenExpiredView(provider: provider)
 
       case .failed(let message):
         errorView(message, provider: provider)
@@ -332,6 +340,44 @@ struct UsagePopoverView: View {
       } label: {
         Text("Retry")
           .font(.system(size: 10))
+      }
+      .buttonStyle(.bordered)
+      .controlSize(.small)
+    }
+    .padding(.vertical, 12)
+  }
+
+  @ViewBuilder
+  private func tokenExpiredView(provider: UsageProvider) -> some View {
+    VStack(spacing: 10) {
+      Image(systemName: "key.slash")
+        .font(.system(size: 24))
+        .foregroundColor(.orange)
+
+      Text("\(provider.displayName) usage data is unavailable because the OAuth token in Keychain has expired or been refreshed.")
+        .font(.system(size: 11))
+        .foregroundColor(.secondary)
+        .multilineTextAlignment(.center)
+        .lineLimit(4)
+
+      Text("Click Renew to re-read the token from Keychain. macOS will ask for permission.")
+        .font(.system(size: 10))
+        .foregroundColor(.secondary.opacity(0.7))
+        .multilineTextAlignment(.center)
+        .lineLimit(3)
+
+      Button {
+        Task {
+          await usageService.renewKeychainToken(provider: provider)
+        }
+      } label: {
+        HStack(spacing: 4) {
+          Image(systemName: "key.viewfinder")
+            .font(.system(size: 10))
+
+          Text("Renew")
+            .font(.system(size: 11))
+        }
       }
       .buttonStyle(.bordered)
       .controlSize(.small)

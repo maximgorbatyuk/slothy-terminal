@@ -61,7 +61,7 @@ class UsageService {
     isStarted = true
     startupTask?.cancel()
     startupTask = Task {
-      resolveAuthSources()
+      await resolveAuthSources()
       await fetchAll()
 
       guard !Task.isCancelled else {
@@ -108,12 +108,44 @@ class UsageService {
     } catch is CancellationError {
       // Task was cancelled — don't update status.
       return
+    } catch UsageFetchError.tokenExpired {
+      Logger.usage.warning(
+        "[\(provider.rawValue)] Token expired — waiting for manual renewal"
+      )
+      fetchStatuses[provider] = .tokenExpired
     } catch {
       Logger.usage.error(
         "[\(provider.rawValue)] Fetch failed (source=\(source.kind.rawValue)): \(error.localizedDescription)"
       )
       fetchStatuses[provider] = .failed(error.localizedDescription)
     }
+  }
+
+  /// Re-reads OAuth token from Claude Code's keychain (triggers macOS permission prompt)
+  /// and fetches usage if successful. Called only by explicit user action.
+  func renewKeychainToken(provider: UsageProvider) async {
+    guard provider == .claude,
+          let source = resolvedSources[provider],
+          source.kind == .cliOAuth,
+          fetchStatuses[provider] != .loading
+    else {
+      return
+    }
+
+    Self.clearCachedClaudeOAuth()
+
+    fetchStatuses[provider] = .loading
+
+    let tokenExists = await Task.detached {
+      Self.readClaudeCodeKeychainTokenDirect() != nil
+    }.value
+
+    guard tokenExists else {
+      fetchStatuses[provider] = .tokenExpired
+      return
+    }
+
+    await fetch(provider: provider)
   }
 
   /// Fetches usage for all resolved providers concurrently.
@@ -182,10 +214,10 @@ class UsageService {
   // MARK: - Auth Resolution
 
   /// Discovers available auth sources for all providers.
-  func resolveAuthSources() {
+  func resolveAuthSources() async {
     let prefs = ConfigManager.shared.config.usagePreferences
 
-    resolvedSources[.claude] = resolveClaudeAuth(
+    resolvedSources[.claude] = await resolveClaudeAuth(
       allowExperimental: prefs.enableExperimentalSources
     )
 
@@ -214,9 +246,13 @@ class UsageService {
   /// 1. Claude Code OAuth from macOS Keychain (preferred — has session/weekly limits)
   /// 2. ANTHROPIC_API_KEY env var (admin API — token-level usage only)
   /// 3. Imported browser session (opt-in, experimental)
-  func resolveClaudeAuth(allowExperimental: Bool) -> UsageAuthSource? {
+  func resolveClaudeAuth(allowExperimental: Bool) async -> UsageAuthSource? {
     // 1. Claude Code OAuth credentials from Keychain.
-    if Self.readClaudeCodeKeychainToken() != nil {
+    let hasOAuth = await Task.detached {
+      Self.readClaudeCodeKeychainToken() != nil
+    }.value
+
+    if hasOAuth {
       return UsageAuthSource(
         provider: .claude,
         kind: .cliOAuth,
@@ -516,9 +552,13 @@ class UsageService {
 
   /// Fetches usage via the Claude Code OAuth token from Keychain.
   /// Calls https://api.anthropic.com/api/oauth/usage for session/weekly limits.
-  /// On 401, invalidates the cached token and retries once from Claude Code's keychain.
+  /// On 401, clears the cached token and throws `.tokenExpired` for manual renewal.
   private func fetchClaudeUsageViaOAuth() async throws -> UsageSnapshot {
-    guard let creds = Self.readClaudeCodeKeychainToken() else {
+    let maybeCreds = await Task.detached {
+      Self.readClaudeCodeKeychainToken()
+    }.value
+
+    guard let creds = maybeCreds else {
       Logger.usage.error("[claude] No OAuth token found in Keychain (Claude Code-credentials)")
       throw UsageFetchError.noCredentials
     }
@@ -526,27 +566,9 @@ class UsageService {
     let (statusCode, data) = try await performClaudeOAuthRequest(creds: creds)
 
     if statusCode == 401 {
-      Logger.usage.warning("[claude] Got 401 — cached token is stale, retrying from Claude Code keychain")
+      Logger.usage.warning("[claude] Got 401 — token expired or revoked, requiring manual renewal")
       Self.clearCachedClaudeOAuth()
-
-      guard let freshCreds = Self.readClaudeCodeKeychainToken() else {
-        Logger.usage.error("[claude] No fresh OAuth token found after cache invalidation")
-        throw UsageFetchError.noCredentials
-      }
-
-      let (retryStatus, retryData) = try await performClaudeOAuthRequest(creds: freshCreds)
-
-      guard retryStatus == 200 else {
-        let body = Self.responseBodyPreview(retryData)
-        Logger.usage.error("[claude] OAuth usage retry failed HTTP \(retryStatus): \(body)")
-        throw UsageFetchError.httpError(retryStatus)
-      }
-
-      return Self.parseClaudeOAuthUsageResponse(
-        data: retryData,
-        subscriptionType: freshCreds.subscriptionType,
-        rateLimitTier: freshCreds.rateLimitTier
-      )
+      throw UsageFetchError.tokenExpired
     }
 
     guard statusCode == 200 else {
@@ -1585,7 +1607,9 @@ class UsageService {
             return
           }
 
-          await self?.fetch(provider: provider)
+          if self?.fetchStatuses[provider] != .tokenExpired {
+            await self?.fetch(provider: provider)
+          }
         }
       }
       refreshTasks[provider] = task

@@ -2,6 +2,19 @@
 
 All notable changes to SlothyTerminal will be documented in this file.
 
+## [2026.2.23] - 2026-03-31
+
+### Changed
+- **Token expiry UX for Claude OAuth** — when Claude Code's OAuth token expires or is refreshed (HTTP 401), the app no longer silently retries the keychain read (which triggered repeated macOS permission prompts). Instead, the status bar shows an orange key icon and the usage popover explains the issue with a "Renew" button. Clicking Renew triggers a single, intentional keychain read. Auto-refresh pauses for the affected provider until renewal succeeds.
+- **Keychain reads moved off the main thread** — all synchronous `SecItemCopyMatching` calls (in `renewKeychainToken`, `resolveClaudeAuth`, `fetchClaudeUsageViaOAuth`) are now dispatched via `Task.detached` so the macOS keychain permission dialog no longer freezes the UI.
+
+### Added
+- `UsageFetchStatus.tokenExpired` and `UsageFetchError.tokenExpired` — new enum cases for the token-expiry state, with dedicated UI handling in both the compact status bar and the detail popover.
+- `UsageService.renewKeychainToken(provider:)` — explicit, user-triggered keychain re-read with re-entrancy guard.
+
+### Tests
+- Added assertions for `.tokenExpired` in `testUsageFetchStatusEquality` and `testUsageFetchErrorDescriptions`.
+
 ## [2026.2.22] - 2026-03-30
 
 ### Changed
