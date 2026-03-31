@@ -61,7 +61,7 @@ class UsageService {
     isStarted = true
     startupTask?.cancel()
     startupTask = Task {
-      resolveAuthSources()
+      await resolveAuthSources()
       await fetchAll()
 
       guard !Task.isCancelled else {
@@ -136,7 +136,11 @@ class UsageService {
 
     fetchStatuses[provider] = .loading
 
-    guard Self.readClaudeCodeKeychainTokenDirect() != nil else {
+    let tokenExists = await Task.detached {
+      Self.readClaudeCodeKeychainTokenDirect() != nil
+    }.value
+
+    guard tokenExists else {
       fetchStatuses[provider] = .tokenExpired
       return
     }
@@ -210,10 +214,10 @@ class UsageService {
   // MARK: - Auth Resolution
 
   /// Discovers available auth sources for all providers.
-  func resolveAuthSources() {
+  func resolveAuthSources() async {
     let prefs = ConfigManager.shared.config.usagePreferences
 
-    resolvedSources[.claude] = resolveClaudeAuth(
+    resolvedSources[.claude] = await resolveClaudeAuth(
       allowExperimental: prefs.enableExperimentalSources
     )
 
@@ -242,9 +246,13 @@ class UsageService {
   /// 1. Claude Code OAuth from macOS Keychain (preferred — has session/weekly limits)
   /// 2. ANTHROPIC_API_KEY env var (admin API — token-level usage only)
   /// 3. Imported browser session (opt-in, experimental)
-  func resolveClaudeAuth(allowExperimental: Bool) -> UsageAuthSource? {
+  func resolveClaudeAuth(allowExperimental: Bool) async -> UsageAuthSource? {
     // 1. Claude Code OAuth credentials from Keychain.
-    if Self.readClaudeCodeKeychainToken() != nil {
+    let hasOAuth = await Task.detached {
+      Self.readClaudeCodeKeychainToken() != nil
+    }.value
+
+    if hasOAuth {
       return UsageAuthSource(
         provider: .claude,
         kind: .cliOAuth,
@@ -546,7 +554,11 @@ class UsageService {
   /// Calls https://api.anthropic.com/api/oauth/usage for session/weekly limits.
   /// On 401, clears the cached token and throws `.tokenExpired` for manual renewal.
   private func fetchClaudeUsageViaOAuth() async throws -> UsageSnapshot {
-    guard let creds = Self.readClaudeCodeKeychainToken() else {
+    let maybeCreds = await Task.detached {
+      Self.readClaudeCodeKeychainToken()
+    }.value
+
+    guard let creds = maybeCreds else {
       Logger.usage.error("[claude] No OAuth token found in Keychain (Claude Code-credentials)")
       throw UsageFetchError.noCredentials
     }
