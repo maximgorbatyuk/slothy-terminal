@@ -354,7 +354,7 @@ struct UsagePopoverView: View {
         .font(.system(size: 24))
         .foregroundColor(.orange)
 
-      Text("Claude usage data is unavailable because the OAuth token in Keychain has expired or been refreshed.")
+      Text("\(provider.displayName) usage data is unavailable because the OAuth token in Keychain has expired or been refreshed.")
         .font(.system(size: 11))
         .foregroundColor(.secondary)
         .multilineTextAlignment(.center)

@@ -126,7 +126,8 @@ class UsageService {
   func renewKeychainToken(provider: UsageProvider) async {
     guard provider == .claude,
           let source = resolvedSources[provider],
-          source.kind == .cliOAuth
+          source.kind == .cliOAuth,
+          fetchStatuses[provider] != .loading
     else {
       return
     }
@@ -543,7 +544,7 @@ class UsageService {
 
   /// Fetches usage via the Claude Code OAuth token from Keychain.
   /// Calls https://api.anthropic.com/api/oauth/usage for session/weekly limits.
-  /// On 401, invalidates the cached token and retries once from Claude Code's keychain.
+  /// On 401, clears the cached token and throws `.tokenExpired` for manual renewal.
   private func fetchClaudeUsageViaOAuth() async throws -> UsageSnapshot {
     guard let creds = Self.readClaudeCodeKeychainToken() else {
       Logger.usage.error("[claude] No OAuth token found in Keychain (Claude Code-credentials)")

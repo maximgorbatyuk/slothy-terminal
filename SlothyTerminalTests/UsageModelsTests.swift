@@ -67,6 +67,8 @@ final class UsageModelsTests: XCTestCase {
       UsageFetchStatus.unavailable("reason"),
       UsageFetchStatus.unavailable("reason")
     )
+    XCTAssertEqual(UsageFetchStatus.tokenExpired, UsageFetchStatus.tokenExpired)
+    XCTAssertNotEqual(UsageFetchStatus.tokenExpired, UsageFetchStatus.idle)
   }
 
   func testUsageMetricEquality() {
@@ -154,6 +156,10 @@ final class UsageModelsTests: XCTestCase {
     XCTAssertEqual(
       UsageFetchError.unsupportedSource.errorDescription,
       "Unsupported auth source"
+    )
+    XCTAssertEqual(
+      UsageFetchError.tokenExpired.errorDescription,
+      "OAuth token expired"
     )
   }
 
