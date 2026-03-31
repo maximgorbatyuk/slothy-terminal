@@ -108,12 +108,39 @@ class UsageService {
     } catch is CancellationError {
       // Task was cancelled — don't update status.
       return
+    } catch UsageFetchError.tokenExpired {
+      Logger.usage.warning(
+        "[\(provider.rawValue)] Token expired — waiting for manual renewal"
+      )
+      fetchStatuses[provider] = .tokenExpired
     } catch {
       Logger.usage.error(
         "[\(provider.rawValue)] Fetch failed (source=\(source.kind.rawValue)): \(error.localizedDescription)"
       )
       fetchStatuses[provider] = .failed(error.localizedDescription)
     }
+  }
+
+  /// Re-reads OAuth token from Claude Code's keychain (triggers macOS permission prompt)
+  /// and fetches usage if successful. Called only by explicit user action.
+  func renewKeychainToken(provider: UsageProvider) async {
+    guard provider == .claude,
+          let source = resolvedSources[provider],
+          source.kind == .cliOAuth
+    else {
+      return
+    }
+
+    Self.clearCachedClaudeOAuth()
+
+    fetchStatuses[provider] = .loading
+
+    guard Self.readClaudeCodeKeychainTokenDirect() != nil else {
+      fetchStatuses[provider] = .tokenExpired
+      return
+    }
+
+    await fetch(provider: provider)
   }
 
   /// Fetches usage for all resolved providers concurrently.
@@ -526,27 +553,9 @@ class UsageService {
     let (statusCode, data) = try await performClaudeOAuthRequest(creds: creds)
 
     if statusCode == 401 {
-      Logger.usage.warning("[claude] Got 401 — cached token is stale, retrying from Claude Code keychain")
+      Logger.usage.warning("[claude] Got 401 — token expired or revoked, requiring manual renewal")
       Self.clearCachedClaudeOAuth()
-
-      guard let freshCreds = Self.readClaudeCodeKeychainToken() else {
-        Logger.usage.error("[claude] No fresh OAuth token found after cache invalidation")
-        throw UsageFetchError.noCredentials
-      }
-
-      let (retryStatus, retryData) = try await performClaudeOAuthRequest(creds: freshCreds)
-
-      guard retryStatus == 200 else {
-        let body = Self.responseBodyPreview(retryData)
-        Logger.usage.error("[claude] OAuth usage retry failed HTTP \(retryStatus): \(body)")
-        throw UsageFetchError.httpError(retryStatus)
-      }
-
-      return Self.parseClaudeOAuthUsageResponse(
-        data: retryData,
-        subscriptionType: freshCreds.subscriptionType,
-        rateLimitTier: freshCreds.rateLimitTier
-      )
+      throw UsageFetchError.tokenExpired
     }
 
     guard statusCode == 200 else {
@@ -1585,7 +1594,9 @@ class UsageService {
             return
           }
 
-          await self?.fetch(provider: provider)
+          if self?.fetchStatuses[provider] != .tokenExpired {
+            await self?.fetch(provider: provider)
+          }
         }
       }
       refreshTasks[provider] = task
