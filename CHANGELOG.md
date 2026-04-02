@@ -2,6 +2,11 @@
 
 All notable changes to SlothyTerminal will be documented in this file.
 
+## [2026.2.24] - 2026-04-02
+
+### Fixed
+- **Terminal font scaling on display changes** — switching between displays with different pixel densities (e.g. closing the laptop lid while connected to an external monitor, or detaching the monitor) no longer leaves the terminal font at the wrong size. The root cause was that `ghostty_surface_set_display_id` was never called, so GhosttyKit's Metal renderer did not know which display the surface was on and could not adjust font rasterization for the new display's DPI. Added an `NSWindow.didChangeScreenNotification` observer that re-sends the display ID, content scale, and surface size on every screen transition.
+
 ## [2026.2.23] - 2026-03-31
 
 ### Changed

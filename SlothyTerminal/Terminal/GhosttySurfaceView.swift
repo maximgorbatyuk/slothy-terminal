@@ -24,6 +24,7 @@ class GhosttySurfaceView: NSView, NSTextInputClient {
   private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "SlothyTerminal", category: "GhosttySurface")
   private var pendingLaunchRequest: SurfaceLaunchRequest?
   private var occlusionObserver: NSObjectProtocol?
+  private var screenChangeObserver: NSObjectProtocol?
 
   /// Stored content size for surviving backing property changes.
   /// Matches Ghostty's approach: during animations, `bounds` may be in transit,
@@ -82,6 +83,9 @@ class GhosttySurfaceView: NSView, NSTextInputClient {
   deinit {
     if let occlusionObserver {
       NotificationCenter.default.removeObserver(occlusionObserver)
+    }
+    if let screenChangeObserver {
+      NotificationCenter.default.removeObserver(screenChangeObserver)
     }
 
     destroySurface()
@@ -198,6 +202,7 @@ class GhosttySurfaceView: NSView, NSTextInputClient {
       ghostty_surface_set_focus(surface, window?.firstResponder == self)
       updateWindowOcclusion()
       ghostty_surface_set_color_scheme(surface, GHOSTTY_COLOR_SCHEME_DARK)
+      updateDisplayId()
 
       let size = ghostty_surface_size(surface)
       logger.info(
@@ -232,6 +237,10 @@ class GhosttySurfaceView: NSView, NSTextInputClient {
       NotificationCenter.default.removeObserver(occlusionObserver)
       self.occlusionObserver = nil
     }
+    if let screenChangeObserver {
+      NotificationCenter.default.removeObserver(screenChangeObserver)
+      self.screenChangeObserver = nil
+    }
 
     if let window {
       occlusionObserver = NotificationCenter.default.addObserver(
@@ -240,6 +249,14 @@ class GhosttySurfaceView: NSView, NSTextInputClient {
         queue: .main
       ) { [weak self] _ in
         self?.updateWindowOcclusion()
+      }
+
+      screenChangeObserver = NotificationCenter.default.addObserver(
+        forName: NSWindow.didChangeScreenNotification,
+        object: window,
+        queue: .main
+      ) { [weak self] _ in
+        self?.handleScreenChange()
       }
     }
 
@@ -277,6 +294,8 @@ class GhosttySurfaceView: NSView, NSTextInputClient {
 
   override func viewDidChangeBackingProperties() {
     super.viewDidChangeBackingProperties()
+
+    updateDisplayId()
 
     /// Update the layer's contentsScale so the compositor doesn't rescale
     /// the Metal content. Matches Ghostty's approach — see:
@@ -349,6 +368,57 @@ class GhosttySurfaceView: NSView, NSTextInputClient {
 
     let visible = window?.occlusionState.contains(.visible) ?? true
     ghostty_surface_set_occlusion(surface, visible)
+  }
+
+  /// Tells GhosttyKit which macOS display the surface is on so the Metal
+  /// renderer can use the correct drawable configuration and font rasterization
+  /// for that display's DPI/scale.
+  private func updateDisplayId() {
+    guard let surface,
+          let screenNumber = window?.screen?.deviceDescription[
+            NSDeviceDescriptionKey("NSScreenNumber")
+          ] as? CGDirectDisplayID
+    else {
+      return
+    }
+
+    ghostty_surface_set_display_id(surface, screenNumber)
+  }
+
+  /// Called when the window moves to a different display (e.g. lid close,
+  /// monitor disconnect, or dragging between screens). Re-sends display ID,
+  /// content scale, and size so GhosttyKit re-rasterizes fonts for the new
+  /// display's DPI.
+  private func handleScreenChange() {
+    updateDisplayId()
+
+    guard let surface,
+          let window
+    else {
+      return
+    }
+
+    logger.info("Screen changed: scale=\(window.backingScaleFactor)")
+
+    CATransaction.begin()
+    CATransaction.setDisableActions(true)
+    layer?.contentsScale = window.backingScaleFactor
+    CATransaction.commit()
+
+    surfaceMetricsCache.reset()
+
+    let fbFrame = convertToBacking(frame)
+    guard frame.size.width > 0,
+          frame.size.height > 0
+    else {
+      return
+    }
+
+    let xScale = fbFrame.size.width / frame.size.width
+    let yScale = fbFrame.size.height / frame.size.height
+    ghostty_surface_set_content_scale(surface, xScale, yScale)
+
+    sizeDidChange(bounds.size)
   }
 
   override func updateTrackingAreas() {
