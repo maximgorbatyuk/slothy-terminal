@@ -32,7 +32,7 @@
     <item>
       <title>Version 2026.2.24</title>
       <pubDate>Wed, 02 Apr 2026 12:00:00 +0000</pubDate>
-      <sparkle:version>BUILD_NUMBER</sparkle:version>
+      <sparkle:version>31</sparkle:version>
       <sparkle:shortVersionString>2026.2.24</sparkle:shortVersionString>
       <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
       <description><![CDATA[
@@ -46,8 +46,8 @@
       <enclosure
         url="https://github.com/maximgorbatyuk/slothy-terminal/releases/download/v2026.2.24/SlothyTerminal-2026.2.24.dmg"
         type="application/octet-stream"
-        sparkle:edSignature="SIGNATURE_HERE"
-        length="FILE_SIZE_IN_BYTES"
+        sparkle:edSignature="m/qy0oeB1ZS5ORJeWQAAaQpheY5n1Gwf69zAurKv0humfw8/19ajx86EqQ96t+qr7VnY+B4NaYetxXKnZMD6BQ=="
+        length="20058475"
       />
     </item>
 
