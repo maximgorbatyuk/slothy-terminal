@@ -2,6 +2,11 @@
 
 All notable changes to SlothyTerminal will be documented in this file.
 
+## [2026.2.25] - 2026-04-03
+
+### Fixed
+- **Terminal font scaling on display changes (follow-up)** — the initial fix in 2026.2.24 did not fully resolve the issue. The deeper root causes: `ghostty_surface_set_content_scale` was skipped by a dedup cache when both screens had the same backing scale factor (e.g. both 2x Retina), and scale factors were read synchronously before the view's coordinate space had settled on the new display. Content scale is now sent unconditionally (matching Ghostty upstream), and the screen-change handler dispatches `viewDidChangeBackingProperties()` asynchronously so coordinate conversions reflect the new display.
+
 ## [2026.2.24] - 2026-04-02
 
 ### Fixed

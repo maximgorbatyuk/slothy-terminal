@@ -311,19 +311,14 @@ class GhosttySurfaceView: NSView, NSTextInputClient {
       return
     }
 
-    /// Calculate x/y scale independently (matches Ghostty).
+    /// Detect x/y scale factor and always send it to the surface — no dedup.
+    /// Matches Ghostty upstream: the content scale must be re-sent unconditionally
+    /// because the compositor may have changed the backing even when the numeric
+    /// scale factor looks identical (e.g. same 2x Retina on a different display).
     let fbFrame = convertToBacking(frame)
-    guard frame.size.width > 0,
-          frame.size.height > 0
-    else {
-      return
-    }
-
     let xScale = fbFrame.size.width / frame.size.width
     let yScale = fbFrame.size.height / frame.size.height
-    if surfaceMetricsCache.shouldApplyContentScale(x: xScale, y: yScale) {
-      ghostty_surface_set_content_scale(surface, xScale, yScale)
-    }
+    ghostty_surface_set_content_scale(surface, xScale, yScale)
 
     /// Re-send size using the stored contentSize so we don't read stale bounds
     /// during animations or transitions.
@@ -386,39 +381,17 @@ class GhosttySurfaceView: NSView, NSTextInputClient {
   }
 
   /// Called when the window moves to a different display (e.g. lid close,
-  /// monitor disconnect, or dragging between screens). Re-sends display ID,
-  /// content scale, and size so GhosttyKit re-rasterizes fonts for the new
-  /// display's DPI.
+  /// monitor disconnect, or dragging between screens). Updates the display ID
+  /// immediately, then dispatches a backing-property refresh on the next
+  /// runloop iteration so the view's coordinate space has settled before we
+  /// read scale factors. Matches Ghostty upstream — see:
+  /// https://github.com/ghostty-org/ghostty/issues/2731
   private func handleScreenChange() {
     updateDisplayId()
 
-    guard let surface,
-          let window
-    else {
-      return
+    DispatchQueue.main.async { [weak self] in
+      self?.viewDidChangeBackingProperties()
     }
-
-    logger.info("Screen changed: scale=\(window.backingScaleFactor)")
-
-    CATransaction.begin()
-    CATransaction.setDisableActions(true)
-    layer?.contentsScale = window.backingScaleFactor
-    CATransaction.commit()
-
-    surfaceMetricsCache.reset()
-
-    let fbFrame = convertToBacking(frame)
-    guard frame.size.width > 0,
-          frame.size.height > 0
-    else {
-      return
-    }
-
-    let xScale = fbFrame.size.width / frame.size.width
-    let yScale = fbFrame.size.height / frame.size.height
-    ghostty_surface_set_content_scale(surface, xScale, yScale)
-
-    sizeDidChange(bounds.size)
   }
 
   override func updateTrackingAreas() {
