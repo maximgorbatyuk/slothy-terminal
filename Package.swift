@@ -45,7 +45,7 @@ let package = Package(
         "Services/ActivityDetectionGate.swift",
         "Services/ClaudeCooldownService.swift",
         "Services/DirectoryTreeScanner.swift",
-        "Services/GhosttySurfaceMetricsCache.swift",
+
         "Services/OpenCodeCLIService.swift",
         "Services/PythonScriptScanner.swift",
         "Services/GitProcessRunner.swift",

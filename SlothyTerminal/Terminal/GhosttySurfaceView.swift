@@ -27,10 +27,19 @@ class GhosttySurfaceView: NSView, NSTextInputClient {
   private var screenChangeObserver: NSObjectProtocol?
 
   /// Stored content size for surviving backing property changes.
-  /// Matches Ghostty's approach: during animations, `bounds` may be in transit,
-  /// so we keep the last known-good size separately.
-  private var contentSize: NSSize = .zero
-  private var surfaceMetricsCache = GhosttySurfaceMetricsCache()
+  /// Matches Ghostty upstream: computed property falls back to frame.size
+  /// so viewDidChangeBackingProperties always has a valid size, even
+  /// before the first layout() pass.
+  private var contentSizeBacking: NSSize?
+  private var contentSize: NSSize {
+    get { contentSizeBacking ?? frame.size }
+    set { contentSizeBacking = newValue }
+  }
+
+  /// When true, the next layout() with a valid frame will trigger a full
+  /// backing-property refresh (content scale + size). Set when a display
+  /// change or tab activation fires while the view has a zero-sized frame.
+  private var pendingSurfaceMetricsRefresh = false
 
   /// Accumulated text from `insertText` during key interpretation.
   private var keyTextAccumulator: [String]?
@@ -222,7 +231,8 @@ class GhosttySurfaceView: NSView, NSTextInputClient {
       self.surface = nil
     }
 
-    surfaceMetricsCache.reset()
+    contentSizeBacking = nil
+    pendingSurfaceMetricsRefresh = false
   }
 
   // MARK: - View Lifecycle
@@ -280,6 +290,17 @@ class GhosttySurfaceView: NSView, NSTextInputClient {
   override func layout() {
     super.layout()
     sizeDidChange(bounds.size)
+
+    /// Drain deferred refresh: if a display change or tab activation fired
+    /// while the view was zero-sized, apply the full content-scale + size
+    /// refresh now that we have a valid frame.
+    /// Flag is cleared before the call to prevent re-entrancy if AppKit
+    /// re-enters layout() from within refreshSurfaceMetrics().
+    if pendingSurfaceMetricsRefresh, bounds.size.width > 0, bounds.size.height > 0 {
+      pendingSurfaceMetricsRefresh = false
+      refreshSurfaceMetrics()
+    }
+
     GhosttyApp.shared.tick()
   }
 
@@ -294,9 +315,18 @@ class GhosttySurfaceView: NSView, NSTextInputClient {
 
   override func viewDidChangeBackingProperties() {
     super.viewDidChangeBackingProperties()
-
     updateDisplayId()
+    refreshSurfaceMetrics()
+  }
 
+  /// Applies a full content-scale + size refresh to the GhosttyKit surface.
+  /// Called from viewDidChangeBackingProperties(), handleScreenChange() (async),
+  /// layout() (deferred drain), and requestSurfaceMetricsRefresh() (async fallback).
+  ///
+  /// Zero-sized frames are rejected to avoid sending NaN scale factors;
+  /// the pendingSurfaceMetricsRefresh flag defers the refresh until layout()
+  /// provides a valid frame.
+  private func refreshSurfaceMetrics() {
     /// Update the layer's contentsScale so the compositor doesn't rescale
     /// the Metal content. Matches Ghostty's approach — see:
     /// https://developer.apple.com/library/archive/documentation/GraphicsAnimation/Conceptual/HighResolutionOSX/CapturingScreenContents/CapturingScreenContents.html
@@ -308,6 +338,16 @@ class GhosttySurfaceView: NSView, NSTextInputClient {
     }
 
     guard let surface else {
+      return
+    }
+
+    /// Zero-sized hidden tabs must never send content scale — the division
+    /// would produce NaN and corrupt GhosttyKit's font rasterization state.
+    /// Defer the refresh until layout() restores a valid frame.
+    guard frame.size.width > 0,
+          frame.size.height > 0
+    else {
+      pendingSurfaceMetricsRefresh = true
       return
     }
 
@@ -349,10 +389,8 @@ class GhosttySurfaceView: NSView, NSTextInputClient {
       return
     }
 
-    guard surfaceMetricsCache.shouldApplySurfaceSize(width: width, height: height) else {
-      return
-    }
-
+    /// No wrapper-side dedup — always forward to GhosttyKit.
+    /// Matches Ghostty upstream; GhosttyKit deduplicates internally.
     ghostty_surface_set_size(surface, width, height)
   }
 
@@ -382,15 +420,15 @@ class GhosttySurfaceView: NSView, NSTextInputClient {
 
   /// Called when the window moves to a different display (e.g. lid close,
   /// monitor disconnect, or dragging between screens). Updates the display ID
-  /// immediately, then dispatches a backing-property refresh on the next
-  /// runloop iteration so the view's coordinate space has settled before we
-  /// read scale factors. Matches Ghostty upstream — see:
+  /// immediately, then dispatches a metrics refresh on the next runloop
+  /// iteration so the view's coordinate space has settled before we read
+  /// scale factors. Matches Ghostty upstream — see:
   /// https://github.com/ghostty-org/ghostty/issues/2731
   private func handleScreenChange() {
     updateDisplayId()
 
     DispatchQueue.main.async { [weak self] in
-      self?.viewDidChangeBackingProperties()
+      self?.refreshSurfaceMetrics()
     }
   }
 
@@ -431,11 +469,23 @@ class GhosttySurfaceView: NSView, NSTextInputClient {
     refreshViewportSnapshot()
   }
 
-  /// Resets the dedup cache so the next layout pass re-sends size to Ghostty
-  /// even if the pixel dimensions haven't changed. Called on tab activation
-  /// to ensure contentSize is refreshed from actual bounds.
-  func invalidateSurfaceMetrics() {
-    surfaceMetricsCache.reset()
+  /// Requests a full surface metrics refresh (content scale + size) on the
+  /// next layout pass. Called on tab activation so that a revealed tab always
+  /// re-sends both scale and size to GhosttyKit.
+  ///
+  /// An async fallback retries after one runloop iteration in case SwiftUI
+  /// has not yet expanded the frame from zero when needsLayout is processed.
+  func requestSurfaceMetricsRefresh() {
+    pendingSurfaceMetricsRefresh = true
+    needsLayout = true
+
+    DispatchQueue.main.async { [weak self] in
+      guard let self, self.pendingSurfaceMetricsRefresh else {
+        return
+      }
+
+      self.refreshSurfaceMetrics()
+    }
   }
 
   override func becomeFirstResponder() -> Bool {

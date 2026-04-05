@@ -100,8 +100,7 @@ struct GhosttyTerminalViewRepresentable: NSViewRepresentable {
       /// pixel dimensions — otherwise TUI apps (opencode, codex) render
       /// with a stale grid size, making text appear tiny.
       if isActive {
-        nsView.invalidateSurfaceMetrics()
-        nsView.needsLayout = true
+        nsView.requestSurfaceMetricsRefresh()
       }
     }
 

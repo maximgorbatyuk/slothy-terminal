@@ -2,6 +2,18 @@
 
 All notable changes to SlothyTerminal will be documented in this file.
 
+## [2026.2.26] - 2026-04-05
+
+### Fixed
+- **Terminal font scaling on display changes and tab switches** — the font size no longer becomes incorrect when switching between displays with different DPI or when switching between tabs. Three root causes were identified and fixed by comparing with Ghostty upstream:
+  - Removed wrapper-side size dedup cache that blocked necessary `ghostty_surface_set_size` re-sends (GhosttyKit deduplicates internally)
+  - Changed `contentSize` to a computed property with `frame.size` fallback, preventing zero-size values from corrupting scale calculations
+  - Tab activation now re-sends both content scale and size via a deferred refresh mechanism, instead of only re-sending size
+  - Added zero-size guard to prevent hidden tabs from sending `NaN` scale factors to GhosttyKit
+
+### Removed
+- `GhosttySurfaceMetricsCache` — the wrapper-side dedup cache has been removed entirely. GhosttyKit handles deduplication internally.
+
 ## [2026.2.25] - 2026-04-03
 
 ### Fixed
