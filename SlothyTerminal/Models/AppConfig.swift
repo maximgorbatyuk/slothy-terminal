@@ -219,7 +219,6 @@ enum SidebarPosition: String, Codable, CaseIterable {
 
 /// Sidebar panel tabs.
 enum SidebarTab: String, Codable, CaseIterable, Identifiable {
-  case workspaces
   case explorer
   case prompts
   case automation
@@ -228,9 +227,6 @@ enum SidebarTab: String, Codable, CaseIterable, Identifiable {
 
   var iconName: String {
     switch self {
-    case .workspaces:
-      return "square.grid.2x2"
-
     case .explorer:
       return "folder"
 
@@ -244,9 +240,6 @@ enum SidebarTab: String, Codable, CaseIterable, Identifiable {
 
   var tooltip: String {
     switch self {
-    case .workspaces:
-      return "Workspaces"
-
     case .explorer:
       return "Current directory"
 
