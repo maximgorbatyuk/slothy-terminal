@@ -2,6 +2,14 @@
 
 All notable changes to SlothyTerminal will be documented in this file.
 
+## [2026.2.27] - 2026-04-09
+
+### Changed
+- **Workspaces pinned to top of sidebar** — the Workspaces panel is no longer a switchable sidebar tab. It is now always visible at the top of the sidebar, occupying up to half the sidebar height, with the remaining tabs (Explorer, Prompts, Automation) switching below it.
+
+### Removed
+- `.workspaces` case from `SidebarTab` enum — existing configs with the old value decode gracefully to `.explorer`.
+
 ## [2026.2.26] - 2026-04-05
 
 ### Fixed

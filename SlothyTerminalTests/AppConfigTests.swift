@@ -57,9 +57,9 @@ struct AppConfigTests {
     #expect(config.sidebarTab == .explorer)
   }
 
-  @Test("Sidebar tabs keep Workspaces first and Current directory default")
+  @Test("Sidebar tabs keep Explorer first and as default")
   func sidebarTabDefaults() {
-    #expect(SidebarTab.allCases.first == .workspaces)
+    #expect(SidebarTab.allCases.first == .explorer)
     #expect(AppConfig().sidebarTab == .explorer)
   }
 

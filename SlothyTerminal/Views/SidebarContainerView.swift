@@ -1,6 +1,8 @@
 import SwiftUI
 
 /// Container that wraps the sidebar tab strip and the active sidebar panel.
+/// Workspaces are always visible at the top (half the height), with the
+/// switchable tab content filling the remaining space below.
 struct SidebarContainerView: View {
   private var configManager = ConfigManager.shared
 
@@ -21,9 +23,6 @@ struct SidebarContainerView: View {
   private var contentPanel: some View {
     Group {
       switch selectedTab {
-      case .workspaces:
-        WorkspacesSidebarView()
-
       case .explorer:
         SidebarView()
 
@@ -42,11 +41,25 @@ struct SidebarContainerView: View {
       if sidebarPosition == .left {
         tabStrip
         Divider()
-        contentPanel
+        sidebarContent
       } else {
-        contentPanel
+        sidebarContent
         Divider()
         tabStrip
+      }
+    }
+  }
+
+  private var sidebarContent: some View {
+    GeometryReader { geometry in
+      VStack(spacing: 0) {
+        WorkspacesSidebarView()
+          .frame(maxHeight: geometry.size.height / 2)
+          .clipped()
+
+        Divider()
+
+        contentPanel
       }
     }
   }

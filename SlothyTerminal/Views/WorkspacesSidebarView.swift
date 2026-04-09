@@ -57,8 +57,6 @@ struct WorkspacesSidebarView: View {
           .font(.system(size: 11))
           .foregroundColor(.red)
       }
-
-      Spacer()
     }
     .padding()
     .background(appBackgroundColor)
