@@ -2,6 +2,11 @@
 
 All notable changes to SlothyTerminal will be documented in this file.
 
+## [2026.3.1] - 2026-04-10
+
+### Added
+- **GhosttyKit update script** (`scripts/update-ghostty.sh`) — automates the full GhosttyKit.xcframework update workflow from within the SlothyTerminal repo: pulls latest Ghostty source, builds the xcframework, copies it into the project, and runs verification builds. Supports `--tag <version>` to pin to a specific Ghostty release and `--ghostty-dir <path>` for custom source locations.
+
 ## [2026.2.27] - 2026-04-09
 
 ### Changed
