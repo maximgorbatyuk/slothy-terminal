@@ -428,15 +428,18 @@ private func ghosttyReadClipboard(
   _ userdata: UnsafeMutableRawPointer?,
   location: ghostty_clipboard_e,
   state: UnsafeMutableRawPointer?
-) {
+) -> Bool {
   guard let userdata else {
-    return
+    return false
   }
 
   let surfaceView = Unmanaged<GhosttySurfaceView>.fromOpaque(userdata).takeUnretainedValue()
 
+  guard let str = NSPasteboard.general.string(forType: .string) else {
+    return false
+  }
+
   ghosttyDispatchOnMain {
-    let str = NSPasteboard.general.string(forType: .string) ?? ""
     surfaceView.captureClipboardPasteIfNeeded(str)
     guard let surface = surfaceView.surface else {
       return
@@ -446,6 +449,8 @@ private func ghosttyReadClipboard(
       ghostty_surface_complete_clipboard_request(surface, ptr, state, false)
     }
   }
+
+  return true
 }
 
 private func ghosttyConfirmReadClipboard(
