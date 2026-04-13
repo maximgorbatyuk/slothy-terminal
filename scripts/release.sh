@@ -4,8 +4,13 @@ set -e
 # SlothyTerminal Full Release Script
 # Builds, signs, notarizes, updates appcast, creates GitHub release, uploads DMG.
 #
-# Usage: ./scripts/release.sh VERSION
+# Usage: ./scripts/release.sh [VERSION]
+#   - If VERSION is omitted, bumps the last segment of MARKETING_VERSION
+#     (e.g. 2026.3.1 → 2026.3.2).
+#   - Any uncommitted working-tree changes are committed before the release
+#     begins, with the message "Commit before release VERSION".
 # Example: ./scripts/release.sh 2026.2.15
+# Example: ./scripts/release.sh        # auto-bumps patch
 #
 # Prerequisites:
 #   - .env file with Apple credentials (APPLE_ID, APP_SPECIFIC_PASSWORD, TEAM_ID)
@@ -20,18 +25,32 @@ set -e
 #   - Replaces BUILD_NUMBER placeholder in appcast.xml with the new build number
 
 VERSION="${1}"
+PBXPROJ="SlothyTerminal.xcodeproj/project.pbxproj"
 
 if [ -z "$VERSION" ]; then
-  echo "Usage: $0 VERSION"
-  echo "Example: $0 2026.2.15"
-  exit 1
+  CURRENT_MARKETING=$(grep -m1 "MARKETING_VERSION" "$PBXPROJ" | sed 's/.*= \(.*\);/\1/' | tr -d ' ')
+
+  if [ -z "$CURRENT_MARKETING" ]; then
+    echo "ERROR: Could not read MARKETING_VERSION from $PBXPROJ"
+    exit 1
+  fi
+
+  IFS='.' read -r MAJOR MINOR PATCH <<< "$CURRENT_MARKETING"
+
+  if ! [[ "$MAJOR" =~ ^[0-9]+$ ]] || ! [[ "$MINOR" =~ ^[0-9]+$ ]] || ! [[ "$PATCH" =~ ^[0-9]+$ ]]; then
+    echo "ERROR: Current MARKETING_VERSION ('$CURRENT_MARKETING') does not match NNNN.N.N pattern."
+    echo "Pass an explicit version: $0 VERSION"
+    exit 1
+  fi
+
+  VERSION="$MAJOR.$MINOR.$((PATCH + 1))"
+  echo "No version argument — auto-deriving next patch: $CURRENT_MARKETING → $VERSION"
 fi
 
 APP_NAME="SlothyTerminal"
 BUILD_DIR="./build"
 DMG_PATH="$BUILD_DIR/$APP_NAME-$VERSION.dmg"
 SPARKLE_BIN="./sparkle-tools/bin/sign_update"
-PBXPROJ="SlothyTerminal.xcodeproj/project.pbxproj"
 TAG="v$VERSION"
 
 echo "==========================================="
@@ -83,6 +102,23 @@ if ! grep -q "\[$VERSION\]" CHANGELOG.md; then
 fi
 
 echo "All preflight checks passed."
+
+# ── Commit any pending changes before release ─────────────────────
+
+echo ""
+echo "==========================================="
+echo "  Pre-release: Commit Pending Changes"
+echo "==========================================="
+echo ""
+
+if [ -n "$(git status --porcelain)" ]; then
+  echo "Uncommitted changes detected — staging and committing."
+  git add -A
+  git commit -m "Commit before release $VERSION"
+  echo "Committed pending changes as: Commit before release $VERSION"
+else
+  echo "Working tree clean — nothing to commit."
+fi
 
 # ── Step 1: Bump Xcode project version ───────────────────────────
 

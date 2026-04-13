@@ -47,6 +47,7 @@ let package = Package(
         "Services/DirectoryTreeScanner.swift",
 
         "Services/OpenCodeCLIService.swift",
+        "Services/PromptFilesScanner.swift",
         "Services/PythonScriptScanner.swift",
         "Services/GitProcessRunner.swift",
         "Services/GitService.swift",
@@ -74,6 +75,7 @@ let package = Package(
         "Agents/ClaudeAgent.swift",
         "Agents/OpenCodeAgent.swift",
         "Agents/TerminalAgent.swift",
+        "Models/PromptFile.swift",
         "Models/SavedPrompt.swift",
         "Models/LaunchType.swift",
         "Models/ChatModelMode.swift",
