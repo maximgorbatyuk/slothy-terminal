@@ -2,6 +2,19 @@
 
 All notable changes to SlothyTerminal will be documented in this file.
 
+## [2026.3.2] - 2026-04-13
+
+### Added
+- **Prompt files viewer** — the Prompts sidebar now lists `.md` and `.txt` files discovered recursively under `<workspace>/docs/prompts/`, rendered below saved prompts under a "Files from docs/prompts" section. Double-clicking a file (or using the "Copy to clipboard" context-menu action) reads its contents and copies them to the system clipboard; a green status message confirms the copy. A "Reveal in Finder" context-menu action opens the file in Finder. Files refresh automatically on workspace switch and via a refresh button in the section header. (`SlothyTerminal/Models/PromptFile.swift`, `SlothyTerminal/Services/PromptFilesScanner.swift`, `SlothyTerminal/Views/PromptsSidebarView.swift`)
+- `PromptFilesScanner` — async recursive file scanner with UTF-8 → Latin-1 decode fallback for reading file contents, filtered to `.md` / `.txt` case-insensitively.
+
+### Changed
+- **`scripts/release.sh` accepts `VERSION` as optional** — when omitted, the script auto-derives the next patch version by bumping the last dot-separated segment of `MARKETING_VERSION` (e.g. `2026.3.1 → 2026.3.2`). An explicit `VERSION` argument overrides the auto-derivation.
+- **`scripts/release.sh` commits pending working-tree changes before releasing** — after preflight checks pass, any uncommitted or untracked files are staged (`git add -A`) and committed with the message `Commit before release VERSION`, so the subsequent release-bump commit stays focused on version metadata only.
+
+### Tests
+- Added `PromptFilesScannerTests` — 8 tests covering missing/empty folder, extension filtering, case-insensitive matching, recursion into subfolders, alphabetical sort order, and UTF-8 round-trip.
+
 ## [2026.3.1] - 2026-04-10
 
 ### Added

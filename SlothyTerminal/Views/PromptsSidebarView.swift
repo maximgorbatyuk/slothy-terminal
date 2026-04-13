@@ -9,6 +9,7 @@ struct PromptsSidebarView: View {
   @State private var actionStatus: String?
   @State private var isStatusError: Bool = false
   @State private var statusDismissTask: Task<Void, Never>?
+  @State private var promptFiles: [PromptFile] = []
 
   private var prompts: [SavedPrompt] {
     configManager.config.savedPrompts
@@ -18,18 +19,25 @@ struct PromptsSidebarView: View {
     configManager.config.promptTags
   }
 
+  private var workspaceRoot: URL? {
+    appState.activeWorkspace?.rootDirectory
+  }
+
   var body: some View {
     VStack(spacing: 0) {
       header
       Divider()
 
-      if prompts.isEmpty {
+      if prompts.isEmpty && promptFiles.isEmpty {
         emptyState
       } else {
-        promptList
+        contentList
       }
     }
     .background(appBackgroundColor)
+    .task(id: workspaceRoot) {
+      await reloadPromptFiles()
+    }
     .sheet(item: $editingPrompt) { prompt in
       PromptEditorSheet(
         prompt: prompt,
@@ -109,17 +117,89 @@ struct PromptsSidebarView: View {
     .frame(maxWidth: .infinity, maxHeight: .infinity)
   }
 
-  // MARK: - Prompt List
+  // MARK: - Content List
 
-  private var promptList: some View {
+  private var contentList: some View {
     ScrollView {
       LazyVStack(alignment: .leading, spacing: 4) {
         ForEach(prompts) { prompt in
           promptBlock(prompt)
         }
+
+        if !promptFiles.isEmpty {
+          promptFilesHeader
+            .padding(.top, prompts.isEmpty ? 0 : 8)
+
+          ForEach(promptFiles) { file in
+            promptFileBlock(file)
+          }
+        }
       }
       .padding(.horizontal, 8)
       .padding(.vertical, 6)
+    }
+  }
+
+  private var promptFilesHeader: some View {
+    HStack {
+      Text("Files from docs/prompts")
+        .font(.system(size: 10, weight: .semibold))
+        .foregroundColor(.secondary)
+
+      Spacer()
+
+      Button {
+        Task { await reloadPromptFiles() }
+      } label: {
+        Image(systemName: "arrow.clockwise")
+          .font(.system(size: 9))
+          .foregroundColor(.secondary)
+      }
+      .buttonStyle(.plain)
+      .help("Refresh")
+
+      Text("\(promptFiles.count)")
+        .font(.system(size: 9))
+        .foregroundColor(.secondary.opacity(0.6))
+    }
+    .padding(.bottom, 2)
+  }
+
+  private func promptFileBlock(_ file: PromptFile) -> some View {
+    VStack(alignment: .leading, spacing: 4) {
+      HStack(spacing: 4) {
+        Image(systemName: "doc.text")
+          .font(.system(size: 10))
+          .foregroundColor(.secondary)
+
+        Text(file.fileName)
+          .font(.system(size: 11, weight: .medium))
+          .foregroundColor(.primary)
+          .lineLimit(1)
+      }
+
+      if file.relativePath != file.fileName {
+        Text(file.relativePath)
+          .font(.system(size: 9, design: .monospaced))
+          .foregroundColor(.secondary.opacity(0.7))
+          .lineLimit(1)
+      }
+    }
+    .padding(8)
+    .frame(maxWidth: .infinity, alignment: .leading)
+    .background(appCardColor)
+    .cornerRadius(6)
+    .contextMenu {
+      Button("Copy to clipboard") {
+        copyFileToClipboard(file)
+      }
+
+      Button("Reveal in Finder") {
+        NSWorkspace.shared.activateFileViewerSelecting([file.url])
+      }
+    }
+    .onTapGesture(count: 2) {
+      copyFileToClipboard(file)
     }
   }
 
@@ -259,6 +339,36 @@ struct PromptsSidebarView: View {
 
     configManager.config.savedPrompts = savedPrompts
     showStatus("Prompt updated", isError: false)
+  }
+
+  // MARK: - Prompt Files
+
+  private func reloadPromptFiles() async {
+    guard let root = workspaceRoot else {
+      promptFiles = []
+      return
+    }
+
+    let scanned = await PromptFilesScanner.scan(workspaceRoot: root)
+
+    guard !Task.isCancelled else {
+      return
+    }
+
+    promptFiles = scanned
+  }
+
+  private func copyFileToClipboard(_ file: PromptFile) {
+    Task {
+      guard let content = await PromptFilesScanner.readContent(of: file) else {
+        showStatus("Failed to read \(file.fileName)", isError: true)
+        return
+      }
+
+      NSPasteboard.general.clearContents()
+      NSPasteboard.general.setString(content, forType: .string)
+      showStatus("Copied: \(file.fileName)", isError: false)
+    }
   }
 
   // MARK: - Status Feedback
