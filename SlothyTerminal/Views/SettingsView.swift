@@ -19,9 +19,6 @@ struct SettingsView: View {
         case .general:
           GeneralSettingsTab()
 
-        case .agents:
-          AgentsSettingsTab()
-
         case .appearance:
           AppearanceSettingsTab()
 
@@ -30,9 +27,6 @@ struct SettingsView: View {
 
         case .prompts:
           PromptsSettingsTab()
-
-        case .usage:
-          UsageSettingsTab()
 
         case .licenses:
           LicensesSettingsTab()
@@ -222,208 +216,6 @@ struct GeneralSettingsTab: View {
       return "~" + path.dropFirst(homeDir.count)
     }
     return path
-  }
-}
-
-// MARK: - Agents Settings Tab
-
-struct AgentsSettingsTab: View {
-  private var configManager = ConfigManager.shared
-  @State private var claudeStatus: AgentStatus = .checking
-  @State private var opencodeStatus: AgentStatus = .checking
-
-  var body: some View {
-    Form {
-      AgentSettingsSection(
-        agentType: .claude,
-        customPath: Bindable(configManager).config.claudePath,
-        status: $claudeStatus
-      )
-
-      AgentSettingsSection(
-        agentType: .opencode,
-        customPath: Bindable(configManager).config.opencodePath,
-        status: $opencodeStatus
-      )
-
-      Section {
-        Text("Agent paths are auto-detected. Override here if needed.")
-          .font(.caption)
-          .foregroundColor(.secondary)
-      }
-    }
-    .formStyle(.grouped)
-    .scrollContentBackground(.hidden)
-    .padding()
-    .background(appBackgroundColor)
-    .task {
-      await checkAgentStatuses()
-    }
-  }
-
-  private func checkAgentStatuses() async {
-    claudeStatus = checkAgent(.claude)
-    opencodeStatus = checkAgent(.opencode)
-  }
-
-  private func checkAgent(_ type: AgentType) -> AgentStatus {
-    let agent = AgentFactory.createAgent(for: type)
-    if agent.isAvailable() {
-      return .connected
-    }
-    return .notFound
-  }
-}
-
-/// Status of an agent installation.
-enum AgentStatus {
-  case checking
-  case connected
-  case notFound
-
-  /// Muted status colors that work with the dark theme.
-  var color: Color {
-    switch self {
-    case .checking:
-      return Color(red: 0.85, green: 0.65, blue: 0.35)
-
-    case .connected:
-      return Color(red: 0.45, green: 0.75, blue: 0.55)
-
-    case .notFound:
-      return Color(red: 0.85, green: 0.45, blue: 0.45)
-    }
-  }
-
-  var text: String {
-    switch self {
-    case .checking:
-      return "Checking..."
-
-    case .connected:
-      return "Connected"
-
-    case .notFound:
-      return "Not Found"
-    }
-  }
-}
-
-/// Settings section for a single agent.
-struct AgentSettingsSection: View {
-  let agentType: AgentType
-  @Binding var customPath: String?
-  @Binding var status: AgentStatus
-
-  @State private var pathText: String = ""
-  @State private var isVerifying: Bool = false
-
-  private var agent: AIAgent {
-    AgentFactory.createAgent(for: agentType)
-  }
-
-  var body: some View {
-    Section {
-      HStack {
-        Image(systemName: agent.iconName)
-          .foregroundColor(agent.accentColor)
-
-        Text(agent.displayName)
-          .font(.headline)
-
-        Spacer()
-
-        HStack(spacing: 4) {
-          Circle()
-            .fill(status.color)
-            .frame(width: 8, height: 8)
-
-          Text(status.text)
-            .font(.caption)
-            .foregroundColor(.secondary)
-        }
-      }
-
-      HStack {
-        TextField("Path", text: $pathText, prompt: Text(agent.command).foregroundStyle(.secondary))
-          .textFieldStyle(.roundedBorder)
-
-        Button("Browse...") {
-          browseForExecutable()
-        }
-      }
-
-      if !pathText.isEmpty || customPath != nil {
-        HStack {
-          Text("Using: \(customPath ?? agent.command)")
-            .font(.system(size: 11, design: .monospaced))
-            .foregroundColor(.secondary)
-            .lineLimit(1)
-            .truncationMode(.middle)
-
-          Spacer()
-
-          if customPath != nil {
-            Button("Reset") {
-              customPath = nil
-              pathText = ""
-              verifyInstallation()
-            }
-            .font(.caption)
-          }
-        }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 4)
-        .background(appCardColor)
-        .cornerRadius(4)
-      }
-
-      Button("Verify Installation") {
-        verifyInstallation()
-      }
-      .disabled(isVerifying)
-    }
-    .onAppear {
-      pathText = customPath ?? ""
-    }
-    .onChange(of: pathText) { _, newValue in
-      if newValue.isEmpty {
-        customPath = nil
-      } else {
-        customPath = newValue
-      }
-    }
-  }
-
-  private func browseForExecutable() {
-    let panel = NSOpenPanel()
-    panel.canChooseFiles = true
-    panel.canChooseDirectories = false
-    panel.allowsMultipleSelection = false
-    panel.message = "Select the \(agent.displayName) CLI executable"
-
-    panel.begin { response in
-      if response == .OK, let url = panel.url {
-        pathText = url.path
-        customPath = url.path
-        verifyInstallation()
-      }
-    }
-  }
-
-  private func verifyInstallation() {
-    isVerifying = true
-    status = .checking
-
-    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-      let path = customPath ?? agent.command
-      if FileManager.default.isExecutableFile(atPath: path) {
-        status = .connected
-      } else {
-        status = .notFound
-      }
-      isVerifying = false
-    }
   }
 }
 
@@ -1373,11 +1165,6 @@ struct LicenseSection: View {
 
 #Preview("General") {
   GeneralSettingsTab()
-    .frame(width: 500, height: 400)
-}
-
-#Preview("Agents") {
-  AgentsSettingsTab()
     .frame(width: 500, height: 400)
 }
 

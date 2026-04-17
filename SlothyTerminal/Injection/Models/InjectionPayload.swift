@@ -24,6 +24,7 @@ enum ControlSignal: String, Codable, Equatable, CaseIterable, Sendable {
   case ctrlD
   case ctrlZ
   case ctrlL
+  case ctrlU
 
   /// The ASCII byte value for this control signal.
   var asciiValue: UInt8 {
@@ -32,6 +33,7 @@ enum ControlSignal: String, Codable, Equatable, CaseIterable, Sendable {
     case .ctrlD: return 4
     case .ctrlZ: return 26
     case .ctrlL: return 12
+    case .ctrlU: return 21
     }
   }
 }

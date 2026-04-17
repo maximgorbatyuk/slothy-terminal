@@ -112,6 +112,22 @@ struct ActiveTerminalView: View {
     static let dismissDelayNanoseconds: UInt64 = 2_500_000_000
   }
 
+  /// Tunables for the agent auto-launch flow.
+  ///
+  /// We host agents under a shell (rather than as the PTY primary) so the
+  /// tab stays interactive after the agent exits. Before injecting the
+  /// agent command into that shell we wait for:
+  /// 1. The surface to register with the injection registry.
+  /// 2. The prompt to settle (no Ghostty render frames for `promptIdleNs`).
+  /// Each wait is bounded so a misbehaving shell can't strand the tab.
+  private enum AgentAutoLaunch {
+    static let registryPollNs: UInt64 = 100_000_000
+    static let registryTimeoutNs: UInt64 = 3_000_000_000
+    static let renderPollNs: UInt64 = 50_000_000
+    static let promptIdleNs: UInt64 = 150_000_000
+    static let promptTimeoutNs: UInt64 = 3_000_000_000
+  }
+
   let tab: Tab
   let isActive: Bool
 
@@ -125,6 +141,16 @@ struct ActiveTerminalView: View {
   @State private var claudeCooldownMessage: String?
   @State private var isShowingClaudeCooldownOverlay: Bool = false
   @State private var claudeCooldownOverlayToken: Int = 0
+
+  /// One-shot guard: the agent command must be injected exactly once per
+  /// view lifetime. `.task` can re-fire if SwiftUI identity changes (tab
+  /// reorder, workspace move); re-injecting would send the agent's own
+  /// command into the already-running agent as a prompt.
+  @State private var didAutoLaunchAgent: Bool = false
+
+  /// True while we are waiting for the shell to become interactive so we
+  /// can inject the agent command. Drives a lightweight status banner.
+  @State private var isAutoLaunchingAgent: Bool = false
 
   private var submitGate: (() -> TerminalSubmitGateDecision)? {
     guard tab.agentType == .claude else {
@@ -175,7 +201,7 @@ struct ActiveTerminalView: View {
           arguments: tab.arguments,
           environment: tab.environment,
           tabId: tab.id,
-          shouldAutoRunCommand: tab.agentType?.supportsInitialPrompt ?? false,
+          shouldAutoRunCommand: false,
           isActive: isActive,
           onDirectoryChanged: { newDirectory in
             tab.workingDirectory = newDirectory
@@ -235,8 +261,34 @@ struct ActiveTerminalView: View {
         .transition(.move(edge: .top).combined(with: .opacity))
         .allowsHitTesting(false)
       }
+
+      if isAutoLaunchingAgent {
+        VStack {
+          HStack {
+            Label("Starting \(tab.agent?.displayName ?? "session")…", systemImage: "arrow.triangle.2.circlepath")
+              .font(.system(size: 12, weight: .semibold))
+              .foregroundStyle(Color.white)
+              .padding(.horizontal, 12)
+              .padding(.vertical, 8)
+              .background(
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                  .fill(Color.accentColor.opacity(0.92))
+              )
+              .shadow(color: Color.black.opacity(0.18), radius: 10, y: 4)
+
+            Spacer(minLength: 0)
+          }
+
+          Spacer()
+        }
+        .padding(.top, 12)
+        .padding(.horizontal, 12)
+        .transition(.opacity)
+        .allowsHitTesting(false)
+      }
     }
     .animation(.easeOut(duration: 0.18), value: isShowingClaudeCooldownOverlay)
+    .animation(.easeOut(duration: 0.18), value: isAutoLaunchingAgent)
     .task(id: claudeCooldownOverlayToken) {
       guard claudeCooldownOverlayToken > 0 else {
         return
@@ -263,8 +315,112 @@ struct ActiveTerminalView: View {
       }
 
       // Mark as ready to show terminal.
+      let shouldHostAgent = tab.agentType?.needsShellHost ?? false
       isReady = true
-      tab.handleTerminalLaunch(shouldAutoRunCommand: tab.agentType?.supportsInitialPrompt ?? false)
+      tab.handleTerminalLaunch(shouldAutoRunCommand: shouldHostAgent)
+
+      if shouldHostAgent, !didAutoLaunchAgent {
+        didAutoLaunchAgent = true
+        await autoLaunchAgentCommand()
+      }
+    }
+  }
+
+  /// Waits for the shell to become interactive, then injects the agent
+  /// command so the shell remains as the PTY parent after the agent exits
+  /// — otherwise the surface has no process left and the tab freezes.
+  ///
+  /// Readiness is detected in two phases:
+  /// 1. Poll for the surface to register with `TerminalSurfaceRegistry`.
+  /// 2. Poll Ghostty's render-dirty flag until we observe a quiet window
+  ///    (the shell has finished drawing its prompt).
+  /// A Ctrl+U is sent before the command to discard anything the user
+  /// may have typed into the prompt during the startup window.
+  private func autoLaunchAgentCommand() async {
+    isAutoLaunchingAgent = true
+    defer { isAutoLaunchingAgent = false }
+
+    let trimmedCommand = tab.command.trimmingCharacters(in: .whitespacesAndNewlines)
+
+    guard !trimmedCommand.isEmpty else {
+      return
+    }
+
+    guard let surface = await waitForRegisteredSurface() else {
+      return
+    }
+
+    await waitForPromptIdle(on: surface)
+
+    guard !Task.isCancelled else {
+      return
+    }
+
+    let parts = [trimmedCommand] + tab.arguments
+    let commandLine = parts.map(GhosttySurfaceView.shellEscape).joined(separator: " ")
+
+    _ = surface.injectControl(.ctrlU)
+    _ = surface.injectCommand(commandLine, submit: .execute)
+  }
+
+  /// Polls the registry until a surface is registered for this tab, or the
+  /// bounded timeout elapses. Returns `nil` if the surface never appears
+  /// (e.g., the tab was dismissed before becoming visible).
+  private func waitForRegisteredSurface() async -> InjectableSurface? {
+    let deadlineNs = AgentAutoLaunch.registryTimeoutNs
+    var elapsedNs: UInt64 = 0
+
+    while elapsedNs < deadlineNs {
+      if let surface = TerminalSurfaceRegistry.shared.surface(for: tab.id) {
+        return surface
+      }
+
+      try? await Task.sleep(nanoseconds: AgentAutoLaunch.registryPollNs)
+
+      guard !Task.isCancelled else {
+        return nil
+      }
+
+      elapsedNs += AgentAutoLaunch.registryPollNs
+    }
+
+    return TerminalSurfaceRegistry.shared.surface(for: tab.id)
+  }
+
+  /// Waits for the terminal to go quiet for at least `promptIdleNs`, using
+  /// Ghostty's render-dirty flag as a proxy for prompt readiness. Bounded
+  /// by `promptTimeoutNs` so a noisy shell (e.g., a login banner that
+  /// never stops updating) cannot strand the injection forever.
+  private func waitForPromptIdle(on surface: InjectableSurface) async {
+    let pollNs = AgentAutoLaunch.renderPollNs
+    let idleThresholdNs = AgentAutoLaunch.promptIdleNs
+    let deadlineNs = AgentAutoLaunch.promptTimeoutNs
+
+    var quietNs: UInt64 = 0
+    var elapsedNs: UInt64 = 0
+
+    surface.clearRenderDirty()
+
+    while elapsedNs < deadlineNs {
+      try? await Task.sleep(nanoseconds: pollNs)
+
+      guard !Task.isCancelled else {
+        return
+      }
+
+      elapsedNs += pollNs
+
+      if surface.hasNewRenderSinceLastRead {
+        surface.clearRenderDirty()
+        quietNs = 0
+        continue
+      }
+
+      quietNs += pollNs
+
+      if quietNs >= idleThresholdNs {
+        return
+      }
     }
   }
 }

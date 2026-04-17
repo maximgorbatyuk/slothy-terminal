@@ -28,7 +28,7 @@ struct StartupPageView: View {
 
   private var header: some View {
     HStack {
-      Text(splitDestination ? "New Session in Split View" : "Start New Session")
+      Text(splitDestination ? "New tab in split view" : "New tab")
         .font(.headline)
 
       Spacer()

@@ -2,6 +2,21 @@
 
 All notable changes to SlothyTerminal will be documented in this file.
 
+## [2026.3.3] - 2026-04-17
+
+### Fixed
+- **Agent tabs no longer freeze when the CLI exits.** Claude and OpenCode tabs previously spawned the CLI binary as the PTY's primary process; when the user exited the CLI (e.g. Ctrl+D in Claude), the PTY had no process left and the surface stopped responding to keystrokes. Agent tabs now launch under the default shell and the agent command is injected into that shell once the prompt is ready, so exiting the CLI returns the user to a usable shell prompt instead of a frozen view. (`SlothyTerminal/Views/TerminalContainerView.swift`)
+- **Prompt-readiness detection replaces fixed-delay injection.** The auto-launch flow now waits for the injection registry to register the surface and then polls Ghostty's render-dirty flag until the terminal is quiet for 150ms (bounded to 3s), so slow shell startups (Oh-My-Zsh, powerlevel10k, corporate dotfiles) no longer race the injector. A Ctrl+U is sent before the agent command to discard anything the user may have typed into the prompt during the startup window.
+- **Auto-launch is now one-shot per view lifetime.** A `didAutoLaunchAgent` guard prevents `.task` re-fires (triggered by tab reorder or workspace moves) from injecting the agent command a second time into an already-running agent.
+
+### Added
+- `AgentType.needsShellHost` — decouples "must run under a shell host" from `supportsInitialPrompt` (which still drives the prompt-picker in `FolderSelectorModal`). Currently true for `.claude` and `.opencode`.
+- `ControlSignal.ctrlU` (ASCII 21) — used to clear any user preamble in the shell line editor before injecting the agent command.
+- Startup status banner in agent tabs — a small "Starting <agent>…" overlay is shown while the flow waits for the shell prompt to settle.
+
+### Changed
+- **"Start New Session" modal renamed to "New tab"** (`SlothyTerminal/Views/StartupPageView.swift`). The split-view variant is now labelled "New tab in split view".
+
 ## [2026.3.2] - 2026-04-13
 
 ### Added

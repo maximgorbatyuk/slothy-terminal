@@ -21,10 +21,6 @@ struct MainView: View {
     @Bindable var appState = appState
 
     VStack(spacing: 0) {
-      TabBarView()
-        .padding(.horizontal, 8)
-        .padding(.top, 8)
-
       HStack(spacing: 0) {
         /// Sidebar on the left.
         if appState.isSidebarVisible && sidebarPosition == .left {
@@ -37,10 +33,17 @@ struct MainView: View {
           sidebarResizeHandle(totalWidth: containerWidth)
         }
 
-        /// Terminal container takes remaining space.
-        TerminalContainerView()
-          .frame(maxWidth: .infinity, maxHeight: .infinity)
-          .padding(8)
+        /// Tab bar + terminal share a single column so tabs align with the terminal, not the sidebar.
+        VStack(spacing: 0) {
+          TabBarView()
+            .padding(.horizontal, 8)
+            .padding(.top, 8)
+
+          TerminalContainerView()
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .padding(8)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
 
         /// Sidebar on the right.
         if appState.isSidebarVisible && sidebarPosition == .right {

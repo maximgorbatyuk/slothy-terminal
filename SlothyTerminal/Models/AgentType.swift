@@ -42,6 +42,21 @@ enum AgentType: String, CaseIterable, Identifiable, Codable {
     }
   }
 
+  /// Whether this agent must be launched under a shell host rather than as
+  /// the PTY's primary process.
+  ///
+  /// When the agent runs as the PTY primary and exits, the PTY has no
+  /// process left and the surface freezes. Hosting it under a shell keeps
+  /// the tab interactive — on exit, the user returns to a shell prompt.
+  var needsShellHost: Bool {
+    switch self {
+    case .terminal:
+      return false
+    case .claude, .opencode:
+      return true
+    }
+  }
+
   /// Description for the tab type.
   var description: String {
     switch self {
