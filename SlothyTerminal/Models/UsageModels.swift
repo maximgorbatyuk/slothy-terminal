@@ -5,6 +5,7 @@ enum UsageProvider: String, Codable, CaseIterable {
   case claude
   case codex
   case opencode
+  case cursor
 
   var displayName: String {
     switch self {
@@ -16,11 +17,14 @@ enum UsageProvider: String, Codable, CaseIterable {
 
     case .opencode:
       return "OpenCode"
+
+    case .cursor:
+      return "Cursor"
     }
   }
 
   /// Providers shown in the status bar usage area.
-  static let statusBarProviders: [UsageProvider] = [.claude, .codex]
+  static let statusBarProviders: [UsageProvider] = [.claude, .codex, .cursor]
 
   /// SF Symbol icon name for the usage display.
   var iconName: String {
@@ -33,6 +37,9 @@ enum UsageProvider: String, Codable, CaseIterable {
 
     case .opencode:
       return "chevron.left.forwardslash.chevron.right"
+
+    case .cursor:
+      return "cursorarrow.rays"
     }
   }
 }

@@ -28,6 +28,9 @@ struct SettingsView: View {
         case .prompts:
           PromptsSettingsTab()
 
+        case .usage:
+          UsageSettingsTab()
+
         case .licenses:
           LicensesSettingsTab()
         }
@@ -1055,6 +1058,133 @@ struct PromptEditorSheet: View {
         }
       }
     )
+  }
+}
+
+// MARK: - Usage Settings Tab
+
+struct UsageSettingsTab: View {
+  private var configManager = ConfigManager.shared
+  private var usageService = UsageService.shared
+
+  @State private var cursorJWTInput: String = ""
+  @State private var hasSavedCursorJWT: Bool = false
+  @State private var saveError: String?
+
+  var body: some View {
+    Form {
+      Section("Usage Tracking") {
+        Toggle("Enable usage tracking", isOn: Binding(
+          get: { configManager.config.usagePreferences.isEnabled },
+          set: { newValue in
+            configManager.config.usagePreferences.isEnabled = newValue
+            usageService.startIfEnabled()
+          }
+        ))
+
+        Text("When enabled, SlothyTerminal periodically fetches usage and rate-limit data for connected providers and shows them in the status bar.")
+          .font(.caption)
+          .foregroundColor(.secondary)
+      }
+
+      Section("Cursor") {
+        HStack {
+          Image(systemName: hasSavedCursorJWT ? "checkmark.circle.fill" : "exclamationmark.circle")
+            .foregroundColor(hasSavedCursorJWT ? .green : .secondary)
+
+          Text(hasSavedCursorJWT ? "Cursor session token saved" : "No Cursor token saved")
+            .font(.system(size: 12))
+
+          Spacer()
+
+          if hasSavedCursorJWT {
+            Button("Clear") {
+              clearCursorJWT()
+            }
+            .buttonStyle(.borderless)
+          }
+        }
+
+        VStack(alignment: .leading, spacing: 6) {
+          Text("Session JWT")
+            .font(.system(size: 11, weight: .semibold))
+            .foregroundColor(.secondary)
+
+          SecureField("Paste your Cursor session token", text: $cursorJWTInput)
+            .textFieldStyle(.roundedBorder)
+            .font(.system(size: 11, design: .monospaced))
+
+          HStack {
+            Button("Save Token") {
+              saveCursorJWT()
+            }
+            .disabled(cursorJWTInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+
+            if let saveError {
+              Text(saveError)
+                .font(.caption)
+                .foregroundColor(.red)
+            }
+          }
+        }
+
+        VStack(alignment: .leading, spacing: 4) {
+          Text("How to find your token")
+            .font(.system(size: 11, weight: .semibold))
+            .foregroundColor(.secondary)
+
+          Text("Open cursor.com in a browser while signed in, open DevTools → Application → Cookies, copy the value of `WorkosCursorSessionToken`, and paste the part after `::` (the JWT) above.")
+            .font(.caption)
+            .foregroundColor(.secondary)
+            .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(.top, 4)
+      }
+    }
+    .formStyle(.grouped)
+    .scrollContentBackground(.hidden)
+    .padding()
+    .background(appBackgroundColor)
+    .onAppear {
+      hasSavedCursorJWT = UsageKeychainStore.loadString(
+        provider: .cursor,
+        sourceKind: .apiKey
+      ) != nil
+    }
+  }
+
+  private func saveCursorJWT() {
+    let trimmed = cursorJWTInput.trimmingCharacters(in: .whitespacesAndNewlines)
+
+    guard !trimmed.isEmpty else {
+      return
+    }
+
+    let saved = UsageKeychainStore.saveString(
+      trimmed,
+      provider: .cursor,
+      sourceKind: .apiKey
+    )
+
+    if saved {
+      saveError = nil
+      hasSavedCursorJWT = true
+      cursorJWTInput = ""
+      Task {
+        await usageService.resolveAuthSources()
+        await usageService.fetch(provider: .cursor)
+      }
+    } else {
+      saveError = "Failed to save token to Keychain."
+    }
+  }
+
+  private func clearCursorJWT() {
+    UsageKeychainStore.delete(provider: .cursor, sourceKind: .apiKey)
+    hasSavedCursorJWT = false
+    cursorJWTInput = ""
+    saveError = nil
+    usageService.clearProvider(.cursor)
   }
 }
 

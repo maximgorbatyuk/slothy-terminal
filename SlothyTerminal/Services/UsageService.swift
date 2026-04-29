@@ -229,6 +229,8 @@ class UsageService {
       resolvedSources[.opencode] = resolveOpenCodeAuth()
     }
 
+    resolvedSources[.cursor] = resolveCursorAuth()
+
     for provider in UsageProvider.statusBarProviders {
       if let source = resolvedSources[provider] {
         Logger.usage.info(
@@ -333,6 +335,24 @@ class UsageService {
     return nil
   }
 
+  /// Resolves Cursor auth.
+  /// Cursor's public site doesn't expose a usage API; we use the same
+  /// session JWT that cursor.com sets as the `WorkosCursorSessionToken`
+  /// cookie. The user pastes that JWT into Settings → Usage; we store it
+  /// in the Keychain.
+  func resolveCursorAuth() -> UsageAuthSource? {
+    guard UsageKeychainStore.loadString(provider: .cursor, sourceKind: .apiKey) != nil else {
+      return nil
+    }
+
+    return UsageAuthSource(
+      provider: .cursor,
+      kind: .apiKey,
+      label: "Session token",
+      detail: "Cursor JWT from Keychain"
+    )
+  }
+
   /// Resolves OpenCode auth.
   /// No stable public usage API exists — always experimental.
   func resolveOpenCodeAuth() -> UsageAuthSource? {
@@ -373,7 +393,28 @@ class UsageService {
 
     case .opencode:
       return try await fetchOpenCodeUsage(source: source)
+
+    case .cursor:
+      return try await fetchCursorUsage(source: source)
     }
+  }
+
+  // MARK: - Cursor Fetching
+
+  private func fetchCursorUsage(source: UsageAuthSource) async throws -> UsageSnapshot {
+    guard source.kind == .apiKey else {
+      throw UsageFetchError.unsupportedSource
+    }
+
+    guard let jwt = UsageKeychainStore.loadString(
+      provider: .cursor,
+      sourceKind: .apiKey
+    ) else {
+      Logger.usage.error("[cursor] No JWT found in Keychain")
+      throw UsageFetchError.noCredentials
+    }
+
+    return try await CursorUsageProvider.fetchUsage(jwt: jwt)
   }
 
   // MARK: - Claude Fetching
