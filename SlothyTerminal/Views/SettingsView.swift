@@ -1069,7 +1069,9 @@ struct UsageSettingsTab: View {
 
   @State private var cursorJWTInput: String = ""
   @State private var hasSavedCursorJWT: Bool = false
+  @State private var cursorAutoDetected: Bool = false
   @State private var saveError: String?
+  @State private var showManualOverride: Bool = false
 
   var body: some View {
     Form {
@@ -1088,57 +1090,60 @@ struct UsageSettingsTab: View {
       }
 
       Section("Cursor") {
-        HStack {
-          Image(systemName: hasSavedCursorJWT ? "checkmark.circle.fill" : "exclamationmark.circle")
-            .foregroundColor(hasSavedCursorJWT ? .green : .secondary)
+        HStack(alignment: .top, spacing: 8) {
+          Image(systemName: cursorStatusIcon)
+            .foregroundColor(cursorStatusColor)
 
-          Text(hasSavedCursorJWT ? "Cursor session token saved" : "No Cursor token saved")
-            .font(.system(size: 12))
+          VStack(alignment: .leading, spacing: 2) {
+            Text(cursorStatusHeadline)
+              .font(.system(size: 12, weight: .medium))
+
+            Text(cursorStatusDetail)
+              .font(.caption)
+              .foregroundColor(.secondary)
+              .fixedSize(horizontal: false, vertical: true)
+          }
 
           Spacer()
-
-          if hasSavedCursorJWT {
-            Button("Clear") {
-              clearCursorJWT()
-            }
-            .buttonStyle(.borderless)
-          }
         }
 
-        VStack(alignment: .leading, spacing: 6) {
-          Text("Session JWT")
+        DisclosureGroup(isExpanded: $showManualOverride) {
+          VStack(alignment: .leading, spacing: 8) {
+            Text("Use this only when Cursor.app isn't installed or auto-detect isn't working. Open cursor.com signed in, copy the `WorkosCursorSessionToken` cookie, and paste the part after `::` below.")
+              .font(.caption)
+              .foregroundColor(.secondary)
+              .fixedSize(horizontal: false, vertical: true)
+
+            SecureField("Cursor session JWT", text: $cursorJWTInput)
+              .textFieldStyle(.roundedBorder)
+              .font(.system(size: 11, design: .monospaced))
+
+            HStack {
+              Button("Save Token") {
+                saveCursorJWT()
+              }
+              .disabled(cursorJWTInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+
+              if hasSavedCursorJWT {
+                Button("Clear Saved Token") {
+                  clearCursorJWT()
+                }
+                .buttonStyle(.borderless)
+              }
+
+              if let saveError {
+                Text(saveError)
+                  .font(.caption)
+                  .foregroundColor(.red)
+              }
+            }
+          }
+          .padding(.top, 4)
+        } label: {
+          Text("Manual override")
             .font(.system(size: 11, weight: .semibold))
             .foregroundColor(.secondary)
-
-          SecureField("Paste your Cursor session token", text: $cursorJWTInput)
-            .textFieldStyle(.roundedBorder)
-            .font(.system(size: 11, design: .monospaced))
-
-          HStack {
-            Button("Save Token") {
-              saveCursorJWT()
-            }
-            .disabled(cursorJWTInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-
-            if let saveError {
-              Text(saveError)
-                .font(.caption)
-                .foregroundColor(.red)
-            }
-          }
         }
-
-        VStack(alignment: .leading, spacing: 4) {
-          Text("How to find your token")
-            .font(.system(size: 11, weight: .semibold))
-            .foregroundColor(.secondary)
-
-          Text("Open cursor.com in a browser while signed in, open DevTools → Application → Cookies, copy the value of `WorkosCursorSessionToken`, and paste the part after `::` (the JWT) above.")
-            .font(.caption)
-            .foregroundColor(.secondary)
-            .fixedSize(horizontal: false, vertical: true)
-        }
-        .padding(.top, 4)
       }
     }
     .formStyle(.grouped)
@@ -1146,11 +1151,68 @@ struct UsageSettingsTab: View {
     .padding()
     .background(appBackgroundColor)
     .onAppear {
-      hasSavedCursorJWT = UsageKeychainStore.loadString(
-        provider: .cursor,
-        sourceKind: .apiKey
-      ) != nil
+      refreshCursorState()
     }
+  }
+
+  // MARK: - Cursor Status
+
+  private var cursorStatusIcon: String {
+    if cursorAutoDetected {
+      return "checkmark.circle.fill"
+    }
+
+    if hasSavedCursorJWT {
+      return "checkmark.circle"
+    }
+
+    return "exclamationmark.circle"
+  }
+
+  private var cursorStatusColor: Color {
+    if cursorAutoDetected {
+      return .green
+    }
+
+    if hasSavedCursorJWT {
+      return .blue
+    }
+
+    return .secondary
+  }
+
+  private var cursorStatusHeadline: String {
+    if cursorAutoDetected {
+      return "Auto-detected from Cursor.app"
+    }
+
+    if hasSavedCursorJWT {
+      return "Using manually-pasted token"
+    }
+
+    return "Cursor not connected"
+  }
+
+  private var cursorStatusDetail: String {
+    if cursorAutoDetected {
+      return "Reading the session token directly from Cursor's local state. Refreshes automatically when Cursor rotates the token."
+    }
+
+    if hasSavedCursorJWT {
+      return "Cursor.app isn't installed or its state file isn't readable, so SlothyTerminal is using the JWT you pasted. Install Cursor.app to switch to auto-detect."
+    }
+
+    return "Install Cursor.app and sign in, or expand Manual override to paste a session token."
+  }
+
+  // MARK: - Actions
+
+  private func refreshCursorState() {
+    cursorAutoDetected = CursorUsageProvider.canReadStateDB()
+    hasSavedCursorJWT = UsageKeychainStore.loadString(
+      provider: .cursor,
+      sourceKind: .apiKey
+    ) != nil
   }
 
   private func saveCursorJWT() {

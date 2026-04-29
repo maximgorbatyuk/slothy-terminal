@@ -1,15 +1,29 @@
 import Foundation
 import OSLog
+import SQLite3
 
 /// Fetches Cursor usage from the undocumented `cursor.com/api/usage` endpoint.
 ///
-/// Auth model: user pastes their Cursor session JWT (the second half of the
-/// `WorkosCursorSessionToken` cookie set by cursor.com) into Settings, where
-/// it's stored in the macOS Keychain via `UsageKeychainStore`. The JWT's
-/// `sub` claim supplies the user ID required by the endpoint.
+/// Auth model (in priority order):
+///   1. Auto-detect — read the JWT directly from Cursor.app's own SQLite state
+///      database at `~/Library/Application Support/Cursor/User/globalStorage/state.vscdb`,
+///      row `cursorAuth/accessToken`. No user setup needed; refreshes whenever
+///      Cursor rotates the token.
+///   2. Manual paste — user pastes the JWT (the second half of the
+///      `WorkosCursorSessionToken` cookie) into Settings; stored in the macOS
+///      Keychain via `UsageKeychainStore`. Used when Cursor.app is not
+///      installed or the state DB can't be read.
+///
+/// In both modes the JWT's `sub` claim supplies the user ID for the endpoint.
 enum CursorUsageProvider {
   private static let usageEndpoint = "https://www.cursor.com/api/usage"
   private static let requestTimeout: TimeInterval = 10
+
+  /// Default location of Cursor.app's state database.
+  static let defaultStateDBPath: String = {
+    let home = FileManager.default.homeDirectoryForCurrentUser.path
+    return "\(home)/Library/Application Support/Cursor/User/globalStorage/state.vscdb"
+  }()
 
   /// JWTs are base64url segments separated by dots — `[A-Za-z0-9_.-]`.
   /// The userID `sub` claim is opaque but in practice fits the same set;
@@ -22,8 +36,14 @@ enum CursorUsageProvider {
     return set
   }()
 
-  /// Fetches a usage snapshot using the provided session JWT.
-  static func fetchUsage(jwt: String) async throws -> UsageSnapshot {
+  /// Fetches a usage snapshot using the provided session JWT. The source kind
+  /// and label are stamped onto the resulting snapshot so the popover badge
+  /// reflects whether this came from the Cursor app or a manual paste.
+  static func fetchUsage(
+    jwt: String,
+    sourceKind: UsageSourceKind = .apiKey,
+    sourceLabel: String = "Session token"
+  ) async throws -> UsageSnapshot {
     let trimmed = jwt.trimmingCharacters(in: .whitespacesAndNewlines)
 
     guard !trimmed.isEmpty else {
@@ -57,7 +77,12 @@ enum CursorUsageProvider {
       throw UsageFetchError.httpError(statusCode)
     }
 
-    return parseUsageResponse(data: data, userID: userID)
+    return parseUsageResponse(
+      data: data,
+      userID: userID,
+      sourceKind: sourceKind,
+      sourceLabel: sourceLabel
+    )
   }
 
   // MARK: - HTTP
@@ -158,13 +183,21 @@ enum CursorUsageProvider {
   /// object — both shapes are handled.
   nonisolated static func parseUsageResponse(
     data: Data,
-    userID: String
+    userID: String,
+    sourceKind: UsageSourceKind = .apiKey,
+    sourceLabel: String = "Session token"
   ) -> UsageSnapshot {
     let now = Date()
 
     guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
       Logger.usage.error("[cursor] Failed to parse usage response JSON")
-      return failureSnapshot(message: "Parse error", userID: userID, fetchedAt: now)
+      return failureSnapshot(
+        message: "Parse error",
+        userID: userID,
+        fetchedAt: now,
+        sourceKind: sourceKind,
+        sourceLabel: sourceLabel
+      )
     }
 
     let startOfMonth = json["startOfMonth"] as? String
@@ -177,7 +210,13 @@ enum CursorUsageProvider {
     /// Surface that as a parse failure so the user/operator notices.
     if startOfMonth == nil && modelEntries.isEmpty {
       Logger.usage.error("[cursor] Response missing both startOfMonth and model entries — schema changed?")
-      return failureSnapshot(message: "Parse error", userID: userID, fetchedAt: now)
+      return failureSnapshot(
+        message: "Parse error",
+        userID: userID,
+        fetchedAt: now,
+        sourceKind: sourceKind,
+        sourceLabel: sourceLabel
+      )
     }
 
     var totalRequests = 0
@@ -237,8 +276,8 @@ enum CursorUsageProvider {
 
     return UsageSnapshot(
       provider: .cursor,
-      sourceKind: .apiKey,
-      sourceLabel: "Session token",
+      sourceKind: sourceKind,
+      sourceLabel: sourceLabel,
       account: userID,
       quotaWindow: UsageQuotaWindow(name: "Monthly", resetLabel: resetLabel),
       used: usedString,
@@ -304,12 +343,14 @@ enum CursorUsageProvider {
   nonisolated private static func failureSnapshot(
     message: String,
     userID: String,
-    fetchedAt: Date
+    fetchedAt: Date,
+    sourceKind: UsageSourceKind,
+    sourceLabel: String
   ) -> UsageSnapshot {
     UsageSnapshot(
       provider: .cursor,
-      sourceKind: .apiKey,
-      sourceLabel: "Session token",
+      sourceKind: sourceKind,
+      sourceLabel: sourceLabel,
       account: userID,
       quotaWindow: nil,
       used: message,
@@ -319,5 +360,71 @@ enum CursorUsageProvider {
       metrics: [],
       fetchedAt: fetchedAt
     )
+  }
+
+  // MARK: - Cursor State DB (auto-detect)
+
+  /// Returns true when Cursor.app's state DB is present at its default path.
+  /// A cheap, prompt-free probe used by `UsageService.resolveCursorAuth` to
+  /// decide between auto-detect and manual-paste paths.
+  nonisolated static func canReadStateDB(
+    path: String = defaultStateDBPath
+  ) -> Bool {
+    FileManager.default.fileExists(atPath: path)
+  }
+
+  /// Reads the current Cursor session JWT from Cursor.app's state DB.
+  /// Throws `UsageFetchError.noCredentials` when the file is missing, locked,
+  /// or doesn't contain the `cursorAuth/accessToken` row. The DB is opened
+  /// read-only with no journal mutations so it's safe alongside a running
+  /// Cursor instance — but Cursor can briefly hold an exclusive lock during
+  /// writes, in which case the caller's cache fallback covers the gap.
+  nonisolated static func readJWTFromCursorState(
+    path: String = defaultStateDBPath
+  ) throws -> String {
+    guard FileManager.default.fileExists(atPath: path) else {
+      Logger.usage.info("[cursor] State DB not found at \(path) — Cursor.app likely not installed")
+      throw UsageFetchError.noCredentials
+    }
+
+    var db: OpaquePointer?
+    let openFlags = SQLITE_OPEN_READONLY | SQLITE_OPEN_NOMUTEX
+
+    guard sqlite3_open_v2(path, &db, openFlags, nil) == SQLITE_OK else {
+      let message = db.flatMap { String(cString: sqlite3_errmsg($0)) } ?? "unknown"
+      sqlite3_close(db)
+      Logger.usage.error("[cursor] sqlite3_open_v2 failed: \(message)")
+      throw UsageFetchError.noCredentials
+    }
+
+    defer { sqlite3_close(db) }
+
+    var stmt: OpaquePointer?
+    let query = "SELECT value FROM ItemTable WHERE key = 'cursorAuth/accessToken' LIMIT 1"
+
+    guard sqlite3_prepare_v2(db, query, -1, &stmt, nil) == SQLITE_OK else {
+      Logger.usage.error("[cursor] sqlite3_prepare_v2 failed — schema change in state.vscdb?")
+      throw UsageFetchError.noCredentials
+    }
+
+    defer { sqlite3_finalize(stmt) }
+
+    guard sqlite3_step(stmt) == SQLITE_ROW else {
+      Logger.usage.warning("[cursor] cursorAuth/accessToken row not found — user likely not signed in to Cursor.app")
+      throw UsageFetchError.noCredentials
+    }
+
+    guard let cString = sqlite3_column_text(stmt, 0) else {
+      Logger.usage.error("[cursor] cursorAuth/accessToken row is NULL")
+      throw UsageFetchError.noCredentials
+    }
+
+    let token = String(cString: cString).trimmingCharacters(in: .whitespacesAndNewlines)
+
+    guard !token.isEmpty else {
+      throw UsageFetchError.noCredentials
+    }
+
+    return token
   }
 }
