@@ -267,35 +267,18 @@ Update appcast.xml with build number, Sparkle signature, and file size."
   echo "Committed release changes."
 fi
 
-# ── Step 7: Create GitHub release & upload DMG ────────────────────
+# ── Step 7: Push & merge to main ──────────────────────────────────
+#
+# NOTE: This must run BEFORE `gh release create` (Step 8). When `gh release
+# create TAG` is invoked without `--target` and the tag doesn't exist yet,
+# GitHub creates it against the latest state of the default branch (main)
+# on the server. If we push/merge afterwards, the tag ends up pointing at
+# the previous release's bump commit instead of the new one. Pushing first
+# (and passing `--target main` below) makes the tag land on the right SHA.
 
 echo ""
 echo "==========================================="
-echo "  Step 7: GitHub Release"
-echo "==========================================="
-echo ""
-
-## Check if release already exists.
-if gh release view "$TAG" &>/dev/null; then
-  echo "Release $TAG already exists. Uploading DMG to existing release..."
-  gh release upload "$TAG" "$DMG_PATH" --clobber
-else
-  echo "Creating release $TAG..."
-  gh release create "$TAG" \
-    "$DMG_PATH" \
-    --title "SlothyTerminal $VERSION" \
-    --notes "$RELEASE_NOTES"
-fi
-
-RELEASE_URL=$(gh release view "$TAG" --json url -q '.url')
-echo ""
-echo "Release published: $RELEASE_URL"
-
-# ── Step 8: Push & merge to main ──────────────────────────────────
-
-echo ""
-echo "==========================================="
-echo "  Step 8: Push & Merge to Main"
+echo "  Step 7: Push & Merge to Main"
 echo "==========================================="
 echo ""
 
@@ -318,6 +301,31 @@ if [ "$BRANCH" != "main" ]; then
   git checkout "$BRANCH"
   echo "Switched back to $BRANCH"
 fi
+
+# ── Step 8: Create GitHub release & upload DMG ────────────────────
+
+echo ""
+echo "==========================================="
+echo "  Step 8: GitHub Release"
+echo "==========================================="
+echo ""
+
+## Check if release already exists.
+if gh release view "$TAG" &>/dev/null; then
+  echo "Release $TAG already exists. Uploading DMG to existing release..."
+  gh release upload "$TAG" "$DMG_PATH" --clobber
+else
+  echo "Creating release $TAG (tagging origin/main HEAD)..."
+  gh release create "$TAG" \
+    "$DMG_PATH" \
+    --target main \
+    --title "SlothyTerminal $VERSION" \
+    --notes "$RELEASE_NOTES"
+fi
+
+RELEASE_URL=$(gh release view "$TAG" --json url -q '.url')
+echo ""
+echo "Release published: $RELEASE_URL"
 
 # ── Done ──────────────────────────────────────────────────────────
 

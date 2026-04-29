@@ -2,6 +2,14 @@
 
 All notable changes to SlothyTerminal will be documented in this file.
 
+## [2026.3.6] - 2026-04-29
+
+### Fixed
+- **Release tags now point to the correct commit.** `scripts/release.sh` previously invoked `gh release create $TAG` *before* pushing `develop` and merging into `main`. With no `--target` flag, `gh release create` asks GitHub to create the tag against the latest state of the default branch on the server — and at that moment `main` still pointed at the *previous* release's `chore: release X-1` commit. Net effect: every tag from `v2026.3.1` through `v2026.3.5` is offset, pointing at the bump commit for the previous version. Sparkle and the GitHub Releases UI were unaffected (the DMG is uploaded explicitly and read via `appcast.xml`), but `git checkout v2026.3.5` got you 2026.3.4 source. Fix: reordered the script so push/merge to `main` happens *before* the GitHub release is created, and added `--target main` to `gh release create` so the tag is bound explicitly to the freshly-pushed `main` HEAD. (`scripts/release.sh:270-326`)
+
+### Notes
+- This fix is forward-only: tags `v2026.3.1` through `v2026.3.5` remain bound to the wrong commits in the GitHub repository. They can be retagged manually if needed (`git tag -f vX <sha> && git push origin :refs/tags/vX && git push origin vX`), but doing so isn't required for Sparkle auto-update — only for source-checkout consumers.
+
 ## [2026.3.5] - 2026-04-29
 
 ### Changed
