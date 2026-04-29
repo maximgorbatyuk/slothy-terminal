@@ -2,6 +2,26 @@
 
 All notable changes to SlothyTerminal will be documented in this file.
 
+## [2026.3.4] - 2026-04-29
+
+### Added
+- **Cursor usage tracking in the menubar.** A new "Usage" section in Settings accepts a Cursor session JWT (the second half of the `WorkosCursorSessionToken` cookie set by cursor.com). The token is stored in the macOS Keychain via `UsageKeychainStore`, and the menubar usage strip polls `https://www.cursor.com/api/usage` for monthly request counts and reset dates. JWT decoding is pure Foundation — the `sub` claim supplies the user ID required by the endpoint and is validated against an RFC 6265 cookie-octet character set before being placed in the `Cookie` header verbatim. (`SlothyTerminal/Services/CursorUsageProvider.swift`, `SlothyTerminal/Services/UsageService.swift`)
+- **`SettingsSection.usage`** — new Settings tab housing the master usage-tracking toggle and per-provider configuration. Currently surfaces the Cursor JWT paste flow with Save / Clear actions and a saved-state indicator. (`SlothyTerminal/Models/SettingsSection.swift`, `SlothyTerminal/Views/SettingsView.swift`)
+- **`UsageProvider.cursor`** case + `statusBarProviders` entry, with `displayName` "Cursor" and SF Symbol `cursorarrow.rays`. (`SlothyTerminal/Models/UsageModels.swift`)
+
+### Changed
+- **Claude umbrella usage windows now prefix-merge across model-suffixed variants.** The Anthropic OAuth response is evolving to include keys like `seven_day_sonnet_4_5`, `seven_day_opus_4_1`, etc. `mergedClaudeWindow(_:baseKey:)` returns the API's exact `seven_day` / `five_hour` value when present (authoritative aggregate), and falls back to merging `baseKey_*` siblings (max utilization, earliest reset) when no exact key exists. New per-model variants surface in the popover automatically without code changes. (`SlothyTerminal/Services/UsageService.swift`)
+- **Claude usage now survives transient API failures.** A new `UserDefaults`-backed metric cache stores `(utilization, resetsAt)` for the `five_hour` and `seven_day` windows. `parseClaudeOAuthUsageResponse` prefers a cached non-zero value over a fresh 0% when the reset boundary hasn't moved (idle-session API gap), and `fetchClaudeUsageViaOAuth` falls back to `cachedClaudeSnapshot` (with a "Cached (offline)" badge in the popover) on network errors and 5xx responses. 401 still clears the OAuth-token cache and surfaces `.tokenExpired` for explicit user renewal — unchanged. Cache entries auto-expire once their `resetsAt` elapses; writes without a reset boundary are refused so the cache can never pin a value indefinitely. `clearProvider(.claude)` and `clearAll()` wipe the metric cache alongside the OAuth-token cache. (`SlothyTerminal/Services/UsageService.swift`)
+- **Status-bar usage strip hides both `.idle` and `.unavailable` providers** instead of just `.idle`. Keeps the menubar clean when a provider enum case exists but no auth source is configured (e.g., no Cursor JWT saved). (`SlothyTerminal/Views/StatusBarUsageView.swift`)
+
+### Removed
+- `formatISO8601ResetTime` helper in `UsageService` — superseded by the new `parseClaudeISO8601` + existing `formatResetDate` pipeline used by the merge/cache code.
+
+### Security
+- **Cookie-header injection guards.** `CursorUsageProvider.isHeaderSafe(_:)` validates JWTs and the decoded user-ID against `[A-Za-z0-9._-]` (RFC 6265 cookie-octet range) before placement in the `Cookie` header. This eliminates the need for percent-encoding — which would corrupt cookie values in transit — while preventing CR/LF/null-byte injection. (`SlothyTerminal/Services/CursorUsageProvider.swift`)
+- **Proper URL query encoding.** Cursor user IDs are passed via `URLComponents` + `URLQueryItem` rather than string concatenation, so any characters outside the validated charset would be encoded correctly instead of silently corrupting the request URL.
+- **Fail-loud Cursor response parsing.** `parseUsageResponse` returns a "Parse error" snapshot when the response is missing both `startOfMonth` and any model entries, surfacing schema breakage instead of silently presenting zero usage.
+
 ## [2026.3.3] - 2026-04-17
 
 ### Fixed

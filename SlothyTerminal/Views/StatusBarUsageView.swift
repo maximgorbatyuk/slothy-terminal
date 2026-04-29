@@ -7,11 +7,13 @@ struct StatusBarUsageBars: View {
 
   @State private var isPopoverPresented = false
 
-  /// Providers that have a non-idle status.
+  /// Providers that have a non-idle, non-unavailable status.
+  /// Hiding `.unavailable` keeps the menubar clean for users who haven't
+  /// connected a given provider (e.g., no Cursor JWT saved).
   private var activeProviders: [UsageProvider] {
     UsageProvider.statusBarProviders.filter { provider in
       switch usageService.status(for: provider) {
-      case .idle:
+      case .idle, .unavailable:
         return false
 
       default:

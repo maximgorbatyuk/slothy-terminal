@@ -57,6 +57,7 @@ let package = Package(
         "Services/ANSIStripper.swift",
         "Services/UsageKeychainStore.swift",
         "Services/UsageService.swift",
+        "Services/CursorUsageProvider.swift",
         "Models/AgentType.swift",
         "Models/GitDiffModels.swift",
         "Models/GitWorkingTreeModels.swift",

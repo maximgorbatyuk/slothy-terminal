@@ -198,6 +198,7 @@ class UsageService {
 
     if provider == .claude {
       Self.clearCachedClaudeOAuth()
+      Self.clearAllCachedClaudeWindows()
     }
   }
 
@@ -209,6 +210,7 @@ class UsageService {
     resolvedSources.removeAll()
     UsageKeychainStore.deleteAll()
     Self.clearCachedClaudeOAuth()
+    Self.clearAllCachedClaudeWindows()
   }
 
   // MARK: - Auth Resolution
@@ -228,6 +230,8 @@ class UsageService {
     if prefs.enableExperimentalSources {
       resolvedSources[.opencode] = resolveOpenCodeAuth()
     }
+
+    resolvedSources[.cursor] = resolveCursorAuth()
 
     for provider in UsageProvider.statusBarProviders {
       if let source = resolvedSources[provider] {
@@ -333,6 +337,24 @@ class UsageService {
     return nil
   }
 
+  /// Resolves Cursor auth.
+  /// Cursor's public site doesn't expose a usage API; we use the same
+  /// session JWT that cursor.com sets as the `WorkosCursorSessionToken`
+  /// cookie. The user pastes that JWT into Settings → Usage; we store it
+  /// in the Keychain.
+  func resolveCursorAuth() -> UsageAuthSource? {
+    guard UsageKeychainStore.loadString(provider: .cursor, sourceKind: .apiKey) != nil else {
+      return nil
+    }
+
+    return UsageAuthSource(
+      provider: .cursor,
+      kind: .apiKey,
+      label: "Session token",
+      detail: "Cursor JWT from Keychain"
+    )
+  }
+
   /// Resolves OpenCode auth.
   /// No stable public usage API exists — always experimental.
   func resolveOpenCodeAuth() -> UsageAuthSource? {
@@ -373,7 +395,28 @@ class UsageService {
 
     case .opencode:
       return try await fetchOpenCodeUsage(source: source)
+
+    case .cursor:
+      return try await fetchCursorUsage(source: source)
     }
+  }
+
+  // MARK: - Cursor Fetching
+
+  private func fetchCursorUsage(source: UsageAuthSource) async throws -> UsageSnapshot {
+    guard source.kind == .apiKey else {
+      throw UsageFetchError.unsupportedSource
+    }
+
+    guard let jwt = UsageKeychainStore.loadString(
+      provider: .cursor,
+      sourceKind: .apiKey
+    ) else {
+      Logger.usage.error("[cursor] No JWT found in Keychain")
+      throw UsageFetchError.noCredentials
+    }
+
+    return try await CursorUsageProvider.fetchUsage(jwt: jwt)
   }
 
   // MARK: - Claude Fetching
@@ -553,6 +596,8 @@ class UsageService {
   /// Fetches usage via the Claude Code OAuth token from Keychain.
   /// Calls https://api.anthropic.com/api/oauth/usage for session/weekly limits.
   /// On 401, clears the cached token and throws `.tokenExpired` for manual renewal.
+  /// On other transient failures (network, 5xx), falls back to cached metric values
+  /// when their reset window hasn't elapsed.
   private func fetchClaudeUsageViaOAuth() async throws -> UsageSnapshot {
     let maybeCreds = await Task.detached {
       Self.readClaudeCodeKeychainToken()
@@ -563,25 +608,42 @@ class UsageService {
       throw UsageFetchError.noCredentials
     }
 
-    let (statusCode, data) = try await performClaudeOAuthRequest(creds: creds)
+    do {
+      let (statusCode, data) = try await performClaudeOAuthRequest(creds: creds)
 
-    if statusCode == 401 {
-      Logger.usage.warning("[claude] Got 401 — token expired or revoked, requiring manual renewal")
-      Self.clearCachedClaudeOAuth()
+      if statusCode == 401 {
+        Logger.usage.warning("[claude] Got 401 — token expired or revoked, requiring manual renewal")
+        Self.clearCachedClaudeOAuth()
+        throw UsageFetchError.tokenExpired
+      }
+
+      guard statusCode == 200 else {
+        let body = Self.responseBodyPreview(data)
+        Logger.usage.error("[claude] OAuth usage failed HTTP \(statusCode): \(body)")
+        throw UsageFetchError.httpError(statusCode)
+      }
+
+      return Self.parseClaudeOAuthUsageResponse(
+        data: data,
+        subscriptionType: creds.subscriptionType,
+        rateLimitTier: creds.rateLimitTier
+      )
+    } catch UsageFetchError.tokenExpired {
       throw UsageFetchError.tokenExpired
-    }
+    } catch is CancellationError {
+      throw CancellationError()
+    } catch {
+      if let cached = Self.cachedClaudeSnapshot(
+        subscriptionType: creds.subscriptionType
+      ) {
+        Logger.usage.info(
+          "[claude] Using cached metrics after error: \(error.localizedDescription)"
+        )
+        return cached
+      }
 
-    guard statusCode == 200 else {
-      let body = Self.responseBodyPreview(data)
-      Logger.usage.error("[claude] OAuth usage failed HTTP \(statusCode): \(body)")
-      throw UsageFetchError.httpError(statusCode)
+      throw error
     }
-
-    return Self.parseClaudeOAuthUsageResponse(
-      data: data,
-      subscriptionType: creds.subscriptionType,
-      rateLimitTier: creds.rateLimitTier
-    )
   }
 
   /// Performs the HTTP request to the Claude OAuth usage endpoint.
@@ -619,13 +681,318 @@ class UsageService {
     return (httpResponse.statusCode, data)
   }
 
+  // MARK: - Claude Window Merging
+
+  /// A merged view of one or more Claude usage windows that share a base key.
+  /// When the API publishes the exact baseKey (e.g., `seven_day`), that value
+  /// is authoritative and used as-is. Only when no exact key exists do we
+  /// fall back to merging baseKey_* siblings (max utilization, earliest reset)
+  /// — useful for per-model groupings like `seven_day_sonnet_*` revisions.
+  nonisolated struct ClaudeWindow {
+    let utilization: Double
+    let resetsAt: Date?
+  }
+
+  /// Returns the authoritative window for `baseKey`. Prefers an exact-key match
+  /// when present (the API's own aggregate); otherwise merges `baseKey_*`
+  /// siblings so model-suffixed variants surface without code changes.
+  nonisolated static func mergedClaudeWindow(
+    _ json: [String: Any],
+    baseKey: String
+  ) -> ClaudeWindow? {
+    // Exact match is always authoritative — don't merge siblings on top of it.
+    if let exact = json[baseKey] as? [String: Any] {
+      let util = normalizeUtilization(exact["utilization"] as? Double ?? 0)
+      let resetsAt = (exact["resets_at"] as? String).flatMap { parseClaudeISO8601($0) }
+      return ClaudeWindow(utilization: util, resetsAt: resetsAt)
+    }
+
+    let prefix = "\(baseKey)_"
+    var maxUtil: Double = 0
+    var earliestReset: Date? = nil
+    var foundAny = false
+
+    for (key, value) in json {
+      guard key.hasPrefix(prefix),
+            let dict = value as? [String: Any]
+      else {
+        continue
+      }
+
+      foundAny = true
+      let util = normalizeUtilization(dict["utilization"] as? Double ?? 0)
+
+      if util > maxUtil {
+        maxUtil = util
+      }
+
+      if let raw = dict["resets_at"] as? String,
+         let date = parseClaudeISO8601(raw)
+      {
+        if let current = earliestReset {
+          if date < current {
+            earliestReset = date
+          }
+        } else {
+          earliestReset = date
+        }
+      }
+    }
+
+    guard foundAny else {
+      return nil
+    }
+
+    return ClaudeWindow(utilization: maxUtil, resetsAt: earliestReset)
+  }
+
+  nonisolated private static func parseClaudeISO8601(_ raw: String) -> Date? {
+    let formatter = ISO8601DateFormatter()
+    formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+
+    if let date = formatter.date(from: raw) {
+      return date
+    }
+
+    formatter.formatOptions = [.withInternetDateTime]
+    return formatter.date(from: raw)
+  }
+
+  // MARK: - Claude Metric Cache (UserDefaults)
+
+  /// UserDefaults key prefix for cached per-window utilization & reset.
+  /// Cache is consulted when (a) a fresh response says 0% before reset
+  /// (idle-session API gap), and (b) the API call itself fails transiently.
+  nonisolated private static let claudeMetricCachePrefix = "claudeUsageCache."
+
+  nonisolated private static func claudeCacheKey(
+    _ baseKey: String,
+    suffix: String
+  ) -> String {
+    "\(claudeMetricCachePrefix)\(baseKey).\(suffix)"
+  }
+
+  nonisolated private static func loadCachedClaudeWindow(
+    forKey baseKey: String,
+    now: Date
+  ) -> ClaudeWindow? {
+    let defaults = UserDefaults.standard
+    let utilKey = claudeCacheKey(baseKey, suffix: "utilization")
+    let resetKey = claudeCacheKey(baseKey, suffix: "resetsAt")
+
+    guard defaults.object(forKey: utilKey) != nil else {
+      return nil
+    }
+
+    let util = defaults.double(forKey: utilKey)
+    let resetsAt: Date? = (defaults.object(forKey: resetKey) as? Double)
+      .map { Date(timeIntervalSince1970: $0) }
+
+    if let reset = resetsAt, reset <= now {
+      clearCachedClaudeWindow(forKey: baseKey)
+      return nil
+    }
+
+    // Legacy or meaningless cache entry (zero with no reset).
+    if util <= 0, resetsAt == nil {
+      clearCachedClaudeWindow(forKey: baseKey)
+      return nil
+    }
+
+    return ClaudeWindow(utilization: util, resetsAt: resetsAt)
+  }
+
+  nonisolated private static func saveCachedClaudeWindow(
+    _ window: ClaudeWindow,
+    forKey baseKey: String
+  ) {
+    // Without a reset boundary the cache can never expire itself; refuse the
+    // write so a transient response missing `resets_at` doesn't pin a value
+    // indefinitely.
+    guard let resetsAt = window.resetsAt else {
+      return
+    }
+
+    let defaults = UserDefaults.standard
+    defaults.set(
+      window.utilization,
+      forKey: claudeCacheKey(baseKey, suffix: "utilization")
+    )
+    defaults.set(
+      resetsAt.timeIntervalSince1970,
+      forKey: claudeCacheKey(baseKey, suffix: "resetsAt")
+    )
+  }
+
+  nonisolated private static func clearCachedClaudeWindow(forKey baseKey: String) {
+    let defaults = UserDefaults.standard
+    defaults.removeObject(forKey: claudeCacheKey(baseKey, suffix: "utilization"))
+    defaults.removeObject(forKey: claudeCacheKey(baseKey, suffix: "resetsAt"))
+  }
+
+  /// Wipes both cached Claude windows. Called from clearProvider/clearAll.
+  nonisolated static func clearAllCachedClaudeWindows() {
+    clearCachedClaudeWindow(forKey: "five_hour")
+    clearCachedClaudeWindow(forKey: "seven_day")
+  }
+
+  /// Decides whether to surface the cached window value instead of a fresh one
+  /// that came back as 0%. Idle sessions can return empty windows; an
+  /// unchanged reset boundary indicates the same window, just observed during
+  /// a quiet moment.
+  nonisolated private static func shouldPreferCachedClaudeWindow(
+    _ cached: ClaudeWindow?,
+    over incoming: ClaudeWindow,
+    now: Date
+  ) -> Bool {
+    guard let cached, cached.utilization > 0 else {
+      return false
+    }
+
+    guard let cachedReset = cached.resetsAt, cachedReset > now else {
+      return false
+    }
+
+    guard incoming.utilization <= 0 else {
+      return false
+    }
+
+    if incoming.resetsAt == nil {
+      return true
+    }
+
+    if let inReset = incoming.resetsAt,
+       abs(inReset.timeIntervalSince(cachedReset)) < 1
+    {
+      return true
+    }
+
+    return false
+  }
+
+  /// Combines a fresh window with the cache: prefers cache on idle 0%, saves
+  /// fresh otherwise. Returns the value to display, or nil if neither exists.
+  nonisolated private static func resolveClaudeWindow(
+    fresh: ClaudeWindow?,
+    cacheKey: String,
+    now: Date
+  ) -> ClaudeWindow? {
+    let cached = loadCachedClaudeWindow(forKey: cacheKey, now: now)
+
+    guard let incoming = fresh else {
+      return cached
+    }
+
+    if shouldPreferCachedClaudeWindow(cached, over: incoming, now: now) {
+      return cached
+    }
+
+    saveCachedClaudeWindow(incoming, forKey: cacheKey)
+    return incoming
+  }
+
+  /// Builds a snapshot from cached metrics alone. Used when the live fetch
+  /// fails transiently but we have at least one window whose reset hasn't
+  /// elapsed. Returns nil if nothing usable is cached.
+  nonisolated static func cachedClaudeSnapshot(
+    subscriptionType: String?
+  ) -> UsageSnapshot? {
+    let now = Date()
+    let fiveHour = loadCachedClaudeWindow(forKey: "five_hour", now: now)
+    let sevenDay = loadCachedClaudeWindow(forKey: "seven_day", now: now)
+
+    guard fiveHour != nil || sevenDay != nil else {
+      return nil
+    }
+
+    var metrics: [UsageMetric] = []
+
+    if let subType = subscriptionType {
+      metrics.append(UsageMetric(
+        label: "Plan",
+        value: subType.capitalized,
+        style: .normal
+      ))
+    }
+
+    metrics.append(contentsOf: claudeWindowMetrics(
+      window: fiveHour,
+      label: "Session (5h)",
+      resetLabel: "Session resets"
+    ))
+
+    metrics.append(contentsOf: claudeWindowMetrics(
+      window: sevenDay,
+      label: "Weekly (7d)",
+      resetLabel: "Weekly resets"
+    ))
+
+    metrics.append(UsageMetric(
+      label: "Status",
+      value: "Cached (offline)",
+      style: .normal
+    ))
+
+    let sessionUtil = fiveHour?.utilization ?? 0
+
+    return UsageSnapshot(
+      provider: .claude,
+      sourceKind: .cliOAuth,
+      sourceLabel: "Claude Code",
+      account: subscriptionType?.capitalized,
+      quotaWindow: nil,
+      used: "\(Int(sessionUtil))% session",
+      limit: nil,
+      remaining: nil,
+      percentUsed: sessionUtil / 100.0,
+      metrics: metrics,
+      fetchedAt: now
+    )
+  }
+
+  nonisolated private static func claudeWindowMetrics(
+    window: ClaudeWindow?,
+    label: String,
+    resetLabel: String
+  ) -> [UsageMetric] {
+    guard let window else {
+      return []
+    }
+
+    var out: [UsageMetric] = [
+      UsageMetric(
+        label: label,
+        value: "\(Int(window.utilization))% used",
+        style: window.utilization >= 90
+          ? .warning : window.utilization >= 70 ? .cost : .normal
+      )
+    ]
+
+    if window.utilization > 0,
+       let resetText = window.resetsAt.flatMap({ formatResetDate($0) })
+    {
+      out.append(UsageMetric(
+        label: resetLabel,
+        value: resetText,
+        style: .normal
+      ))
+    }
+
+    return out
+  }
+
+  // MARK: - Claude OAuth Response Parsing
+
   /// Parses the Claude OAuth usage response.
-  /// Response has five_hour, seven_day, extra_usage windows.
+  /// Response has five_hour, seven_day, extra_usage windows, plus model-suffixed
+  /// variants (e.g., seven_day_sonnet_4_5) which are merged via prefix-match.
   nonisolated static func parseClaudeOAuthUsageResponse(
     data: Data,
     subscriptionType: String?,
     rateLimitTier: String?
   ) -> UsageSnapshot {
+    let now = Date()
+
     guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
       Logger.usage.error("[claude] Failed to parse OAuth usage response")
       return UsageSnapshot(
@@ -639,7 +1006,7 @@ class UsageService {
         remaining: nil,
         percentUsed: nil,
         metrics: [],
-        fetchedAt: Date()
+        fetchedAt: now
       )
     }
 
@@ -654,68 +1021,52 @@ class UsageService {
       ))
     }
 
-    // Session window (five_hour).
-    if let fiveHour = json["five_hour"] as? [String: Any] {
-      let utilization = Self.normalizeUtilization(fiveHour["utilization"] as? Double ?? 0)
-      let resetsAt = fiveHour["resets_at"] as? String
-      let resetLabel = resetsAt.flatMap { Self.formatISO8601ResetTime($0) }
+    // Umbrella session window — uses exact `five_hour` key when present,
+    // otherwise merges five_hour_<model>_<rev> siblings.
+    let fiveHour = resolveClaudeWindow(
+      fresh: mergedClaudeWindow(json, baseKey: "five_hour"),
+      cacheKey: "five_hour",
+      now: now
+    )
 
-      metrics.append(UsageMetric(
-        label: "Session (5h)",
-        value: "\(Int(utilization))% used",
-        style: utilization >= 90 ? .warning : utilization >= 70 ? .cost : .normal
-      ))
+    metrics.append(contentsOf: claudeWindowMetrics(
+      window: fiveHour,
+      label: "Session (5h)",
+      resetLabel: "Session resets"
+    ))
 
-      if utilization > 0, let resetLabel {
-        metrics.append(UsageMetric(
-          label: "Session resets",
-          value: resetLabel,
-          style: .normal
-        ))
-      }
-    }
+    // Umbrella weekly window — uses exact `seven_day` key when present,
+    // otherwise merges seven_day_<model>_<rev> siblings.
+    let sevenDay = resolveClaudeWindow(
+      fresh: mergedClaudeWindow(json, baseKey: "seven_day"),
+      cacheKey: "seven_day",
+      now: now
+    )
 
-    // Weekly window (seven_day).
-    if let sevenDay = json["seven_day"] as? [String: Any] {
-      let utilization = Self.normalizeUtilization(sevenDay["utilization"] as? Double ?? 0)
-      let resetsAt = sevenDay["resets_at"] as? String
-      let resetLabel = resetsAt.flatMap { Self.formatISO8601ResetTime($0) }
+    metrics.append(contentsOf: claudeWindowMetrics(
+      window: sevenDay,
+      label: "Weekly (7d)",
+      resetLabel: "Weekly resets"
+    ))
 
-      metrics.append(UsageMetric(
-        label: "Weekly (7d)",
-        value: "\(Int(utilization))% used",
-        style: utilization >= 90 ? .warning : utilization >= 70 ? .cost : .normal
-      ))
-
-      if utilization > 0, let resetLabel {
-        metrics.append(UsageMetric(
-          label: "Weekly resets",
-          value: resetLabel,
-          style: .normal
-        ))
-      }
-    }
-
-    // Model-specific weekly windows.
-    if let sonnet = json["seven_day_sonnet"] as? [String: Any],
-       let util = sonnet["utilization"] as? Double,
-       util > 0
+    // Per-model 7d rows: prefix-merged so future revisions surface automatically.
+    if let sonnet = mergedClaudeWindow(json, baseKey: "seven_day_sonnet"),
+       sonnet.utilization > 0
     {
       metrics.append(UsageMetric(
         label: "Sonnet (7d)",
-        value: "\(Int(util))% used",
-        style: util >= 90 ? .warning : .normal
+        value: "\(Int(sonnet.utilization))% used",
+        style: sonnet.utilization >= 90 ? .warning : .normal
       ))
     }
 
-    if let opus = json["seven_day_opus"] as? [String: Any],
-       let util = opus["utilization"] as? Double,
-       util > 0
+    if let opus = mergedClaudeWindow(json, baseKey: "seven_day_opus"),
+       opus.utilization > 0
     {
       metrics.append(UsageMetric(
         label: "Opus (7d)",
-        value: "\(Int(util))% used",
-        style: util >= 90 ? .warning : .normal
+        value: "\(Int(opus.utilization))% used",
+        style: opus.utilization >= 90 ? .warning : .normal
       ))
     }
 
@@ -735,8 +1086,7 @@ class UsageService {
       }
     }
 
-    // Determine main "used" label from session utilization.
-    let sessionUtil = (json["five_hour"] as? [String: Any])?["utilization"] as? Double ?? 0
+    let sessionUtil = fiveHour?.utilization ?? 0
 
     return UsageSnapshot(
       provider: .claude,
@@ -749,27 +1099,8 @@ class UsageService {
       remaining: nil,
       percentUsed: sessionUtil / 100.0,
       metrics: metrics,
-      fetchedAt: Date()
+      fetchedAt: now
     )
-  }
-
-  /// Formats an ISO 8601 reset timestamp to a human-readable "in Xh Ym" string.
-  nonisolated private static func formatISO8601ResetTime(_ isoString: String) -> String? {
-    let formatter = ISO8601DateFormatter()
-    formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-
-    guard let resetDate = formatter.date(from: isoString) else {
-      // Try without fractional seconds.
-      formatter.formatOptions = [.withInternetDateTime]
-
-      guard let resetDate = formatter.date(from: isoString) else {
-        return nil
-      }
-
-      return formatResetDate(resetDate)
-    }
-
-    return formatResetDate(resetDate)
   }
 
   /// Normalizes a utilization value to a 0-100 percentage.
