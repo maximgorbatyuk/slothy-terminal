@@ -337,22 +337,31 @@ class UsageService {
     return nil
   }
 
-  /// Resolves Cursor auth.
-  /// Cursor's public site doesn't expose a usage API; we use the same
-  /// session JWT that cursor.com sets as the `WorkosCursorSessionToken`
-  /// cookie. The user pastes that JWT into Settings → Usage; we store it
-  /// in the Keychain.
+  /// Resolves Cursor auth in priority order:
+  /// 1. Auto-detect — Cursor.app's own SQLite state DB (`cursorAuth/accessToken`).
+  ///    No user setup; refreshes whenever Cursor rotates the token.
+  /// 2. Manually-pasted JWT in our Keychain (fallback for users without
+  ///    Cursor.app installed, or whose state DB is unreadable).
   func resolveCursorAuth() -> UsageAuthSource? {
-    guard UsageKeychainStore.loadString(provider: .cursor, sourceKind: .apiKey) != nil else {
-      return nil
+    if CursorUsageProvider.canReadStateDB() {
+      return UsageAuthSource(
+        provider: .cursor,
+        kind: .cliOAuth,
+        label: "Cursor app",
+        detail: "Auto-detected from Cursor's session"
+      )
     }
 
-    return UsageAuthSource(
-      provider: .cursor,
-      kind: .apiKey,
-      label: "Session token",
-      detail: "Cursor JWT from Keychain"
-    )
+    if UsageKeychainStore.loadString(provider: .cursor, sourceKind: .apiKey) != nil {
+      return UsageAuthSource(
+        provider: .cursor,
+        kind: .apiKey,
+        label: "Session token",
+        detail: "Manually pasted JWT (Keychain)"
+      )
+    }
+
+    return nil
   }
 
   /// Resolves OpenCode auth.
@@ -404,19 +413,36 @@ class UsageService {
   // MARK: - Cursor Fetching
 
   private func fetchCursorUsage(source: UsageAuthSource) async throws -> UsageSnapshot {
-    guard source.kind == .apiKey else {
+    switch source.kind {
+    case .cliOAuth:
+      let jwt = try await Task.detached {
+        try CursorUsageProvider.readJWTFromCursorState()
+      }.value
+
+      return try await CursorUsageProvider.fetchUsage(
+        jwt: jwt,
+        sourceKind: .cliOAuth,
+        sourceLabel: "Cursor app"
+      )
+
+    case .apiKey:
+      guard let jwt = UsageKeychainStore.loadString(
+        provider: .cursor,
+        sourceKind: .apiKey
+      ) else {
+        Logger.usage.error("[cursor] No JWT found in Keychain")
+        throw UsageFetchError.noCredentials
+      }
+
+      return try await CursorUsageProvider.fetchUsage(
+        jwt: jwt,
+        sourceKind: .apiKey,
+        sourceLabel: "Session token"
+      )
+
+    case .browser, .experimental:
       throw UsageFetchError.unsupportedSource
     }
-
-    guard let jwt = UsageKeychainStore.loadString(
-      provider: .cursor,
-      sourceKind: .apiKey
-    ) else {
-      Logger.usage.error("[cursor] No JWT found in Keychain")
-      throw UsageFetchError.noCredentials
-    }
-
-    return try await CursorUsageProvider.fetchUsage(jwt: jwt)
   }
 
   // MARK: - Claude Fetching

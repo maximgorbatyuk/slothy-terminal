@@ -30,6 +30,29 @@
     -->
 
     <item>
+      <title>Version 2026.3.5</title>
+      <pubDate>Wed, 29 Apr 2026 18:00:00 +0000</pubDate>
+      <sparkle:version>46</sparkle:version>
+      <sparkle:shortVersionString>2026.3.5</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
+      <description><![CDATA[
+        <h2>What's New</h2>
+        <h3>Cursor connects itself</h3>
+        <ul>
+          <li>No more hunting through browser cookies — if Cursor.app is installed and you're signed in, SlothyTerminal picks up your session automatically and starts showing usage right away</li>
+          <li>When Cursor rotates your session token, the menubar follows along on its own — no re-pasting needed</li>
+          <li>If you'd rather paste a token by hand (or you don't run Cursor.app), the manual option is still there under Settings → Usage → Cursor → Manual override</li>
+        </ul>
+      ]]></description>
+      <enclosure
+        url="https://github.com/maximgorbatyuk/slothy-terminal/releases/download/v2026.3.5/SlothyTerminal-2026.3.5.dmg"
+        type="application/octet-stream"
+        sparkle:edSignature="XklqH3BTvnYMt497bY4h6xdon6rfw68sv0KX4oKXEGIn/DePoAz3u2Dht+1H6WbXszZKnnEVA6ZtT969RdqcDQ=="
+        length="20155179"
+      />
+    </item>
+
+    <item>
       <title>Version 2026.3.4</title>
       <pubDate>Wed, 29 Apr 2026 12:00:00 +0000</pubDate>
       <sparkle:version>43</sparkle:version>

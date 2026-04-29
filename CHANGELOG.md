@@ -2,6 +2,17 @@
 
 All notable changes to SlothyTerminal will be documented in this file.
 
+## [2026.3.5] - 2026-04-29
+
+### Changed
+- **Cursor authentication is now auto-detected from Cursor.app.** SlothyTerminal reads the current session JWT directly from Cursor's own SQLite state database at `~/Library/Application Support/Cursor/User/globalStorage/state.vscdb` (row `cursorAuth/accessToken`), so no manual setup is required when Cursor.app is installed and the user is signed in. The DB is opened read-only with `SQLITE_OPEN_NOMUTEX` so it's safe alongside a running Cursor instance; brief exclusive locks during Cursor writes are covered by the metric-cache fallback added in 2026.3.4. JWT rotation is picked up automatically — every fetch reads the latest token from disk. (`SlothyTerminal/Services/CursorUsageProvider.swift`)
+- **`UsageService.resolveCursorAuth()` priority order**: 1) auto-detect via `CursorUsageProvider.canReadStateDB()` (`.cliOAuth`, label "Cursor app"), 2) fall back to the existing manually-pasted JWT in our Keychain (`.apiKey`, label "Session token"). `fetchCursorUsage(source:)` now dispatches by `source.kind`; the SQLite read happens off the main actor via `Task.detached`. Existing manual-paste tokens continue to work unchanged when Cursor.app is unavailable. (`SlothyTerminal/Services/UsageService.swift`)
+- **`CursorUsageProvider.fetchUsage` accepts `sourceKind` and `sourceLabel`** so the popover badge reflects whether the JWT came from auto-detect ("Cursor app") or a manual paste ("Session token"). `parseUsageResponse` and `failureSnapshot` propagate the same fields. (`SlothyTerminal/Services/CursorUsageProvider.swift`)
+- **Settings → Usage → Cursor section reframed.** The auto-detect status is now the headline (one of three states: auto-detected from Cursor.app / using manually-pasted token / not connected) with a contextual subtitle. The JWT paste field is collapsed inside a `DisclosureGroup` labelled "Manual override" with copy explicitly directing users there only when Cursor.app isn't installed or auto-detect fails. (`SlothyTerminal/Views/SettingsView.swift`)
+
+### Notes
+- `import SQLite3` resolves to the system-bundled libsqlite3 on macOS — no Swift Package Manager dependency, no `Package.swift` change required.
+
 ## [2026.3.4] - 2026-04-29
 
 ### Added
