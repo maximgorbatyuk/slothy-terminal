@@ -2,22 +2,41 @@ import Foundation
 import OSLog
 import SQLite3
 
-/// Fetches Cursor usage from the undocumented `cursor.com/api/usage` endpoint.
+/// Fetches Cursor usage from the dashboard backend that powers
+/// `cursor.com/dashboard?tab=usage`. The legacy `cursor.com/api/usage`
+/// endpoint reports zeros for accounts on the token-based billing model
+/// (Pro/Pro+/Ultra) and is not used here.
+///
+/// Two endpoints, both authenticated with the same `WorkosCursorSessionToken`
+/// cookie that the web dashboard uses:
+///   - `POST /api/dashboard/get-filtered-usage-events` — per-event detail
+///     (model, kind, tokenUsage, usageBasedCosts). Paginated.
+///   - `POST /api/dashboard/get-current-period-usage` — aggregated $ spent
+///     vs. plan limit for the current billing period. Best-effort: the
+///     dashboard sometimes 4xxs this endpoint, in which case we still
+///     produce a snapshot from the events alone.
 ///
 /// Auth model (in priority order):
-///   1. Auto-detect — read the JWT directly from Cursor.app's own SQLite state
+///   1. Auto-detect — read the JWT directly from Cursor.app's SQLite state
 ///      database at `~/Library/Application Support/Cursor/User/globalStorage/state.vscdb`,
-///      row `cursorAuth/accessToken`. No user setup needed; refreshes whenever
-///      Cursor rotates the token.
+///      row `cursorAuth/accessToken`. Refreshes whenever Cursor rotates the
+///      token.
 ///   2. Manual paste — user pastes the JWT (the second half of the
-///      `WorkosCursorSessionToken` cookie) into Settings; stored in the macOS
-///      Keychain via `UsageKeychainStore`. Used when Cursor.app is not
-///      installed or the state DB can't be read.
-///
-/// In both modes the JWT's `sub` claim supplies the user ID for the endpoint.
+///      `WorkosCursorSessionToken` cookie) into Settings; stored in the
+///      macOS Keychain via `UsageKeychainStore`.
 enum CursorUsageProvider {
-  private static let usageEndpoint = "https://www.cursor.com/api/usage"
-  private static let requestTimeout: TimeInterval = 10
+  private static let usageEventsEndpoint = "https://cursor.com/api/dashboard/get-filtered-usage-events"
+  private static let currentPeriodEndpoint = "https://cursor.com/api/dashboard/get-current-period-usage"
+  private static let dashboardOrigin = "https://cursor.com"
+  private static let dashboardReferer = "https://cursor.com/dashboard?tab=usage"
+  private static let requestTimeout: TimeInterval = 15
+  private static let eventsPageSize = 100
+  private static let eventsPageCap = 50
+
+  private static let userAgent: String = {
+    let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.0"
+    return "SlothyTerminal/\(version)"
+  }()
 
   /// Default location of Cursor.app's state database.
   static let defaultStateDBPath: String = {
@@ -25,14 +44,13 @@ enum CursorUsageProvider {
     return "\(home)/Library/Application Support/Cursor/User/globalStorage/state.vscdb"
   }()
 
-  /// JWTs are base64url segments separated by dots — `[A-Za-z0-9_.-]`.
-  /// The userID `sub` claim is opaque but in practice fits the same set;
-  /// we restrict both to this charset so they can be safely placed in the
-  /// `Cookie` header verbatim without percent-encoding (RFC 6265 cookie-octet
-  /// range; servers receive cookies un-decoded).
-  private static let cookieSafeCharacters: CharacterSet = {
+  /// RFC 3986 unreserved set — used to percent-encode the userID and JWT
+  /// halves of the `WorkosCursorSessionToken` cookie. The Cursor server
+  /// expects URL-decoded values, so e.g. a Google OAuth `sub` like
+  /// `google-oauth2|12345` round-trips correctly via percent-encoding.
+  private static let cookieComponentAllowed: CharacterSet = {
     var set = CharacterSet.alphanumerics
-    set.insert(charactersIn: "-._")
+    set.insert(charactersIn: "-._~")
     return set
   }()
 
@@ -47,39 +65,34 @@ enum CursorUsageProvider {
     let trimmed = jwt.trimmingCharacters(in: .whitespacesAndNewlines)
 
     guard !trimmed.isEmpty else {
+      Logger.usage.error("[cursor] fetchUsage called with empty JWT (sourceKind=\(sourceKind.rawValue), sourceLabel=\(sourceLabel))")
       throw UsageFetchError.noCredentials
     }
 
-    guard isHeaderSafe(trimmed) else {
-      Logger.usage.error("[cursor] JWT contains characters not allowed in a Cookie header")
-      throw UsageFetchError.invalidCredentials
-    }
+    let segmentCount = trimmed.split(separator: ".").count
+    Logger.usage.info(
+      "[cursor] fetchUsage entry — sourceKind=\(sourceKind.rawValue) sourceLabel=\(sourceLabel) jwtLength=\(trimmed.count) jwtSegments=\(segmentCount) jwtSample=\(redact(trimmed))"
+    )
 
     guard let userID = decodeUserID(fromJWT: trimmed) else {
-      Logger.usage.error("[cursor] Failed to decode user ID from JWT")
+      Logger.usage.error(
+        "[cursor] Failed to decode user ID from JWT — segments=\(segmentCount) sample=\(redact(trimmed)). See preceding [cursor] logs for the specific decode step that failed."
+      )
       throw UsageFetchError.invalidCredentials
     }
 
-    guard isHeaderSafe(userID) else {
-      Logger.usage.error("[cursor] JWT sub claim contains characters not allowed in a Cookie header")
-      throw UsageFetchError.invalidCredentials
-    }
+    Logger.usage.info("[cursor] Decoded userID from JWT — userID=\(redact(userID)) length=\(userID.count)")
 
-    let (statusCode, data) = try await performRequest(jwt: trimmed, userID: userID)
+    let cookie = buildSessionCookie(userID: userID, jwt: trimmed)
+    let (start, end) = currentBillingPeriod()
 
-    if statusCode == 401 {
-      Logger.usage.warning("[cursor] Got 401 — JWT expired or revoked")
-      throw UsageFetchError.tokenExpired
-    }
+    let events = try await fetchAllEvents(cookie: cookie, start: start, end: end)
+    let periodTotals = try await fetchCurrentPeriodTotals(cookie: cookie)
 
-    guard statusCode == 200 else {
-      Logger.usage.error("[cursor] Usage request failed: HTTP \(statusCode)")
-      throw UsageFetchError.httpError(statusCode)
-    }
-
-    return parseUsageResponse(
-      data: data,
-      userID: userID,
+    return buildSnapshot(
+      events: events,
+      periodTotals: periodTotals,
+      periodStart: start,
       sourceKind: sourceKind,
       sourceLabel: sourceLabel
     )
@@ -87,48 +100,192 @@ enum CursorUsageProvider {
 
   // MARK: - HTTP
 
-  private static func performRequest(
-    jwt: String,
-    userID: String
-  ) async throws -> (statusCode: Int, data: Data) {
-    guard var components = URLComponents(string: usageEndpoint) else {
-      throw UsageFetchError.invalidURL
-    }
-
-    components.queryItems = [URLQueryItem(name: "user", value: userID)]
-
-    guard let url = components.url else {
-      throw UsageFetchError.invalidURL
-    }
-
-    var request = URLRequest(url: url)
-    request.timeoutInterval = requestTimeout
-    request.setValue("application/json", forHTTPHeaderField: "Accept")
-    request.setValue("SlothyTerminal", forHTTPHeaderField: "User-Agent")
-    /// Cookie values are passed verbatim by HTTP intermediaries — both
-    /// `userID` and `jwt` are validated against `cookieSafeCharacters` by
-    /// the caller, so no percent-encoding is needed here.
-    request.setValue(
-      "WorkosCursorSessionToken=\(userID)::\(jwt)",
-      forHTTPHeaderField: "Cookie"
-    )
-
-    Logger.usage.info("[cursor] Requesting usage from cursor.com")
-    let (data, response) = try await URLSession.shared.data(for: request)
-
-    guard let http = response as? HTTPURLResponse else {
-      throw UsageFetchError.invalidResponse
-    }
-
-    return (http.statusCode, data)
+  /// Builds the `WorkosCursorSessionToken` cookie value. Both halves are
+  /// percent-encoded (RFC 3986 unreserved) and joined with `%3A%3A` — the
+  /// Cursor server URL-decodes before parsing, so OAuth `sub` claims like
+  /// `google-oauth2|12345` survive the Cookie header intact.
+  private static func buildSessionCookie(userID: String, jwt: String) -> String {
+    let encodedUserID = percentEncodeCookieComponent(userID)
+    let encodedJWT = percentEncodeCookieComponent(jwt)
+    return "WorkosCursorSessionToken=\(encodedUserID)%3A%3A\(encodedJWT)"
   }
 
-  /// Returns true if the value contains only characters allowed in an HTTP
-  /// header without quoting/encoding — i.e., no whitespace, control characters,
-  /// or punctuation that would break Cookie-header parsing.
-  nonisolated static func isHeaderSafe(_ value: String) -> Bool {
-    !value.isEmpty
-      && value.unicodeScalars.allSatisfy { cookieSafeCharacters.contains($0) }
+  private static func dashboardRequest(url: URL, cookie: String, body: Data) -> URLRequest {
+    var request = URLRequest(url: url)
+    request.httpMethod = "POST"
+    request.timeoutInterval = requestTimeout
+    request.httpBody = body
+    request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+    request.setValue("application/json", forHTTPHeaderField: "Accept")
+    request.setValue(userAgent, forHTTPHeaderField: "User-Agent")
+    request.setValue(dashboardOrigin, forHTTPHeaderField: "Origin")
+    request.setValue(dashboardReferer, forHTTPHeaderField: "Referer")
+    request.setValue(cookie, forHTTPHeaderField: "Cookie")
+    return request
+  }
+
+  /// Fetches every page of `get-filtered-usage-events` for the given window.
+  /// Stops when a page returns fewer than `eventsPageSize` events, or when
+  /// `eventsPageCap` is hit (a safety cap against runaway loops).
+  /// 401 maps to `tokenExpired`; other non-2xx maps to `httpError`.
+  private static func fetchAllEvents(
+    cookie: String,
+    start: Date,
+    end: Date
+  ) async throws -> [UsageEvent] {
+    guard let url = URL(string: usageEventsEndpoint) else {
+      throw UsageFetchError.invalidURL
+    }
+
+    let startMS = Int64(start.timeIntervalSince1970 * 1000)
+    let endMS = Int64(end.timeIntervalSince1970 * 1000)
+    var aggregated: [UsageEvent] = []
+
+    for page in 1...eventsPageCap {
+      let payload: [String: Any] = [
+        "teamId": 0,
+        "startDate": String(startMS),
+        "endDate": String(endMS),
+        "page": page,
+        "pageSize": eventsPageSize,
+      ]
+      let body = try JSONSerialization.data(withJSONObject: payload)
+      let request = dashboardRequest(url: url, cookie: cookie, body: body)
+
+      Logger.usage.info("[cursor] events request page=\(page) start=\(startMS) end=\(endMS)")
+      let (data, response) = try await URLSession.shared.data(for: request)
+
+      #if DEBUG
+      ProviderResponseStore.record(
+        provider: .cursor,
+        endpoint: "events",
+        url: url.absoluteString,
+        statusCode: (response as? HTTPURLResponse)?.statusCode,
+        body: data
+      )
+      #endif
+
+      guard let http = response as? HTTPURLResponse else {
+        throw UsageFetchError.invalidResponse
+      }
+
+      switch http.statusCode {
+      case 200:
+        break
+
+      case 401:
+        Logger.usage.warning("[cursor] events 401 — token expired or revoked. snippet=\(bodySnippet(data))")
+        throw UsageFetchError.tokenExpired
+
+      case 429:
+        Logger.usage.warning("[cursor] events 429 — rate limited. Stopping pagination at page \(page).")
+        throw UsageFetchError.httpError(429)
+
+      default:
+        Logger.usage.error("[cursor] events HTTP \(http.statusCode). snippet=\(bodySnippet(data))")
+        throw UsageFetchError.httpError(http.statusCode)
+      }
+
+      let pageEvents = parseEventsPage(data: data)
+      aggregated.append(contentsOf: pageEvents)
+
+      Logger.usage.info("[cursor] events page=\(page) returned=\(pageEvents.count) cumulative=\(aggregated.count)")
+
+      if pageEvents.count < eventsPageSize {
+        break
+      }
+    }
+
+    return aggregated
+  }
+
+  /// Best-effort fetch of `get-current-period-usage` (plan totals).
+  /// Returns nil on any non-2xx — the snapshot will fall back to event sums.
+  /// 401 still throws so the caller surfaces a re-login prompt.
+  private static func fetchCurrentPeriodTotals(cookie: String) async throws -> CurrentPeriodTotals? {
+    guard let url = URL(string: currentPeriodEndpoint) else {
+      return nil
+    }
+
+    let body = Data("{}".utf8)
+    let request = dashboardRequest(url: url, cookie: cookie, body: body)
+
+    Logger.usage.info("[cursor] current-period request")
+    let (data, response): (Data, URLResponse)
+    do {
+      (data, response) = try await URLSession.shared.data(for: request)
+    } catch {
+      Logger.usage.warning("[cursor] current-period transport error: \(error.localizedDescription)")
+      #if DEBUG
+      ProviderResponseStore.record(
+        provider: .cursor,
+        endpoint: "current-period",
+        url: url.absoluteString,
+        statusCode: nil,
+        body: Data(),
+        error: error.localizedDescription
+      )
+      #endif
+      return nil
+    }
+
+    #if DEBUG
+    ProviderResponseStore.record(
+      provider: .cursor,
+      endpoint: "current-period",
+      url: url.absoluteString,
+      statusCode: (response as? HTTPURLResponse)?.statusCode,
+      body: data
+    )
+    #endif
+
+    guard let http = response as? HTTPURLResponse else {
+      return nil
+    }
+
+    if http.statusCode == 401 {
+      Logger.usage.warning("[cursor] current-period 401 — token expired or revoked. snippet=\(bodySnippet(data))")
+      throw UsageFetchError.tokenExpired
+    }
+
+    guard http.statusCode == 200 else {
+      Logger.usage.info("[cursor] current-period HTTP \(http.statusCode) — proceeding without plan totals. snippet=\(bodySnippet(data))")
+      return nil
+    }
+
+    return parseCurrentPeriod(data: data)
+  }
+
+  // MARK: - Diagnostic helpers
+
+  /// Returns a redacted preview of a sensitive string for logs.
+  /// Shows length and first/last 4 characters so format changes are visible
+  /// without leaking the full secret.
+  nonisolated private static func redact(_ value: String) -> String {
+    if value.count <= 8 {
+      return "<\(value.count) chars>"
+    }
+    let prefix = value.prefix(4)
+    let suffix = value.suffix(4)
+    return "\(prefix)…\(suffix)(\(value.count) chars)"
+  }
+
+  /// Returns up to 512 bytes of the response body as a UTF-8 string for
+  /// diagnostic logging. Falls back to a hex-style summary for binary data.
+  nonisolated private static func bodySnippet(_ data: Data) -> String {
+    let limit = 512
+    let slice = data.prefix(limit)
+
+    if let text = String(data: slice, encoding: .utf8) {
+      let suffix = data.count > limit ? "… (\(data.count) bytes total)" : ""
+      return text.replacingOccurrences(of: "\n", with: " ") + suffix
+    }
+
+    return "<non-UTF8 body, \(data.count) bytes>"
+  }
+
+  nonisolated private static func percentEncodeCookieComponent(_ value: String) -> String {
+    value.addingPercentEncoding(withAllowedCharacters: cookieComponentAllowed) ?? value
   }
 
   // MARK: - JWT decoding
@@ -139,18 +296,36 @@ enum CursorUsageProvider {
     let segments = jwt.split(separator: ".")
 
     guard segments.count >= 2 else {
+      Logger.usage.error(
+        "[cursor] decodeUserID: JWT has only \(segments.count) dot-separated segment(s), expected 3 — token may not be a JWT (sample=\(redact(jwt)))"
+      )
       return nil
     }
 
     guard let payload = base64URLDecode(String(segments[1])) else {
+      Logger.usage.error(
+        "[cursor] decodeUserID: base64URL decode of payload segment failed — segmentLength=\(segments[1].count)"
+      )
       return nil
     }
 
     guard let json = try? JSONSerialization.jsonObject(with: payload) as? [String: Any] else {
+      let preview = String(data: payload.prefix(256), encoding: .utf8) ?? "<non-UTF8>"
+      Logger.usage.error(
+        "[cursor] decodeUserID: JWT payload is not a JSON object — payloadBytes=\(payload.count) preview=\(preview)"
+      )
       return nil
     }
 
-    return json["sub"] as? String
+    guard let sub = json["sub"] as? String else {
+      let keys = json.keys.sorted().joined(separator: ", ")
+      Logger.usage.error(
+        "[cursor] decodeUserID: JWT payload missing string `sub` claim — keys=[\(keys)]"
+      )
+      return nil
+    }
+
+    return sub
   }
 
   private static func base64URLDecode(_ value: String) -> Data? {
@@ -168,198 +343,280 @@ enum CursorUsageProvider {
 
   // MARK: - Response parsing
 
-  /// Parses the Cursor usage response.
-  ///
-  /// Shape (top-level keys):
-  /// ```
-  /// {
-  ///   "startOfMonth": "2026-04-01T00:00:00.000Z",
-  ///   "gpt-4":            { "numRequests": 12, "maxRequestUsage": 500 },
-  ///   "claude-3.5-sonnet": { "numRequests": 0,  "maxRequestUsage": null },
-  ///   ...
-  /// }
-  /// ```
-  /// Some deployments may nest the per-model entries under a `modelUsages`
-  /// object — both shapes are handled.
-  nonisolated static func parseUsageResponse(
-    data: Data,
-    userID: String,
-    sourceKind: UsageSourceKind = .apiKey,
-    sourceLabel: String = "Session token"
-  ) -> UsageSnapshot {
-    let now = Date()
+  /// Parsed event from `get-filtered-usage-events`. Field names match the
+  /// dashboard payload — we only keep what we display or aggregate.
+  struct UsageEvent: Equatable {
+    let model: String
+    /// Raw `kind` string from the API. Examples: `INCLUDED_IN_PRO`,
+    /// `USAGE_BASED`, `ERRORED_NOT_CHARGED`, `INCLUDED_IN_ULTRA`.
+    let kind: String
+    let inputTokens: Int
+    let outputTokens: Int
+    let cacheReadTokens: Int
+    let cacheWriteTokens: Int
+    /// Dollar value reported for this event. Present even on `INCLUDED_IN_*`
+    /// rows (where it represents the would-be cost — useful for a "value
+    /// included" display). May be 0 for free/error rows.
+    let cost: Double
+  }
 
-    guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
-      Logger.usage.error("[cursor] Failed to parse usage response JSON")
-      return failureSnapshot(
-        message: "Parse error",
-        userID: userID,
-        fetchedAt: now,
-        sourceKind: sourceKind,
-        sourceLabel: sourceLabel
-      )
+  /// Aggregated plan totals from `get-current-period-usage`. Field shape
+  /// varies across plans; we extract the common shape and tolerate keys
+  /// being absent.
+  struct CurrentPeriodTotals: Equatable {
+    /// Dollars spent in the current period (usage-based portion).
+    let spent: Double?
+    /// Plan's included credit allowance in dollars (e.g. $20 Pro, $400 Ultra).
+    let includedDollars: Double?
+    /// Hard usage-based cap in dollars, if the user has set one.
+    let hardLimitDollars: Double?
+  }
+
+  nonisolated static func parseEventsPage(data: Data) -> [UsageEvent] {
+    guard let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+      Logger.usage.error("[cursor] events: non-JSON response — snippet=\(bodySnippet(data))")
+      return []
     }
 
-    let startOfMonth = json["startOfMonth"] as? String
-
-    let modelEntries = extractModelEntries(from: json)
-
-    /// A valid response always carries `startOfMonth`. An empty modelUsages
-    /// list is normal for fresh accounts, but with NO `startOfMonth` either,
-    /// the schema has changed and the snapshot would silently look healthy.
-    /// Surface that as a parse failure so the user/operator notices.
-    if startOfMonth == nil && modelEntries.isEmpty {
-      Logger.usage.error("[cursor] Response missing both startOfMonth and model entries — schema changed?")
-      return failureSnapshot(
-        message: "Parse error",
-        userID: userID,
-        fetchedAt: now,
-        sourceKind: sourceKind,
-        sourceLabel: sourceLabel
-      )
+    guard let raw = root["usageEventsDisplay"] as? [[String: Any]] else {
+      let keys = root.keys.sorted().joined(separator: ", ")
+      Logger.usage.error("[cursor] events: missing usageEventsDisplay — keys=[\(keys)]")
+      return []
     }
 
-    var totalRequests = 0
-    var maxLimit: Int? = nil
+    return raw.map { event in
+      let tokenUsage = event["tokenUsage"] as? [String: Any] ?? [:]
+      return UsageEvent(
+        model: (event["model"] as? String) ?? "Unknown",
+        kind: (event["kind"] as? String) ?? "Unknown",
+        inputTokens: intField(tokenUsage["inputTokens"]),
+        outputTokens: intField(tokenUsage["outputTokens"]),
+        cacheReadTokens: intField(tokenUsage["cacheReadTokens"]),
+        cacheWriteTokens: intField(tokenUsage["cacheWriteTokens"]),
+        cost: parseCostField(event["usageBasedCosts"])
+      )
+    }
+  }
 
-    for (_, entry) in modelEntries {
-      if let used = entry["numRequests"] as? Int {
-        totalRequests += used
-      }
+  nonisolated static func parseCurrentPeriod(data: Data) -> CurrentPeriodTotals? {
+    guard let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+      Logger.usage.error("[cursor] current-period: non-JSON — snippet=\(bodySnippet(data))")
+      return nil
+    }
 
-      if let limit = entry["maxRequestUsage"] as? Int {
-        if let current = maxLimit {
-          maxLimit = max(current, limit)
-        } else {
-          maxLimit = limit
+    Logger.usage.info("[cursor] current-period keys=[\(root.keys.sorted().joined(separator: ", "))]")
+
+    return CurrentPeriodTotals(
+      spent: doubleField(root, keys: ["totalCents", "currentSpendCents"]).map { $0 / 100 }
+        ?? doubleField(root, keys: ["totalCost", "totalSpend", "currentSpend", "spent"]),
+      includedDollars: doubleField(root, keys: ["includedCreditCents", "includedAmountCents"]).map { $0 / 100 }
+        ?? doubleField(root, keys: ["includedCredit", "includedAmount", "planCredit"]),
+      hardLimitDollars: doubleField(root, keys: ["hardLimitCents"]).map { $0 / 100 }
+        ?? doubleField(root, keys: ["hardLimit", "hardLimitDollars"])
+    )
+  }
+
+  nonisolated private static func intField(_ value: Any?) -> Int {
+    if let i = value as? Int { return i }
+    if let d = value as? Double { return Int(d) }
+    if let s = value as? String, let i = Int(s) { return i }
+    return 0
+  }
+
+  nonisolated private static func doubleField(
+    _ root: [String: Any],
+    keys: [String]
+  ) -> Double? {
+    for key in keys {
+      if let v = root[key] {
+        if let d = v as? Double { return d }
+        if let i = v as? Int { return Double(i) }
+        if let s = v as? String, let d = Double(s.replacingOccurrences(of: "$", with: "")) {
+          return d
         }
       }
     }
+    return nil
+  }
 
-    let resetLabel = startOfMonth.flatMap { formatMonthlyReset(startOfMonthISO: $0) }
-    let usedString = "\(totalRequests)"
-    let limitString = maxLimit.map { "\($0)" }
-    let remainingString = maxLimit.map { "\(max(0, $0 - totalRequests))" }
-    let percentUsed: Double? = maxLimit.flatMap { limit in
-      limit > 0 ? min(100, Double(totalRequests) / Double(limit) * 100) : nil
+  /// Parses `usageBasedCosts` which the API serializes inconsistently —
+  /// sometimes a `"$1.23"` string, sometimes a number, sometimes an object
+  /// with a `cost`/`totalCost` field.
+  nonisolated private static func parseCostField(_ value: Any?) -> Double {
+    if let s = value as? String {
+      let trimmed = s.replacingOccurrences(of: "$", with: "")
+        .replacingOccurrences(of: ",", with: "")
+      return Double(trimmed) ?? 0
+    }
+    if let d = value as? Double { return d }
+    if let i = value as? Int { return Double(i) }
+    if let dict = value as? [String: Any] {
+      for key in ["cost", "totalCost", "amount", "value", "price"] {
+        if let nested = dict[key] {
+          let v = parseCostField(nested)
+          if v != 0 { return v }
+        }
+      }
+    }
+    if let array = value as? [Any] {
+      return array.map { parseCostField($0) }.reduce(0, +)
+    }
+    return 0
+  }
+
+  // MARK: - Snapshot building
+
+  nonisolated private static func buildSnapshot(
+    events: [UsageEvent],
+    periodTotals: CurrentPeriodTotals?,
+    periodStart: Date,
+    sourceKind: UsageSourceKind,
+    sourceLabel: String
+  ) -> UsageSnapshot {
+    let now = Date()
+
+    var spentUsageBased = 0.0
+    var includedValue = 0.0
+    var inputTokens = 0
+    var outputTokens = 0
+    var cacheTokens = 0
+    var errorCount = 0
+
+    for event in events {
+      inputTokens += event.inputTokens
+      outputTokens += event.outputTokens
+      cacheTokens += event.cacheReadTokens + event.cacheWriteTokens
+
+      let upperKind = event.kind.uppercased()
+      if upperKind.contains("ERROR") {
+        errorCount += 1
+      } else if upperKind.contains("INCLUDED") {
+        includedValue += event.cost
+      } else {
+        spentUsageBased += event.cost
+      }
     }
 
-    var metrics: [UsageMetric] = []
-
-    let requestsValue: String
-    if let limitString {
-      requestsValue = "\(totalRequests) / \(limitString)"
-    } else {
-      requestsValue = "\(totalRequests)"
+    let spent = periodTotals?.spent ?? spentUsageBased
+    let limit = periodTotals?.includedDollars ?? periodTotals?.hardLimitDollars
+    let percentUsed: Double? = limit.flatMap { lim in
+      lim > 0 ? min(100, spent / lim * 100) : nil
     }
 
-    let requestsStyle: UsageMetricStyle
-    if let pct = percentUsed {
-      requestsStyle = pct >= 90 ? .warning : pct >= 70 ? .cost : .normal
+    let resetLabel = formatPeriodReset(periodStart: periodStart)
+
+    let spentValue: String
+    if let limit {
+      spentValue = "\(formatDollars(spent)) / \(formatDollars(limit))"
     } else {
-      requestsStyle = .normal
+      spentValue = formatDollars(spent)
+    }
+
+    let spentStyle: UsageMetricStyle = {
+      guard let pct = percentUsed else { return .cost }
+      if pct >= 90 { return .warning }
+      if pct >= 70 { return .cost }
+      return .cost
+    }()
+
+    var metrics: [UsageMetric] = [
+      UsageMetric(label: "Spent (this period)", value: spentValue, style: spentStyle)
+    ]
+
+    if includedValue > 0 {
+      metrics.append(UsageMetric(
+        label: "Included value",
+        value: formatDollars(includedValue),
+        style: .normal
+      ))
+    }
+
+    let totalTokens = inputTokens + outputTokens + cacheTokens
+    if totalTokens > 0 {
+      metrics.append(UsageMetric(
+        label: "Tokens (in / out)",
+        value: "\(formatTokens(inputTokens)) / \(formatTokens(outputTokens))",
+        style: .normal
+      ))
+      if cacheTokens > 0 {
+        metrics.append(UsageMetric(
+          label: "Tokens (cache)",
+          value: formatTokens(cacheTokens),
+          style: .normal
+        ))
+      }
     }
 
     metrics.append(UsageMetric(
-      label: "Requests (monthly)",
-      value: requestsValue,
-      style: requestsStyle
+      label: "Events",
+      value: "\(events.count)",
+      style: .normal
     ))
 
-    if let resetLabel {
+    if errorCount > 0 {
       metrics.append(UsageMetric(
-        label: "Resets",
-        value: resetLabel,
+        label: "Errors (not charged)",
+        value: "\(errorCount)",
         style: .normal
       ))
+    }
+
+    if let resetLabel {
+      metrics.append(UsageMetric(label: "Resets", value: resetLabel, style: .normal))
     }
 
     return UsageSnapshot(
       provider: .cursor,
       sourceKind: sourceKind,
       sourceLabel: sourceLabel,
-      account: userID,
+      account: nil,
       quotaWindow: UsageQuotaWindow(name: "Monthly", resetLabel: resetLabel),
-      used: usedString,
-      limit: limitString,
-      remaining: remainingString,
+      used: formatDollars(spent),
+      limit: limit.map { formatDollars($0) },
+      remaining: limit.map { formatDollars(max(0, $0 - spent)) },
       percentUsed: percentUsed,
       metrics: metrics,
       fetchedAt: now
     )
   }
 
-  /// Returns per-model entries from either the flat or nested response shape.
-  nonisolated private static func extractModelEntries(
-    from json: [String: Any]
-  ) -> [(String, [String: Any])] {
-    if let nested = json["modelUsages"] as? [String: Any] {
-      return nested.compactMap { key, value in
-        guard let dict = value as? [String: Any] else {
-          return nil
-        }
-        return (key, dict)
-      }
-    }
+  // MARK: - Period & formatting helpers
 
-    return json.compactMap { key, value in
-      guard key != "startOfMonth",
-            let dict = value as? [String: Any]
-      else {
-        return nil
-      }
-      return (key, dict)
-    }
+  /// Returns `[startOfCurrentMonthUTC, now]`. Matches Cursor's billing
+  /// display, which resets on the 1st of each calendar month.
+  nonisolated private static func currentBillingPeriod() -> (Date, Date) {
+    var calendar = Calendar(identifier: .gregorian)
+    calendar.timeZone = TimeZone(identifier: "UTC") ?? .current
+    let now = Date()
+    let components = calendar.dateComponents([.year, .month], from: now)
+    let start = calendar.date(from: components) ?? now
+    return (start, now)
   }
 
-  nonisolated private static func formatMonthlyReset(startOfMonthISO: String) -> String? {
-    let formatter = ISO8601DateFormatter()
-    formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-
-    var startDate = formatter.date(from: startOfMonthISO)
-    if startDate == nil {
-      formatter.formatOptions = [.withInternetDateTime]
-      startDate = formatter.date(from: startOfMonthISO)
-    }
-
-    guard let start = startDate else {
+  nonisolated private static func formatPeriodReset(periodStart: Date) -> String? {
+    var calendar = Calendar(identifier: .gregorian)
+    calendar.timeZone = TimeZone(identifier: "UTC") ?? .current
+    guard let next = calendar.date(byAdding: .month, value: 1, to: periodStart) else {
       return nil
     }
-
-    guard let resetDate = Calendar(identifier: .gregorian).date(
-      byAdding: .month,
-      value: 1,
-      to: start
-    ) else {
-      return nil
-    }
-
     let display = DateFormatter()
     display.dateStyle = .medium
     display.timeStyle = .none
-    return display.string(from: resetDate)
+    return display.string(from: next)
   }
 
-  nonisolated private static func failureSnapshot(
-    message: String,
-    userID: String,
-    fetchedAt: Date,
-    sourceKind: UsageSourceKind,
-    sourceLabel: String
-  ) -> UsageSnapshot {
-    UsageSnapshot(
-      provider: .cursor,
-      sourceKind: sourceKind,
-      sourceLabel: sourceLabel,
-      account: userID,
-      quotaWindow: nil,
-      used: message,
-      limit: nil,
-      remaining: nil,
-      percentUsed: nil,
-      metrics: [],
-      fetchedAt: fetchedAt
-    )
+  nonisolated private static func formatDollars(_ value: Double) -> String {
+    String(format: "$%.2f", value)
+  }
+
+  nonisolated private static func formatTokens(_ value: Int) -> String {
+    if value >= 1_000_000 {
+      return String(format: "%.1fM", Double(value) / 1_000_000)
+    }
+    if value >= 1_000 {
+      return "\(value / 1_000)k"
+    }
+    return "\(value)"
   }
 
   // MARK: - Cursor State DB (auto-detect)
@@ -422,7 +679,23 @@ enum CursorUsageProvider {
     let token = String(cString: cString).trimmingCharacters(in: .whitespacesAndNewlines)
 
     guard !token.isEmpty else {
+      Logger.usage.error("[cursor] cursorAuth/accessToken row is empty after trim")
       throw UsageFetchError.noCredentials
+    }
+
+    let segmentCount = token.split(separator: ".").count
+    let looksLikeJWT = segmentCount == 3
+    Logger.usage.info(
+      "[cursor] Read accessToken from state DB — length=\(token.count) segments=\(segmentCount) looksLikeJWT=\(looksLikeJWT) sample=\(redact(token))"
+    )
+
+    if !looksLikeJWT {
+      // Not throwing — let the caller try anyway and log the downstream
+      // failure. Common cause: Cursor wrapped the token in JSON or changed
+      // the storage key.
+      Logger.usage.warning(
+        "[cursor] Token in state DB does not look like a JWT (expected 3 dot-separated segments). Cursor.app may have changed its storage format."
+      )
     }
 
     return token

@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 /// Main settings view with sidebar navigation.
@@ -30,6 +31,9 @@ struct SettingsView: View {
 
         case .usage:
           UsageSettingsTab()
+
+        case .logs:
+          LogsSettingsTab()
 
         case .licenses:
           LicensesSettingsTab()
@@ -1066,12 +1070,18 @@ struct PromptEditorSheet: View {
 struct UsageSettingsTab: View {
   private var configManager = ConfigManager.shared
   private var usageService = UsageService.shared
+  #if DEBUG
+  private var responseStore = ProviderResponseStore.shared
+  #endif
 
   @State private var cursorJWTInput: String = ""
   @State private var hasSavedCursorJWT: Bool = false
   @State private var cursorAutoDetected: Bool = false
   @State private var saveError: String?
   @State private var showManualOverride: Bool = false
+  #if DEBUG
+  @State private var expandedResponseIDs: Set<String> = []
+  #endif
 
   var body: some View {
     Form {
@@ -1088,6 +1098,10 @@ struct UsageSettingsTab: View {
           .font(.caption)
           .foregroundColor(.secondary)
       }
+
+      #if DEBUG
+      providerResponsesSection
+      #endif
 
       Section("Cursor") {
         HStack(alignment: .top, spacing: 8) {
@@ -1247,6 +1261,486 @@ struct UsageSettingsTab: View {
     cursorJWTInput = ""
     saveError = nil
     usageService.clearProvider(.cursor)
+  }
+
+  // MARK: - Provider Responses (DEBUG only)
+
+  #if DEBUG
+  /// Sorted snapshot of captured responses, grouped by provider and then by
+  /// endpoint name so the UI order is stable across refetches.
+  private var sortedResponses: [ProviderResponseStore.Entry] {
+    responseStore.entries.sorted { lhs, rhs in
+      if lhs.provider.rawValue != rhs.provider.rawValue {
+        return lhs.provider.rawValue < rhs.provider.rawValue
+      }
+
+      return lhs.endpoint < rhs.endpoint
+    }
+  }
+
+  @ViewBuilder
+  private var providerResponsesSection: some View {
+    Section {
+      Text("The most recent JSON each provider returned. Useful when deciding what new data to surface — auth headers aren't stored, and email-shaped strings are scrubbed before display. DEBUG builds only.")
+        .font(.caption)
+        .foregroundColor(.secondary)
+        .fixedSize(horizontal: false, vertical: true)
+
+      if sortedResponses.isEmpty {
+        Text("No responses captured yet. Enable usage tracking and connect a provider, then trigger a fetch.")
+          .font(.caption)
+          .foregroundColor(.secondary)
+      } else {
+        ForEach(sortedResponses) { entry in
+          ProviderResponseRow(
+            entry: entry,
+            isExpanded: expandedResponseIDs.contains(entry.id),
+            onToggleExpand: {
+              if expandedResponseIDs.contains(entry.id) {
+                expandedResponseIDs.remove(entry.id)
+              } else {
+                expandedResponseIDs.insert(entry.id)
+              }
+            },
+            onRefetch: {
+              Task {
+                await usageService.fetch(provider: entry.provider)
+              }
+            }
+          )
+        }
+
+        Button("Clear Captured Responses") {
+          responseStore.clear()
+          expandedResponseIDs.removeAll()
+        }
+        .buttonStyle(.borderless)
+      }
+    } header: {
+      Text("Latest JSON Responses")
+    }
+  }
+  #endif
+}
+
+#if DEBUG
+/// One captured response row with status badge, URL, body preview, and
+/// per-row actions (copy, refetch, expand). DEBUG-only feature view.
+private struct ProviderResponseRow: View {
+  let entry: ProviderResponseStore.Entry
+  let isExpanded: Bool
+  let onToggleExpand: () -> Void
+  let onRefetch: () -> Void
+
+  var body: some View {
+    VStack(alignment: .leading, spacing: 6) {
+      HStack(spacing: 8) {
+        Text(entry.provider.displayName)
+          .font(.system(size: 12, weight: .semibold))
+
+        Text(entry.endpoint)
+          .font(.system(size: 11, design: .monospaced))
+          .padding(.horizontal, 6)
+          .padding(.vertical, 2)
+          .background(appCardColor)
+          .cornerRadius(3)
+
+        statusBadge
+
+        Spacer()
+
+        Text(entry.fetchedAt, style: .relative)
+          .font(.caption)
+          .foregroundColor(.secondary)
+
+        Button {
+          onToggleExpand()
+        } label: {
+          Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
+        }
+        .buttonStyle(.borderless)
+        .accessibilityLabel(isExpanded ? "Collapse response" : "Expand response")
+      }
+
+      /// URL path (host omitted) — keeps the meaningful endpoint visible
+      /// even when the row is narrow. Full URL is reachable via Copy JSON
+      /// for the rare case it matters.
+      Text(displayURL)
+        .font(.system(size: 10, design: .monospaced))
+        .foregroundColor(.secondary)
+        .lineLimit(1)
+        .truncationMode(.middle)
+
+      if let error = entry.error {
+        Text("Error: \(error)")
+          .font(.caption)
+          .foregroundColor(.red)
+      }
+
+      if isExpanded {
+        ScrollView([.horizontal, .vertical]) {
+          Text(entry.prettyBody)
+            .font(.system(size: 11, design: .monospaced))
+            .textSelection(.enabled)
+            .padding(8)
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .frame(maxHeight: 320)
+        .background(appCardColor)
+        .cornerRadius(6)
+
+        HStack(spacing: 8) {
+          Button {
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString(entry.prettyBody, forType: .string)
+          } label: {
+            Label("Copy JSON", systemImage: "doc.on.doc")
+          }
+          .buttonStyle(.bordered)
+
+          Button {
+            onRefetch()
+          } label: {
+            Label("Refetch", systemImage: "arrow.clockwise")
+          }
+          .buttonStyle(.bordered)
+
+          Spacer()
+
+          Text("\(entry.byteCount) bytes")
+            .font(.caption)
+            .foregroundColor(.secondary)
+        }
+      }
+    }
+    .padding(.vertical, 2)
+  }
+
+  /// Host + path — drops scheme noise but keeps enough to disambiguate
+  /// providers that share an endpoint name (e.g. `admin-orgs` vs
+  /// `browser-orgs`).
+  private var displayURL: String {
+    guard let parsed = URL(string: entry.url),
+          let host = parsed.host
+    else {
+      return entry.url
+    }
+
+    return host + parsed.path
+  }
+
+  private var statusBadge: some View {
+    let descriptor = statusDescriptor
+
+    return Text(descriptor.label)
+      .font(.system(size: 10, weight: .semibold, design: .monospaced))
+      .foregroundColor(descriptor.foreground)
+      .padding(.horizontal, 6)
+      .padding(.vertical, 2)
+      .background(descriptor.background)
+      .cornerRadius(3)
+      .accessibilityLabel("HTTP status \(descriptor.label)")
+  }
+
+  private var statusDescriptor: (label: String, foreground: Color, background: Color) {
+    guard let code = entry.statusCode else {
+      // Transport error / no status — keep readable on the muted background.
+      return ("—", .primary, Color.secondary.opacity(0.25))
+    }
+
+    switch code {
+    case 200..<300:
+      return ("\(code)", .white, .green)
+
+    case 400..<500:
+      return ("\(code)", .white, .orange)
+
+    case 500..<600:
+      return ("\(code)", .white, .red)
+
+    default:
+      return ("\(code)", .primary, Color.secondary.opacity(0.25))
+    }
+  }
+}
+#endif
+
+// MARK: - Logs Settings Tab
+
+struct LogsSettingsTab: View {
+  @State private var entries: [LogReader.Entry] = []
+  @State private var minLevel: LogReader.Level = .error
+  @State private var selectedCategory: String = "All"
+  @State private var isPaused: Bool = false
+  @State private var lastRefreshDate: Date = .now
+  @State private var lastError: String?
+  @State private var hasLoadedOnce: Bool = false
+
+  /// Rolling 2-hour window, anchored at "now" on every fetch.
+  private let timeWindowSeconds: TimeInterval = 2 * 60 * 60
+  private let refreshInterval: Duration = .seconds(2)
+
+  private var availableCategories: [String] {
+    var categories = Set(entries.map(\.category))
+
+    if selectedCategory != "All" {
+      categories.insert(selectedCategory)
+    }
+
+    return ["All"] + categories.sorted()
+  }
+
+  private var filteredEntries: [LogReader.Entry] {
+    let matched = entries.filter { entry in
+      selectedCategory == "All" || entry.category == selectedCategory
+    }
+
+    return matched.sorted { lhs, rhs in
+      lhs.date > rhs.date
+    }
+  }
+
+  var body: some View {
+    VStack(alignment: .leading, spacing: 12) {
+      controls
+
+      if let lastError {
+        Text("Failed to read logs: \(lastError)")
+          .font(.caption)
+          .foregroundColor(.red)
+      }
+
+      Divider()
+
+      if filteredEntries.isEmpty {
+        emptyState
+      } else {
+        logList
+      }
+
+      Divider()
+
+      footer
+    }
+    .padding()
+    .background(appBackgroundColor)
+    .task(id: isPaused) {
+      guard !isPaused else {
+        return
+      }
+
+      while !Task.isCancelled {
+        await refresh()
+
+        do {
+          try await Task.sleep(for: refreshInterval)
+        } catch {
+          return
+        }
+      }
+    }
+    .onChange(of: minLevel) { _, _ in
+      Task {
+        await refresh()
+      }
+    }
+  }
+
+  private var controls: some View {
+    HStack(spacing: 12) {
+      Picker("Min level", selection: $minLevel) {
+        ForEach(LogReader.Level.allCases, id: \.self) { level in
+          Text(level.displayName).tag(level)
+        }
+      }
+      .pickerStyle(.menu)
+      .frame(maxWidth: 200)
+
+      Picker("Category", selection: $selectedCategory) {
+        ForEach(availableCategories, id: \.self) { category in
+          Text(category).tag(category)
+        }
+      }
+      .pickerStyle(.menu)
+      .frame(maxWidth: 220)
+
+      Spacer()
+
+      Button {
+        isPaused.toggle()
+      } label: {
+        Label(
+          isPaused ? "Resume" : "Pause",
+          systemImage: isPaused ? "play.fill" : "pause.fill"
+        )
+      }
+
+      Button {
+        Task {
+          await refresh()
+        }
+      } label: {
+        Label("Refresh", systemImage: "arrow.clockwise")
+      }
+    }
+  }
+
+  private var emptyState: some View {
+    VStack(spacing: 8) {
+      Image(systemName: "doc.text.magnifyingglass")
+        .font(.system(size: 32))
+        .foregroundColor(.secondary)
+
+      Text(hasLoadedOnce ? "No log entries match the current filter." : "Loading…")
+        .font(.subheadline)
+        .foregroundColor(.secondary)
+
+      Text("Showing entries from the last 2 hours.")
+        .font(.caption)
+        .foregroundColor(.secondary)
+    }
+    .frame(maxWidth: .infinity, maxHeight: .infinity)
+  }
+
+  private var logList: some View {
+    ScrollView {
+      LazyVStack(alignment: .leading, spacing: 0) {
+        ForEach(filteredEntries) { entry in
+          LogRow(entry: entry)
+          Divider()
+        }
+      }
+    }
+    .background(appCardColor)
+    .cornerRadius(6)
+  }
+
+  private var footer: some View {
+    HStack {
+      TimelineView(.periodic(from: .now, by: 1.0)) { context in
+        Text(statusText(now: context.date))
+          .font(.caption)
+          .foregroundColor(.secondary)
+      }
+
+      Spacer()
+
+      Button {
+        copyAllToClipboard()
+      } label: {
+        Label("Copy All", systemImage: "doc.on.doc")
+      }
+      .disabled(filteredEntries.isEmpty)
+    }
+  }
+
+  private func statusText(now: Date) -> String {
+    let count = filteredEntries.count
+    let countText = count == 1 ? "1 entry" : "\(count) entries"
+
+    let agoText: String
+    if isPaused {
+      agoText = "Paused"
+    } else {
+      let secondsAgo = max(0, Int(now.timeIntervalSince(lastRefreshDate)))
+      agoText = secondsAgo <= 1 ? "Refreshed just now" : "Refreshed \(secondsAgo)s ago"
+    }
+
+    return "\(countText) · Last 2h · \(agoText)"
+  }
+
+  @MainActor
+  private func refresh() async {
+    let level = minLevel
+    let since = Date().addingTimeInterval(-timeWindowSeconds)
+
+    let result = await Task.detached(priority: .userInitiated) {
+      Result {
+        try LogReader.fetch(minLevel: level, since: since)
+      }
+    }.value
+
+    switch result {
+    case .success(let fetched):
+      entries = fetched
+      lastError = nil
+
+    case .failure(let error):
+      lastError = error.localizedDescription
+    }
+
+    lastRefreshDate = .now
+    hasLoadedOnce = true
+  }
+
+  private func copyAllToClipboard() {
+    let formatter = ISO8601DateFormatter()
+    formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+
+    let text = filteredEntries.map { entry in
+      let timestamp = formatter.string(from: entry.date)
+      let level = entry.level.displayName.uppercased()
+      return "\(timestamp) \(level) \(entry.category): \(entry.message)"
+    }.joined(separator: "\n")
+
+    NSPasteboard.general.clearContents()
+    NSPasteboard.general.setString(text, forType: .string)
+  }
+}
+
+private struct LogRow: View {
+  let entry: LogReader.Entry
+
+  private static let timeFormatter: DateFormatter = {
+    let formatter = DateFormatter()
+    formatter.dateFormat = "HH:mm:ss.SSS"
+    return formatter
+  }()
+
+  var body: some View {
+    HStack(alignment: .top, spacing: 8) {
+      Text(Self.timeFormatter.string(from: entry.date))
+        .font(.system(size: 11, design: .monospaced))
+        .foregroundColor(.secondary)
+        .frame(width: 90, alignment: .leading)
+
+      Text(entry.level.displayName.uppercased())
+        .font(.system(size: 10, weight: .semibold, design: .monospaced))
+        .foregroundColor(.white)
+        .padding(.horizontal, 6)
+        .padding(.vertical, 2)
+        .background(levelColor)
+        .cornerRadius(3)
+        .frame(width: 60, alignment: .leading)
+
+      Text(entry.category)
+        .font(.system(size: 11, design: .monospaced))
+        .foregroundColor(.primary)
+        .frame(width: 90, alignment: .leading)
+
+      Text(entry.message)
+        .font(.system(size: 11, design: .monospaced))
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .textSelection(.enabled)
+    }
+    .padding(.horizontal, 8)
+    .padding(.vertical, 4)
+  }
+
+  private var levelColor: Color {
+    switch entry.level {
+    case .fault, .error:
+      return .red
+
+    case .notice:
+      return .orange
+
+    case .info:
+      return .blue
+
+    case .debug:
+      return .gray
+    }
   }
 }
 
