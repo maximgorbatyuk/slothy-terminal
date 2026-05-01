@@ -2,13 +2,13 @@ import Foundation
 
 /// In-memory store of the most recent raw HTTP response per
 /// `(provider, endpoint)` pair. Powers the Settings → Usage tab's "Latest JSON
-/// responses" section so the developer can inspect the actual JSON shape each
-/// provider returns before deciding what to surface in the UI.
+/// responses" section so users (and developers) can inspect the actual JSON
+/// shape each provider returns.
 ///
 /// Auth material is never stored — request headers (Cookie, Authorization)
 /// aren't recorded. Email-shaped strings in response bodies are scrubbed
-/// before storage to avoid surfacing PII. Capture is gated to DEBUG builds at
-/// each call site, so this entire feature is inert in Release.
+/// before storage to avoid surfacing PII. Captured entries live only in
+/// memory for the lifetime of the process.
 @Observable
 @MainActor
 final class ProviderResponseStore {

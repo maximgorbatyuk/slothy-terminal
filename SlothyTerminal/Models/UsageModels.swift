@@ -134,6 +134,23 @@ struct UsageMetric: Identifiable, Equatable {
   }
 }
 
+/// A single chargeable event for the "Recent usage" tooltip section.
+/// Provider-agnostic, but currently only Cursor populates it.
+///
+/// `id` is derived from `timestamp` + `model` so SwiftUI's `ForEach` keeps
+/// the same row identity across refetches when the underlying event is the
+/// same — without this, every refresh would generate fresh UUIDs and
+/// trigger view diff churn (potential animation flicker).
+struct UsageEventDisplay: Identifiable, Equatable {
+  let model: String
+  let dollars: Double
+  let timestamp: Date
+
+  var id: String {
+    "\(timestamp.timeIntervalSince1970)-\(model)"
+  }
+}
+
 /// A snapshot of usage data from a provider.
 struct UsageSnapshot: Equatable {
   let provider: UsageProvider
@@ -146,7 +163,36 @@ struct UsageSnapshot: Equatable {
   let remaining: String?
   let percentUsed: Double?
   let metrics: [UsageMetric]
+  let events: [UsageEventDisplay]
   let fetchedAt: Date
+
+  init(
+    provider: UsageProvider,
+    sourceKind: UsageSourceKind,
+    sourceLabel: String,
+    account: String?,
+    quotaWindow: UsageQuotaWindow?,
+    used: String,
+    limit: String?,
+    remaining: String?,
+    percentUsed: Double?,
+    metrics: [UsageMetric],
+    events: [UsageEventDisplay] = [],
+    fetchedAt: Date
+  ) {
+    self.provider = provider
+    self.sourceKind = sourceKind
+    self.sourceLabel = sourceLabel
+    self.account = account
+    self.quotaWindow = quotaWindow
+    self.used = used
+    self.limit = limit
+    self.remaining = remaining
+    self.percentUsed = percentUsed
+    self.metrics = metrics
+    self.events = events
+    self.fetchedAt = fetchedAt
+  }
 }
 
 /// User preferences for the usage stats feature.

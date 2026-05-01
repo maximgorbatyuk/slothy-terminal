@@ -155,7 +155,6 @@ enum CursorUsageProvider {
       Logger.usage.info("[cursor] events request page=\(page) start=\(startMS) end=\(endMS)")
       let (data, response) = try await URLSession.shared.data(for: request)
 
-      #if DEBUG
       ProviderResponseStore.record(
         provider: .cursor,
         endpoint: "events",
@@ -163,7 +162,6 @@ enum CursorUsageProvider {
         statusCode: (response as? HTTPURLResponse)?.statusCode,
         body: data
       )
-      #endif
 
       guard let http = response as? HTTPURLResponse else {
         throw UsageFetchError.invalidResponse
@@ -216,7 +214,6 @@ enum CursorUsageProvider {
       (data, response) = try await URLSession.shared.data(for: request)
     } catch {
       Logger.usage.warning("[cursor] current-period transport error: \(error.localizedDescription)")
-      #if DEBUG
       ProviderResponseStore.record(
         provider: .cursor,
         endpoint: "current-period",
@@ -225,11 +222,9 @@ enum CursorUsageProvider {
         body: Data(),
         error: error.localizedDescription
       )
-      #endif
       return nil
     }
 
-    #if DEBUG
     ProviderResponseStore.record(
       provider: .cursor,
       endpoint: "current-period",
@@ -237,7 +232,6 @@ enum CursorUsageProvider {
       statusCode: (response as? HTTPURLResponse)?.statusCode,
       body: data
     )
-    #endif
 
     guard let http = response as? HTTPURLResponse else {
       return nil
@@ -358,11 +352,19 @@ enum CursorUsageProvider {
     /// rows (where it represents the would-be cost — useful for a "value
     /// included" display). May be 0 for free/error rows.
     let cost: Double
+    /// Cents charged to the user for this event, from `chargedCents`.
+    /// Authoritative source for the per-event dollar amount shown in the
+    /// "Recent usage" tooltip section (vs. `cost`, which is the legacy
+    /// `usageBasedCosts` field — often `"-"` on Ultra plans).
+    let chargedDollars: Double
+    /// Event timestamp, parsed from the `timestamp` field (milliseconds
+    /// since epoch, serialized as a string by the dashboard API).
+    let timestamp: Date
   }
 
   /// Aggregated plan totals from `get-current-period-usage`. Field shape
-  /// varies across plans; we extract the common shape and tolerate keys
-  /// being absent.
+  /// varies across plans; we extract both the legacy flat shape and the
+  /// current `planUsage`-nested shape.
   struct CurrentPeriodTotals: Equatable {
     /// Dollars spent in the current period (usage-based portion).
     let spent: Double?
@@ -370,6 +372,16 @@ enum CursorUsageProvider {
     let includedDollars: Double?
     /// Hard usage-based cap in dollars, if the user has set one.
     let hardLimitDollars: Double?
+    /// `planUsage.apiPercentUsed` — already a percentage (e.g. 5.318 = 5.32%).
+    let apiPercentUsed: Double?
+    /// `planUsage.autoPercentUsed` — already a percentage.
+    let autoPercentUsed: Double?
+    /// `planUsage.totalSpend` in dollars (raw API value is cents — divided by 100).
+    let totalSpendDollars: Double?
+    /// `planUsage.limit` in dollars (raw API value is cents — e.g. 40000 = $400 Ultra).
+    let limitDollars: Double?
+    /// `billingCycleEnd` as Date — period reset moment.
+    let billingCycleEnd: Date?
   }
 
   nonisolated static func parseEventsPage(data: Data) -> [UsageEvent] {
@@ -386,6 +398,7 @@ enum CursorUsageProvider {
 
     return raw.map { event in
       let tokenUsage = event["tokenUsage"] as? [String: Any] ?? [:]
+      let chargedCents = doubleAny(event["chargedCents"]) ?? 0
       return UsageEvent(
         model: (event["model"] as? String) ?? "Unknown",
         kind: (event["kind"] as? String) ?? "Unknown",
@@ -393,9 +406,28 @@ enum CursorUsageProvider {
         outputTokens: intField(tokenUsage["outputTokens"]),
         cacheReadTokens: intField(tokenUsage["cacheReadTokens"]),
         cacheWriteTokens: intField(tokenUsage["cacheWriteTokens"]),
-        cost: parseCostField(event["usageBasedCosts"])
+        cost: parseCostField(event["usageBasedCosts"]),
+        chargedDollars: chargedCents / 100,
+        timestamp: parseEpochMSField(event["timestamp"]) ?? .distantPast
       )
     }
+  }
+
+  /// Parses a number that the API may serialize as a number or a numeric
+  /// string. Returns nil if neither matches.
+  nonisolated private static func doubleAny(_ value: Any?) -> Double? {
+    if let d = value as? Double { return d }
+    if let i = value as? Int { return Double(i) }
+    if let s = value as? String, let d = Double(s) { return d }
+    return nil
+  }
+
+  /// Parses an epoch-milliseconds timestamp serialized as a string or number.
+  nonisolated private static func parseEpochMSField(_ value: Any?) -> Date? {
+    guard let ms = doubleAny(value) else {
+      return nil
+    }
+    return Date(timeIntervalSince1970: ms / 1000)
   }
 
   nonisolated static func parseCurrentPeriod(data: Data) -> CurrentPeriodTotals? {
@@ -406,13 +438,31 @@ enum CursorUsageProvider {
 
     Logger.usage.info("[cursor] current-period keys=[\(root.keys.sorted().joined(separator: ", "))]")
 
+    let planUsage = root["planUsage"] as? [String: Any] ?? [:]
+
+    /// Cursor reports `planUsage.totalSpend`, `limit`, and `includedSpend` in
+    /// cents — e.g. `limit: 40000` is $400 (Ultra plan), not $40,000. Divide
+    /// by 100 to get dollars consistent with the rest of the snapshot.
+    let totalSpendDollars = doubleField(planUsage, keys: ["totalSpend"]).map { $0 / 100 }
+    let limitDollars = doubleField(planUsage, keys: ["limit"]).map { $0 / 100 }
+    let includedDollarsFromPlan = doubleField(planUsage, keys: ["includedSpend"]).map { $0 / 100 }
+
     return CurrentPeriodTotals(
-      spent: doubleField(root, keys: ["totalCents", "currentSpendCents"]).map { $0 / 100 }
+      spent: totalSpendDollars
+        ?? doubleField(root, keys: ["totalCents", "currentSpendCents"]).map { $0 / 100 }
         ?? doubleField(root, keys: ["totalCost", "totalSpend", "currentSpend", "spent"]),
-      includedDollars: doubleField(root, keys: ["includedCreditCents", "includedAmountCents"]).map { $0 / 100 }
+      includedDollars: includedDollarsFromPlan
+        ?? doubleField(root, keys: ["includedCreditCents", "includedAmountCents"]).map { $0 / 100 }
         ?? doubleField(root, keys: ["includedCredit", "includedAmount", "planCredit"]),
       hardLimitDollars: doubleField(root, keys: ["hardLimitCents"]).map { $0 / 100 }
-        ?? doubleField(root, keys: ["hardLimit", "hardLimitDollars"])
+        ?? doubleField(root, keys: ["hardLimit", "hardLimitDollars"]),
+      apiPercentUsed: doubleField(planUsage, keys: ["apiPercentUsed"]),
+      autoPercentUsed: doubleField(planUsage, keys: ["autoPercentUsed"]),
+      totalSpendDollars: totalSpendDollars,
+      limitDollars: limitDollars,
+      billingCycleEnd: doubleField(root, keys: ["billingCycleEnd"]).map {
+        Date(timeIntervalSince1970: $0 / 1000)
+      }
     )
   }
 
@@ -466,7 +516,12 @@ enum CursorUsageProvider {
 
   // MARK: - Snapshot building
 
-  nonisolated private static func buildSnapshot(
+  /// How many events to surface in the tooltip's "Recent usage" section.
+  static let recentEventsLimit = 5
+
+  /// `internal` so unit tests can build snapshots from synthetic inputs
+  /// without going through the full `fetchUsage` HTTP path.
+  nonisolated static func buildSnapshot(
     events: [UsageEvent],
     periodTotals: CurrentPeriodTotals?,
     periodStart: Date,
@@ -476,94 +531,70 @@ enum CursorUsageProvider {
     let now = Date()
 
     var spentUsageBased = 0.0
-    var includedValue = 0.0
-    var inputTokens = 0
-    var outputTokens = 0
-    var cacheTokens = 0
-    var errorCount = 0
-
-    for event in events {
-      inputTokens += event.inputTokens
-      outputTokens += event.outputTokens
-      cacheTokens += event.cacheReadTokens + event.cacheWriteTokens
-
-      let upperKind = event.kind.uppercased()
-      if upperKind.contains("ERROR") {
-        errorCount += 1
-      } else if upperKind.contains("INCLUDED") {
-        includedValue += event.cost
-      } else {
-        spentUsageBased += event.cost
-      }
+    for event in events where !event.kind.uppercased().contains("ERROR")
+      && !event.kind.uppercased().contains("INCLUDED") {
+      spentUsageBased += event.cost
     }
 
-    let spent = periodTotals?.spent ?? spentUsageBased
-    let limit = periodTotals?.includedDollars ?? periodTotals?.hardLimitDollars
+    let spent = periodTotals?.totalSpendDollars
+      ?? periodTotals?.spent
+      ?? spentUsageBased
+
+    let limit = periodTotals?.limitDollars
+      ?? periodTotals?.includedDollars
+      ?? periodTotals?.hardLimitDollars
+
+    /// `UsageSnapshot.percentUsed` is the 0-1 fraction the status-bar bars
+    /// and popover progress bar expect — multiplied to a percentage by the
+    /// view layer. Storing it as 0-100 here would cause double-scaling in
+    /// `StatusBarUsageBars`.
     let percentUsed: Double? = limit.flatMap { lim in
-      lim > 0 ? min(100, spent / lim * 100) : nil
+      lim > 0 ? min(1, spent / lim) : nil
     }
 
-    let resetLabel = formatPeriodReset(periodStart: periodStart)
+    let resetLabel = formatPeriodReset(
+      cycleEnd: periodTotals?.billingCycleEnd,
+      periodStart: periodStart
+    )
 
-    let spentValue: String
+    var metrics: [UsageMetric] = []
+
+    if let apiPct = periodTotals?.apiPercentUsed {
+      metrics.append(UsageMetric(
+        label: "API usage",
+        value: formatPercent(apiPct),
+        style: percentStyle(apiPct)
+      ))
+    }
+
+    if let autoPct = periodTotals?.autoPercentUsed {
+      metrics.append(UsageMetric(
+        label: "Auto model usage",
+        value: formatPercent(autoPct),
+        style: .normal
+      ))
+    }
+
     if let limit {
-      spentValue = "\(formatDollars(spent)) / \(formatDollars(limit))"
+      let pctDisplay = (percentUsed ?? 0) * 100
+      metrics.append(UsageMetric(
+        label: "Spend",
+        value: "\(formatDollars(spent)) / \(formatDollars(limit)) (\(formatPercent(pctDisplay)))",
+        style: percentStyle(pctDisplay)
+      ))
     } else {
-      spentValue = formatDollars(spent)
-    }
-
-    let spentStyle: UsageMetricStyle = {
-      guard let pct = percentUsed else { return .cost }
-      if pct >= 90 { return .warning }
-      if pct >= 70 { return .cost }
-      return .cost
-    }()
-
-    var metrics: [UsageMetric] = [
-      UsageMetric(label: "Spent (this period)", value: spentValue, style: spentStyle)
-    ]
-
-    if includedValue > 0 {
       metrics.append(UsageMetric(
-        label: "Included value",
-        value: formatDollars(includedValue),
-        style: .normal
-      ))
-    }
-
-    let totalTokens = inputTokens + outputTokens + cacheTokens
-    if totalTokens > 0 {
-      metrics.append(UsageMetric(
-        label: "Tokens (in / out)",
-        value: "\(formatTokens(inputTokens)) / \(formatTokens(outputTokens))",
-        style: .normal
-      ))
-      if cacheTokens > 0 {
-        metrics.append(UsageMetric(
-          label: "Tokens (cache)",
-          value: formatTokens(cacheTokens),
-          style: .normal
-        ))
-      }
-    }
-
-    metrics.append(UsageMetric(
-      label: "Events",
-      value: "\(events.count)",
-      style: .normal
-    ))
-
-    if errorCount > 0 {
-      metrics.append(UsageMetric(
-        label: "Errors (not charged)",
-        value: "\(errorCount)",
-        style: .normal
+        label: "Spend",
+        value: formatDollars(spent),
+        style: .cost
       ))
     }
 
     if let resetLabel {
       metrics.append(UsageMetric(label: "Resets", value: resetLabel, style: .normal))
     }
+
+    let recentEvents = groupEventsByModel(events, limit: recentEventsLimit)
 
     return UsageSnapshot(
       provider: .cursor,
@@ -576,8 +607,57 @@ enum CursorUsageProvider {
       remaining: limit.map { formatDollars(max(0, $0 - spent)) },
       percentUsed: percentUsed,
       metrics: metrics,
+      events: recentEvents,
       fetchedAt: now
     )
+  }
+
+  /// Groups events by `model`, sums their `chargedDollars`, and returns the
+  /// top `limit` rows ordered by total spend descending. Each row's
+  /// `timestamp` is the most recent event for that model — preserves stable
+  /// SwiftUI identity across refetches via `UsageEventDisplay.id`.
+  ///
+  /// `internal` (not `private`) so unit tests can exercise the grouping
+  /// logic without going through the full `fetchUsage` HTTP path.
+  nonisolated static func groupEventsByModel(
+    _ events: [UsageEvent],
+    limit: Int
+  ) -> [UsageEventDisplay] {
+    var totals: [String: (dollars: Double, latest: Date)] = [:]
+
+    for event in events {
+      let existing = totals[event.model]
+      let newest = max(existing?.latest ?? .distantPast, event.timestamp)
+      totals[event.model] = (
+        dollars: (existing?.dollars ?? 0) + event.chargedDollars,
+        latest: newest
+      )
+    }
+
+    return totals
+      .map { model, value in
+        UsageEventDisplay(model: model, dollars: value.dollars, timestamp: value.latest)
+      }
+      .sorted { lhs, rhs in
+        if lhs.dollars != rhs.dollars {
+          return lhs.dollars > rhs.dollars
+        }
+
+        return lhs.timestamp > rhs.timestamp
+      }
+      .prefix(limit)
+      .map { $0 }
+  }
+
+  /// Maps a percentage (0-100) to the metric style we use for the spend row,
+  /// matching the popover's color thresholds.
+  nonisolated private static func percentStyle(_ percent: Double) -> UsageMetricStyle {
+    if percent >= 90 { return .warning }
+    return .cost
+  }
+
+  nonisolated private static func formatPercent(_ value: Double) -> String {
+    String(format: "%.2f%%", value)
   }
 
   // MARK: - Period & formatting helpers
@@ -593,15 +673,27 @@ enum CursorUsageProvider {
     return (start, now)
   }
 
-  nonisolated private static func formatPeriodReset(periodStart: Date) -> String? {
+  /// Prefers the API-provided `billingCycleEnd` when available; otherwise
+  /// falls back to "first of next month" derived from `periodStart`. The
+  /// fallback only matters for accounts where the dashboard endpoint omits
+  /// or 4xxs the period totals.
+  nonisolated private static func formatPeriodReset(
+    cycleEnd: Date?,
+    periodStart: Date
+  ) -> String? {
+    let display = DateFormatter()
+    display.dateStyle = .medium
+    display.timeStyle = .none
+
+    if let cycleEnd {
+      return display.string(from: cycleEnd)
+    }
+
     var calendar = Calendar(identifier: .gregorian)
     calendar.timeZone = TimeZone(identifier: "UTC") ?? .current
     guard let next = calendar.date(byAdding: .month, value: 1, to: periodStart) else {
       return nil
     }
-    let display = DateFormatter()
-    display.dateStyle = .medium
-    display.timeStyle = .none
     return display.string(from: next)
   }
 

@@ -1070,18 +1070,14 @@ struct PromptEditorSheet: View {
 struct UsageSettingsTab: View {
   private var configManager = ConfigManager.shared
   private var usageService = UsageService.shared
-  #if DEBUG
   private var responseStore = ProviderResponseStore.shared
-  #endif
 
   @State private var cursorJWTInput: String = ""
   @State private var hasSavedCursorJWT: Bool = false
   @State private var cursorAutoDetected: Bool = false
   @State private var saveError: String?
   @State private var showManualOverride: Bool = false
-  #if DEBUG
   @State private var expandedResponseIDs: Set<String> = []
-  #endif
 
   var body: some View {
     Form {
@@ -1099,9 +1095,7 @@ struct UsageSettingsTab: View {
           .foregroundColor(.secondary)
       }
 
-      #if DEBUG
       providerResponsesSection
-      #endif
 
       Section("Cursor") {
         HStack(alignment: .top, spacing: 8) {
@@ -1263,9 +1257,8 @@ struct UsageSettingsTab: View {
     usageService.clearProvider(.cursor)
   }
 
-  // MARK: - Provider Responses (DEBUG only)
+  // MARK: - Provider Responses
 
-  #if DEBUG
   /// Sorted snapshot of captured responses, grouped by provider and then by
   /// endpoint name so the UI order is stable across refetches.
   private var sortedResponses: [ProviderResponseStore.Entry] {
@@ -1281,7 +1274,7 @@ struct UsageSettingsTab: View {
   @ViewBuilder
   private var providerResponsesSection: some View {
     Section {
-      Text("The most recent JSON each provider returned. Useful when deciding what new data to surface — auth headers aren't stored, and email-shaped strings are scrubbed before display. DEBUG builds only.")
+      Text("The most recent JSON each provider returned. Useful when deciding what new data to surface — auth headers aren't stored, and email-shaped strings are scrubbed before display.")
         .font(.caption)
         .foregroundColor(.secondary)
         .fixedSize(horizontal: false, vertical: true)
@@ -1320,12 +1313,10 @@ struct UsageSettingsTab: View {
       Text("Latest JSON Responses")
     }
   }
-  #endif
 }
 
-#if DEBUG
 /// One captured response row with status badge, URL, body preview, and
-/// per-row actions (copy, refetch, expand). DEBUG-only feature view.
+/// per-row actions (copy, refetch, expand).
 private struct ProviderResponseRow: View {
   let entry: ProviderResponseStore.Entry
   let isExpanded: Bool
@@ -1463,7 +1454,6 @@ private struct ProviderResponseRow: View {
     }
   }
 }
-#endif
 
 // MARK: - Logs Settings Tab
 
