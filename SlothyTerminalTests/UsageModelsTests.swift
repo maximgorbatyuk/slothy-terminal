@@ -26,7 +26,7 @@ final class UsageModelsTests: XCTestCase {
   }
 
   func testUsageStatusBarProviders() {
-    XCTAssertEqual(UsageProvider.statusBarProviders, [.claude, .codex])
+    XCTAssertEqual(UsageProvider.statusBarProviders, [.claude, .codex, .cursor])
   }
 
   func testUsageAuthSourceExperimental() {

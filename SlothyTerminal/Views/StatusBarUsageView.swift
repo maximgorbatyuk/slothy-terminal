@@ -6,6 +6,11 @@ struct StatusBarUsageBars: View {
   private var usageService: UsageService { UsageService.shared }
 
   @State private var isPopoverPresented = false
+  @State private var isHovered = false
+  /// Provider to surface in the popover when it opens. Kept here (rather
+  /// than inside `UsagePopoverView`) so per-bar taps can pre-select the
+  /// matching tab before the popover appears.
+  @State private var selectedProvider: UsageProvider = .claude
 
   /// Providers that have a non-idle, non-unavailable status.
   /// Hiding `.unavailable` keeps the menubar clean for users who haven't
@@ -27,13 +32,32 @@ struct StatusBarUsageBars: View {
       HStack(spacing: 8) {
         ForEach(activeProviders, id: \.self) { provider in
           providerBar(provider)
+            .contentShape(Rectangle())
+            .onTapGesture {
+              selectedProvider = provider
+              isPopoverPresented = true
+            }
         }
+      }
+      .padding(.horizontal, 6)
+      .padding(.vertical, 3)
+      .background(
+        RoundedRectangle(cornerRadius: 4)
+          .fill(isHovered ? Color.primary.opacity(0.08) : Color.clear)
+      )
+      .contentShape(Rectangle())
+      .onHover { hovering in
+        isHovered = hovering
       }
       .onTapGesture {
         isPopoverPresented.toggle()
       }
+      .help("Click to view usage details")
       .popover(isPresented: $isPopoverPresented) {
-        UsagePopoverView(isPresented: $isPopoverPresented)
+        UsagePopoverView(
+          isPresented: $isPopoverPresented,
+          selectedProvider: $selectedProvider
+        )
       }
     }
   }
@@ -43,8 +67,8 @@ struct StatusBarUsageBars: View {
     let status = usageService.status(for: provider)
 
     HStack(spacing: 4) {
-      Image(systemName: provider.iconName)
-        .font(.system(size: 9))
+      Text(provider.displayName)
+        .font(.system(size: 10, weight: .medium))
         .foregroundColor(.secondary)
 
       switch status {
@@ -118,7 +142,7 @@ struct StatusBarUsageBars: View {
 /// Full usage detail popover shown on click.
 struct UsagePopoverView: View {
   @Binding var isPresented: Bool
-  @State private var selectedProvider: UsageProvider = .claude
+  @Binding var selectedProvider: UsageProvider
 
   private var usageService: UsageService { UsageService.shared }
 
@@ -148,10 +172,13 @@ struct UsagePopoverView: View {
 
       Divider()
 
-      /// Content area.
+      /// Content area. Right padding is wider so the AppKit overlay
+      /// scrollbar doesn't clip trailing numeric values.
       ScrollView {
         popoverContent(provider: selectedProvider)
-          .padding(12)
+          .padding(.leading, 12)
+          .padding(.trailing, 12)
+          .padding(.vertical, 12)
       }
       .frame(maxHeight: 320)
     }
@@ -275,6 +302,37 @@ struct UsagePopoverView: View {
         isHighlighted: metric.style == .highlighted,
         style: statRowStyle(for: metric.style)
       )
+    }
+
+    if !snapshot.events.isEmpty {
+      Divider()
+        .padding(.vertical, 4)
+
+      Text("Usage by model")
+        .font(.system(size: 10, weight: .semibold))
+        .foregroundColor(.secondary)
+        .frame(maxWidth: .infinity, alignment: .leading)
+
+      ForEach(Array(snapshot.events.enumerated()), id: \.element.id) { index, event in
+        HStack(spacing: 6) {
+          Text("\(index + 1).")
+            .font(.system(size: 10, design: .monospaced))
+            .foregroundColor(.secondary)
+            .frame(width: 16, alignment: .leading)
+
+          Text(event.model)
+            .font(.system(size: 10))
+            .foregroundColor(.primary)
+            .lineLimit(1)
+            .truncationMode(.tail)
+
+          Spacer(minLength: 4)
+
+          Text(String(format: "$%.2f", event.dollars))
+            .font(.system(size: 10, design: .monospaced))
+            .foregroundColor(event.dollars > 0 ? .primary : .secondary)
+        }
+      }
     }
 
     Divider()
