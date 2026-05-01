@@ -7,6 +7,7 @@ enum SettingsSection: String, CaseIterable, Identifiable {
   case shortcuts
   case prompts
   case usage
+  case logs
   case licenses
 
   var id: String { rawValue }
@@ -27,6 +28,9 @@ enum SettingsSection: String, CaseIterable, Identifiable {
 
     case .usage:
       return "Usage"
+
+    case .logs:
+      return "Logs"
 
     case .licenses:
       return "Licenses"
@@ -49,6 +53,9 @@ enum SettingsSection: String, CaseIterable, Identifiable {
 
     case .usage:
       return "chart.bar"
+
+    case .logs:
+      return "doc.text.magnifyingglass"
 
     case .licenses:
       return "doc.text"

@@ -698,6 +698,16 @@ class UsageService {
     Logger.usage.info("[claude] Requesting OAuth usage from api.anthropic.com")
     let (data, response) = try await URLSession.shared.data(for: request)
 
+    #if DEBUG
+    ProviderResponseStore.record(
+      provider: .claude,
+      endpoint: "oauth-usage",
+      url: url.absoluteString,
+      statusCode: (response as? HTTPURLResponse)?.statusCode,
+      body: data
+    )
+    #endif
+
     guard let httpResponse = response as? HTTPURLResponse else {
       Logger.usage.error("[claude] Non-HTTP response from OAuth usage endpoint")
       throw UsageFetchError.invalidResponse
@@ -1169,6 +1179,16 @@ class UsageService {
     Logger.usage.info("[claude] Requesting organizations from Anthropic admin API")
     let (orgData, orgResponse) = try await URLSession.shared.data(for: orgRequest)
 
+    #if DEBUG
+    ProviderResponseStore.record(
+      provider: .claude,
+      endpoint: "admin-orgs",
+      url: orgURL.absoluteString,
+      statusCode: (orgResponse as? HTTPURLResponse)?.statusCode,
+      body: orgData
+    )
+    #endif
+
     guard let httpResponse = orgResponse as? HTTPURLResponse else {
       Logger.usage.error("[claude] Non-HTTP response from organizations endpoint")
       throw UsageFetchError.invalidResponse
@@ -1262,6 +1282,16 @@ class UsageService {
 
     Logger.usage.info("[claude] Requesting organizations via browser session")
     let (responseData, response) = try await URLSession.shared.data(for: request)
+
+    #if DEBUG
+    ProviderResponseStore.record(
+      provider: .claude,
+      endpoint: "browser-orgs",
+      url: url.absoluteString,
+      statusCode: (response as? HTTPURLResponse)?.statusCode,
+      body: responseData
+    )
+    #endif
 
     guard let httpResponse = response as? HTTPURLResponse else {
       throw UsageFetchError.invalidResponse
@@ -1439,6 +1469,16 @@ class UsageService {
 
     Logger.usage.info("[codex] Requesting wham/usage from ChatGPT backend API")
     let (data, response) = try await URLSession.shared.data(for: request)
+
+    #if DEBUG
+    ProviderResponseStore.record(
+      provider: .codex,
+      endpoint: "wham-usage",
+      url: url.absoluteString,
+      statusCode: (response as? HTTPURLResponse)?.statusCode,
+      body: data
+    )
+    #endif
 
     guard let httpResponse = response as? HTTPURLResponse else {
       Logger.usage.error("[codex] Non-HTTP response from wham/usage")
@@ -1664,6 +1704,16 @@ class UsageService {
 
     Logger.usage.info("[codex] Requesting organization from OpenAI API")
     let (orgData, orgResponse) = try await URLSession.shared.data(for: orgRequest)
+
+    #if DEBUG
+    ProviderResponseStore.record(
+      provider: .codex,
+      endpoint: "openai-org",
+      url: orgURL.absoluteString,
+      statusCode: (orgResponse as? HTTPURLResponse)?.statusCode,
+      body: orgData
+    )
+    #endif
 
     guard let httpResponse = orgResponse as? HTTPURLResponse else {
       Logger.usage.error("[codex] Non-HTTP response from organization endpoint")
