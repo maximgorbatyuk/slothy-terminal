@@ -2,6 +2,15 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<!--
+		ATSApplicationFontsPath is "." (Resources root), not "Fonts", because
+		the Xcode PBXFileSystemSynchronizedRootGroup flattens Resources/Fonts/*.ttf
+		into Contents/Resources/ at build time. Do NOT change to "Fonts" — bundled
+		fonts will silently fail to register and the Appearance picker will fall
+		back to the system font. See AppDelegate.assertBundledFontsRegistered().
+	-->
+	<key>ATSApplicationFontsPath</key>
+	<string>.</string>
 	<key>SUEnableAutomaticChecks</key>
 	<string>YES</string>
 	<key>SUFeedURL</key>

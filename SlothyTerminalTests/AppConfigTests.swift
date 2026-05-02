@@ -135,6 +135,63 @@ struct AppConfigTests {
     #expect(config.colorScheme == defaults.colorScheme)
   }
 
+  // MARK: - App Font
+
+  @Test("AppFont defaults to system")
+  func appFontDefault() {
+    #expect(AppConfig().appFont == .system)
+  }
+
+  @Test("AppFont round-trips through encode/decode")
+  func appFontRoundTrip() throws {
+    var original = AppConfig()
+    original.appFont = .jetBrainsMono
+
+    let data = try JSONEncoder().encode(original)
+    let decoded = try JSONDecoder().decode(AppConfig.self, from: data)
+
+    #expect(decoded.appFont == .jetBrainsMono)
+  }
+
+  @Test("Missing appFont key falls back to system")
+  func appFontMissingFallsBack() throws {
+    let data = Data("{}".utf8)
+    let config = try JSONDecoder().decode(AppConfig.self, from: data)
+
+    #expect(config.appFont == .system)
+  }
+
+  @Test("Invalid appFont value falls back to system")
+  func appFontInvalidFallsBack() throws {
+    let json = """
+      {
+        "appFont": "comicSans"
+      }
+      """
+
+    let data = Data(json.utf8)
+    let config = try JSONDecoder().decode(AppConfig.self, from: data)
+
+    #expect(config.appFont == .system)
+  }
+
+  @Test("AppFont fontName is nil for system, family name for JetBrains Mono")
+  func appFontFontName() {
+    #expect(AppFont.system.fontName == nil)
+    #expect(AppFont.jetBrainsMono.fontName == "JetBrains Mono")
+  }
+
+  @Test("Encoded AppConfig includes appFont key with raw value")
+  func appFontEncoded() throws {
+    var config = AppConfig()
+    config.appFont = .jetBrainsMono
+
+    let data = try JSONEncoder().encode(config)
+    let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+
+    #expect(json?["appFont"] as? String == "jetBrainsMono")
+  }
+
   // MARK: - Round-trip
 
   @Test("Encode then decode preserves values")

@@ -27,15 +27,15 @@ struct EmptySidebarView: View {
   var body: some View {
     VStack(spacing: 12) {
       Image(systemName: "chart.bar")
-        .font(.system(size: 32))
+        .appFont(size: 32)
         .foregroundColor(.secondary)
 
       Text("No active session")
-        .font(.system(size: 12))
+        .appFont(size: 12)
         .foregroundColor(.secondary)
 
       Text("Create a tab to view usage statistics")
-        .font(.system(size: 11))
+        .appFont(size: 11)
         .foregroundColor(.secondary)
         .multilineTextAlignment(.center)
     }
@@ -80,15 +80,15 @@ struct DirectoryTreeView: View {
       } label: {
         HStack {
           Image(systemName: "folder.fill")
-            .font(.system(size: 10))
+            .appFont(size: 10)
 
           Text("Files")
-            .font(.system(size: 10, weight: .semibold))
+            .appFont(size: 10, weight: .semibold)
 
           Spacer()
 
           Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
-            .font(.system(size: 10))
+            .appFont(size: 10)
         }
         .foregroundColor(.secondary)
       }
@@ -97,7 +97,7 @@ struct DirectoryTreeView: View {
       if isExpanded {
         /// Hint text.
         Text("Double-click to copy path. Right-click for more options.")
-          .font(.system(size: 9))
+          .appFont(size: 9)
           .foregroundColor(.secondary)
           .opacity(0.7)
 
@@ -110,13 +110,13 @@ struct DirectoryTreeView: View {
                   .controlSize(.small)
 
                 Text("Loading files...")
-                  .font(.system(size: 11))
+                  .appFont(size: 11)
                   .foregroundColor(.secondary)
               }
               .padding(.vertical, 8)
             } else if items.isEmpty {
               Text("No files")
-                .font(.system(size: 11))
+                .appFont(size: 11)
                 .foregroundColor(.secondary)
                 .padding(.vertical, 8)
             } else {
@@ -203,7 +203,7 @@ struct FileItemRow: View {
         /// Expand/collapse chevron for directories.
         if item.isDirectory {
           Image(systemName: item.isExpanded ? "chevron.down" : "chevron.right")
-            .font(.system(size: 8))
+            .appFont(size: 8)
             .foregroundColor(.secondary)
             .frame(width: 10)
         } else {
@@ -218,7 +218,7 @@ struct FileItemRow: View {
 
         /// Name.
         Text(item.name)
-          .font(.system(size: 11))
+          .appFont(size: 11)
           .lineLimit(1)
           .truncationMode(.middle)
 
@@ -250,7 +250,7 @@ struct FileItemRow: View {
       .overlay(alignment: .trailing) {
         if showCopiedTooltip {
           Text("Copied!")
-            .font(.system(size: 9))
+            .appFont(size: 9)
             .padding(.horizontal, 6)
             .padding(.vertical, 2)
             .background(Color.green.opacity(0.9))
@@ -271,7 +271,7 @@ struct FileItemRow: View {
               .controlSize(.small)
 
             Text("Loading...")
-              .font(.system(size: 10))
+              .appFont(size: 10)
               .foregroundColor(.secondary)
           }
           .padding(.vertical, 3)
@@ -373,15 +373,15 @@ struct ProjectDocsView: View {
           } label: {
             HStack {
               Image(systemName: "doc.text.fill")
-                .font(.system(size: 10))
+                .appFont(size: 10)
 
               Text("Project docs")
-                .font(.system(size: 10, weight: .semibold))
+                .appFont(size: 10, weight: .semibold)
 
               Spacer()
 
               Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
-                .font(.system(size: 10))
+                .appFont(size: 10)
             }
             .foregroundColor(.secondary)
           }
@@ -433,7 +433,7 @@ struct ProjectDocRow: View {
         .frame(width: 14, height: 14)
 
       Text(name)
-        .font(.system(size: 11))
+        .appFont(size: 11)
         .lineLimit(1)
 
       Spacer()
@@ -442,7 +442,7 @@ struct ProjectDocRow: View {
         openInDefaultEditor()
       } label: {
         Image(systemName: "square.and.pencil")
-          .font(.system(size: 10))
+          .appFont(size: 10)
           .foregroundColor(.secondary)
       }
       .buttonStyle(.plain)
@@ -495,7 +495,7 @@ struct StatsSection<Content: View>: View {
   var body: some View {
     VStack(alignment: .leading, spacing: 8) {
       Text(title)
-        .font(.system(size: 10, weight: .semibold))
+        .appFont(size: 10, weight: .semibold)
         .textCase(.uppercase)
         .foregroundColor(.secondary)
 
@@ -537,13 +537,13 @@ struct StatRow: View {
   var body: some View {
     HStack {
       Text(label)
-        .font(.system(size: 11))
+        .appFont(size: 11)
         .foregroundColor(.secondary)
 
       Spacer()
 
       Text(value)
-        .font(.system(size: 11, weight: isHighlighted ? .semibold : .regular))
+        .appFont(size: 11, weight: isHighlighted ? .semibold : .regular)
         .foregroundColor(valueColor)
         .monospacedDigit()
     }

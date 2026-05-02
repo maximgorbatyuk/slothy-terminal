@@ -81,15 +81,15 @@ struct GitClientView: View {
   private var noRepoMessage: some View {
     VStack(spacing: 12) {
       Image(systemName: "folder.badge.questionmark")
-        .font(.system(size: 48))
+        .appFont(size: 48)
         .foregroundColor(.secondary.opacity(0.6))
 
       Text("No Git Repository")
-        .font(.title2)
+        .appFont(.title2)
         .fontWeight(.semibold)
 
       Text("The selected directory is not a Git repository.")
-        .font(.subheadline)
+        .appFont(.subheadline)
         .foregroundColor(.secondary)
         .multilineTextAlignment(.center)
         .frame(maxWidth: 320)
@@ -146,16 +146,16 @@ struct GitOverviewContentView: View {
   private func repoHeader(summary: RepositorySummary) -> some View {
     HStack(spacing: 10) {
       Image(systemName: "arrow.triangle.branch")
-        .font(.system(size: 14))
+        .appFont(size: 14)
         .foregroundColor(.orange.opacity(0.7))
 
       Text(workingDirectory.lastPathComponent)
-        .font(.system(size: 14, weight: .semibold))
+        .appFont(size: 14, weight: .semibold)
         .lineLimit(1)
 
       if let branch = summary.currentBranch {
         Text(branch)
-          .font(.system(size: 10, weight: .medium, design: .monospaced))
+          .appFont(size: 10, weight: .medium, design: .monospaced)
           .padding(.horizontal, 6)
           .padding(.vertical, 2)
           .background(Color.accentColor.opacity(0.15))
@@ -170,7 +170,7 @@ struct GitOverviewContentView: View {
         }
       } label: {
         Image(systemName: "arrow.clockwise")
-          .font(.system(size: 11))
+          .appFont(size: 11)
           .foregroundColor(.secondary)
       }
       .buttonStyle(.plain)
@@ -203,7 +203,7 @@ struct GitOverviewContentView: View {
   private var authorStatsSection: some View {
     VStack(alignment: .leading, spacing: 8) {
       Text("User Stats")
-        .font(.system(size: 10, weight: .semibold))
+        .appFont(size: 10, weight: .semibold)
         .textCase(.uppercase)
         .foregroundColor(.secondary)
 
@@ -232,7 +232,7 @@ struct GitOverviewContentView: View {
   private var activitySection: some View {
     VStack(alignment: .leading, spacing: 8) {
       Text("Activity")
-        .font(.system(size: 10, weight: .semibold))
+        .appFont(size: 10, weight: .semibold)
         .textCase(.uppercase)
         .foregroundColor(.secondary)
 
@@ -327,18 +327,18 @@ struct AuthorStatRow: View {
     VStack(alignment: .leading, spacing: 4) {
       HStack(spacing: 6) {
         Text("#\(rank)")
-          .font(.system(size: 9, weight: .medium, design: .monospaced))
+          .appFont(size: 9, weight: .medium, design: .monospaced)
           .foregroundColor(.secondary)
           .frame(width: 20, alignment: .trailing)
 
         VStack(alignment: .leading, spacing: 1) {
           Text(author.name)
-            .font(.system(size: 11, weight: .medium))
+            .appFont(size: 11, weight: .medium)
             .lineLimit(1)
 
           if !author.email.isEmpty {
             Text(author.email)
-              .font(.system(size: 9))
+              .appFont(size: 9)
               .foregroundColor(.secondary)
               .lineLimit(1)
           }
@@ -347,7 +347,7 @@ struct AuthorStatRow: View {
         Spacer()
 
         Text("\(author.commitCount)")
-          .font(.system(size: 11, design: .monospaced))
+          .appFont(size: 11, design: .monospaced)
           .foregroundColor(.secondary)
       }
 
@@ -443,12 +443,12 @@ struct ActivityHeatmapGrid: View {
       VStack(spacing: cellSpacing) {
         // Empty spacer for header row alignment.
         Text("")
-          .font(.system(size: 8))
+          .appFont(size: 8)
           .frame(width: 22, height: cellSize)
 
         ForEach(0..<7, id: \.self) { dayIndex in
           Text(dayLabels[dayIndex])
-            .font(.system(size: 8))
+            .appFont(size: 8)
             .foregroundColor(.secondary)
             .frame(width: 22, height: cellSize, alignment: .trailing)
         }
@@ -459,7 +459,7 @@ struct ActivityHeatmapGrid: View {
         VStack(spacing: cellSpacing) {
           // Week header (month label for first week of each month).
           Text(weekHeader(for: week))
-            .font(.system(size: 8))
+            .appFont(size: 8)
             .foregroundColor(.secondary)
             .frame(height: cellSize)
 
@@ -536,10 +536,10 @@ struct GitTabButton: View {
     Button(action: action) {
       HStack(spacing: 4) {
         Image(systemName: tab.iconName)
-          .font(.system(size: 10))
+          .appFont(size: 10)
 
         Text(tab.displayName)
-          .font(.system(size: 11, weight: isSelected ? .semibold : .regular))
+          .appFont(size: 11, weight: isSelected ? .semibold : .regular)
       }
       .foregroundColor(isSelected ? .primary : .secondary)
       .padding(.horizontal, 10)
@@ -567,14 +567,14 @@ struct GitStubContentView: View {
   var body: some View {
     VStack(spacing: 12) {
       Image(systemName: tab.iconName)
-        .font(.system(size: 36))
+        .appFont(size: 36)
         .foregroundColor(.secondary.opacity(0.5))
 
       Text(tab.displayName)
-        .font(.system(size: 16, weight: .semibold))
+        .appFont(size: 16, weight: .semibold)
 
       Text("This feature is not yet available.")
-        .font(.system(size: 12))
+        .appFont(size: 12)
         .foregroundColor(.secondary)
     }
     .frame(maxWidth: .infinity, maxHeight: .infinity)

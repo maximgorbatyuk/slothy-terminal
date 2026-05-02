@@ -29,7 +29,7 @@ struct StartupPageView: View {
   private var header: some View {
     HStack {
       Text(splitDestination ? "New tab in split view" : "New tab")
-        .font(.headline)
+        .appFont(.headline)
 
       Spacer()
 
@@ -37,7 +37,7 @@ struct StartupPageView: View {
         dismiss()
       } label: {
         Image(systemName: "xmark.circle.fill")
-          .font(.system(size: 20))
+          .appFont(size: 20)
           .foregroundColor(.secondary)
       }
       .buttonStyle(.plain)

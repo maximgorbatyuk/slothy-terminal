@@ -68,7 +68,7 @@ struct StatusBarUsageBars: View {
 
     HStack(spacing: 4) {
       Text(provider.displayName)
-        .font(.system(size: 10, weight: .medium))
+        .appFont(size: 10, weight: .medium)
         .foregroundColor(.secondary)
 
       switch status {
@@ -85,27 +85,28 @@ struct StatusBarUsageBars: View {
           usageBarCapsule(percent: percent)
 
           Text("\(Int(min(percent, 9.99) * 100))%")
-            .font(.system(size: 9).monospacedDigit())
+            .appFont(size: 9)
+            .monospacedDigit()
             .foregroundColor(.secondary)
         } else {
           Text("--")
-            .font(.system(size: 9))
+            .appFont(size: 9)
             .foregroundColor(.secondary)
         }
 
       case .failed:
         Image(systemName: "exclamationmark.triangle.fill")
-          .font(.system(size: 8))
+          .appFont(size: 8)
           .foregroundColor(.orange)
 
       case .tokenExpired:
         Image(systemName: "key.slash")
-          .font(.system(size: 9))
+          .appFont(size: 9)
           .foregroundColor(.orange)
 
       case .unavailable:
         Image(systemName: "minus.circle")
-          .font(.system(size: 8))
+          .appFont(size: 8)
           .foregroundColor(.secondary.opacity(0.5))
 
       case .idle:
@@ -161,7 +162,7 @@ struct UsagePopoverView: View {
           isPresented = false
         } label: {
           Image(systemName: "xmark")
-            .font(.system(size: 9, weight: .medium))
+            .appFont(size: 9, weight: .medium)
             .foregroundColor(.secondary)
         }
         .buttonStyle(.plain)
@@ -227,13 +228,13 @@ struct UsagePopoverView: View {
     /// Source badge row.
     HStack {
       Text(snapshot.provider.displayName)
-        .font(.system(size: 11, weight: .medium))
+        .appFont(size: 11, weight: .medium)
         .foregroundColor(.primary)
 
       Spacer()
 
       Text(snapshot.sourceLabel)
-        .font(.system(size: 9, weight: .medium))
+        .appFont(size: 9, weight: .medium)
         .padding(.horizontal, 6)
         .padding(.vertical, 2)
         .background(sourceBadgeColor(for: snapshot.sourceKind))
@@ -272,14 +273,14 @@ struct UsagePopoverView: View {
 
         HStack {
           Text(snapshot.used)
-            .font(.system(size: 11))
+            .appFont(size: 11)
             .foregroundColor(.primary)
 
           Spacer()
 
           if let limit = snapshot.limit {
             Text("/ \(limit)")
-              .font(.system(size: 11))
+              .appFont(size: 11)
               .foregroundColor(.secondary)
           }
         }
@@ -309,19 +310,19 @@ struct UsagePopoverView: View {
         .padding(.vertical, 4)
 
       Text("Usage by model")
-        .font(.system(size: 10, weight: .semibold))
+        .appFont(size: 10, weight: .semibold)
         .foregroundColor(.secondary)
         .frame(maxWidth: .infinity, alignment: .leading)
 
       ForEach(Array(snapshot.events.enumerated()), id: \.element.id) { index, event in
         HStack(spacing: 6) {
           Text("\(index + 1).")
-            .font(.system(size: 10, design: .monospaced))
+            .appFont(size: 10, design: .monospaced)
             .foregroundColor(.secondary)
             .frame(width: 16, alignment: .leading)
 
           Text(event.model)
-            .font(.system(size: 10))
+            .appFont(size: 10)
             .foregroundColor(.primary)
             .lineLimit(1)
             .truncationMode(.tail)
@@ -329,7 +330,7 @@ struct UsagePopoverView: View {
           Spacer(minLength: 4)
 
           Text(String(format: "$%.2f", event.dollars))
-            .font(.system(size: 10, design: .monospaced))
+            .appFont(size: 10, design: .monospaced)
             .foregroundColor(event.dollars > 0 ? .primary : .secondary)
         }
       }
@@ -341,7 +342,7 @@ struct UsagePopoverView: View {
     /// Footer: timestamp + refresh.
     HStack {
       Text("Updated \(snapshot.fetchedAt.formatted(.dateTime.hour().minute().second()))")
-        .font(.system(size: 9))
+        .appFont(size: 9)
         .foregroundColor(.secondary.opacity(0.7))
 
       Spacer()
@@ -353,10 +354,10 @@ struct UsagePopoverView: View {
       } label: {
         HStack(spacing: 4) {
           Image(systemName: "arrow.clockwise")
-            .font(.system(size: 9))
+            .appFont(size: 9)
 
           Text("Refresh")
-            .font(.system(size: 10))
+            .appFont(size: 10)
         }
         .foregroundColor(.secondary)
       }
@@ -373,7 +374,7 @@ struct UsagePopoverView: View {
         .controlSize(.small)
 
       Text("Loading usage...")
-        .font(.system(size: 11))
+        .appFont(size: 11)
         .foregroundColor(.secondary)
     }
     .padding(.vertical, 20)
@@ -384,11 +385,11 @@ struct UsagePopoverView: View {
     VStack(spacing: 8) {
       HStack(spacing: 6) {
         Image(systemName: "exclamationmark.triangle")
-          .font(.system(size: 11))
+          .appFont(size: 11)
           .foregroundColor(.orange)
 
         Text(message)
-          .font(.system(size: 11))
+          .appFont(size: 11)
           .foregroundColor(.secondary)
           .lineLimit(3)
       }
@@ -399,7 +400,7 @@ struct UsagePopoverView: View {
         }
       } label: {
         Text("Retry")
-          .font(.system(size: 10))
+          .appFont(size: 10)
       }
       .buttonStyle(.bordered)
       .controlSize(.small)
@@ -411,17 +412,17 @@ struct UsagePopoverView: View {
   private func tokenExpiredView(provider: UsageProvider) -> some View {
     VStack(spacing: 10) {
       Image(systemName: "key.slash")
-        .font(.system(size: 24))
+        .appFont(size: 24)
         .foregroundColor(.orange)
 
       Text("\(provider.displayName) usage data is unavailable because the OAuth token in Keychain has expired or been refreshed.")
-        .font(.system(size: 11))
+        .appFont(size: 11)
         .foregroundColor(.secondary)
         .multilineTextAlignment(.center)
         .lineLimit(4)
 
       Text("Click Renew to re-read the token from Keychain. macOS will ask for permission.")
-        .font(.system(size: 10))
+        .appFont(size: 10)
         .foregroundColor(.secondary.opacity(0.7))
         .multilineTextAlignment(.center)
         .lineLimit(3)
@@ -433,10 +434,10 @@ struct UsagePopoverView: View {
       } label: {
         HStack(spacing: 4) {
           Image(systemName: "key.viewfinder")
-            .font(.system(size: 10))
+            .appFont(size: 10)
 
           Text("Renew")
-            .font(.system(size: 11))
+            .appFont(size: 11)
         }
       }
       .buttonStyle(.bordered)
@@ -449,11 +450,11 @@ struct UsagePopoverView: View {
   private func unavailableView(_ reason: String) -> some View {
     HStack(spacing: 6) {
       Image(systemName: "info.circle")
-        .font(.system(size: 11))
+        .appFont(size: 11)
         .foregroundColor(.secondary)
 
       Text(reason)
-        .font(.system(size: 11))
+        .appFont(size: 11)
         .foregroundColor(.secondary)
         .lineLimit(2)
     }
@@ -464,11 +465,11 @@ struct UsagePopoverView: View {
   private func noDataView() -> some View {
     HStack(spacing: 6) {
       Image(systemName: "chart.bar")
-        .font(.system(size: 11))
+        .appFont(size: 11)
         .foregroundColor(.secondary)
 
       Text("No usage data")
-        .font(.system(size: 11))
+        .appFont(size: 11)
         .foregroundColor(.secondary)
     }
     .padding(.vertical, 20)
@@ -479,16 +480,16 @@ struct UsagePopoverView: View {
     VStack(spacing: 4) {
       HStack(spacing: 6) {
         Image(systemName: "chart.bar")
-          .font(.system(size: 11))
+          .appFont(size: 11)
           .foregroundColor(.secondary)
 
         Text("Usage stats disabled")
-          .font(.system(size: 11))
+          .appFont(size: 11)
           .foregroundColor(.secondary)
       }
 
       Text("Enable in Settings > Usage")
-        .font(.system(size: 10))
+        .appFont(size: 10)
         .foregroundColor(.secondary.opacity(0.7))
     }
     .padding(.vertical, 20)

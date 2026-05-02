@@ -11,7 +11,7 @@ struct CloseButton: View {
       action()
     } label: {
       Image(systemName: "xmark")
-        .font(.system(size: 9, weight: .medium))
+        .appFont(size: 9, weight: .medium)
         .foregroundColor(.gray)
         .frame(width: 20, height: 20)
         .background(

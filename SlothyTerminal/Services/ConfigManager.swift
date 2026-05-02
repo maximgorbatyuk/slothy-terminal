@@ -8,6 +8,13 @@ class ConfigManager {
   static let shared = ConfigManager()
 
   /// The current configuration.
+  ///
+  /// MUST remain a stored property. SwiftUI views (e.g. `AppFontStyleModifier`
+  /// in `Views/AppFontModifier.swift`) read `ConfigManager.shared.config.<x>`
+  /// and rely on `@Observable` change tracking to re-render. Replacing this
+  /// with a computed getter that returns a fresh copy would silently break
+  /// that tracking and the app font picker (and similar bindings) would stop
+  /// updating live.
   var config: AppConfig {
     didSet {
       if !isSuppressingSave,

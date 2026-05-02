@@ -11,18 +11,18 @@ struct MakeCommitDiffContentView: View {
       if let selectedChange {
         HStack(spacing: 6) {
           Image(systemName: "doc.text")
-            .font(.system(size: 10))
+            .appFont(size: 10)
             .foregroundStyle(.secondary)
 
           Text(selectedChange.path)
-            .font(.system(size: 11, weight: .medium))
+            .appFont(size: 11, weight: .medium)
             .lineLimit(1)
             .truncationMode(.middle)
 
           Spacer()
 
           Text(selectedChange.section == .staged ? "Staged" : "Unstaged")
-            .font(.system(size: 10, weight: .medium, design: .monospaced))
+            .appFont(size: 10, weight: .medium, design: .monospaced)
             .foregroundStyle(.secondary)
         }
         .padding(.horizontal, 12)
@@ -74,11 +74,11 @@ struct MakeCommitDiffContentView: View {
   ) -> some View {
     VStack(spacing: 8) {
       Image(systemName: iconName)
-        .font(.system(size: 24))
+        .appFont(size: 24)
         .foregroundStyle(.secondary.opacity(0.5))
 
       Text(message)
-        .font(.system(size: 11))
+        .appFont(size: 11)
         .foregroundStyle(.secondary)
     }
     .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -111,7 +111,7 @@ struct MakeCommitDiffContentView: View {
   ) -> some View {
     HStack(alignment: .top, spacing: 0) {
       Text(lineNumber.map(String.init) ?? "")
-        .font(.system(size: 11, design: .monospaced))
+        .appFont(size: 11, design: .monospaced)
         .foregroundStyle(.secondary.opacity(0.5))
         .frame(width: 40, alignment: .trailing)
         .padding(.trailing, 8)
@@ -121,7 +121,7 @@ struct MakeCommitDiffContentView: View {
         .frame(width: 1)
 
       Text(verbatim: text.isEmpty ? " " : text)
-        .font(.system(size: 12, design: .monospaced))
+        .appFont(size: 12, design: .monospaced)
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.leading, 8)
         .textSelection(.enabled)

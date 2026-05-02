@@ -12,6 +12,7 @@ struct SlothyTerminalApp: App {
       MainView()
         .environment(appState)
         .preferredColorScheme(configManager.config.colorScheme.colorScheme)
+        .appFont(configManager.config.appFont)
         .onReceive(NotificationCenter.default.publisher(for: .newTabRequested)) { notification in
           if let agentType = notification.userInfo?["agentType"] as? AgentType {
             appState.showFolderSelector(for: agentType)
@@ -137,11 +138,13 @@ struct SlothyTerminalApp: App {
       SettingsView()
         .environment(appState)
         .preferredColorScheme(configManager.config.colorScheme.colorScheme)
+        .appFont(configManager.config.appFont)
     }
 
     Window("About \(BuildConfig.current.appName)", id: "about") {
       AboutView()
         .preferredColorScheme(configManager.config.colorScheme.colorScheme)
+        .appFont(configManager.config.appFont)
     }
     .windowStyle(.hiddenTitleBar)
     .windowResizability(.contentSize)

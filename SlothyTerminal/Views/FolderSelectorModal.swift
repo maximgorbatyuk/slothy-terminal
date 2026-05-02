@@ -88,10 +88,10 @@ struct FolderSelectorModal: View {
       HStack {
         VStack(alignment: .leading, spacing: 4) {
           Text("Select Working Directory")
-            .font(.headline)
+            .appFont(.headline)
 
           Text(subtitle)
-            .font(.subheadline)
+            .appFont(.subheadline)
             .foregroundColor(.secondary)
         }
 
@@ -101,7 +101,7 @@ struct FolderSelectorModal: View {
           dismiss()
         } label: {
           Image(systemName: "xmark.circle.fill")
-            .font(.system(size: 20))
+            .appFont(size: 20)
             .foregroundColor(.secondary)
         }
         .buttonStyle(.plain)
@@ -122,19 +122,19 @@ struct FolderSelectorModal: View {
       if !recentFoldersManager.entries.isEmpty {
         VStack(alignment: .leading, spacing: 12) {
           Text("RECENT FOLDERS")
-            .font(.system(size: 11, weight: .semibold))
+            .appFont(size: 11, weight: .semibold)
             .foregroundColor(.secondary)
 
           TextField("Search folders...", text: $searchText)
             .textFieldStyle(.roundedBorder)
-            .font(.system(size: 12))
+            .appFont(size: 12)
 
           if filteredFolders.isEmpty {
             HStack {
               Spacer()
 
               Text(searchText.isEmpty ? "No folders used in the last 10 days" : "No matching folders")
-                .font(.subheadline)
+                .appFont(.subheadline)
                 .foregroundColor(.secondary)
                 .padding(.vertical, 8)
 
@@ -170,11 +170,11 @@ struct FolderSelectorModal: View {
         if recentFoldersManager.entries.isEmpty {
           VStack(spacing: 12) {
             Image(systemName: "folder.badge.plus")
-              .font(.system(size: 40))
+              .appFont(size: 40)
               .foregroundColor(.secondary)
 
             Text("No recent folders")
-              .font(.subheadline)
+              .appFont(.subheadline)
               .foregroundColor(.secondary)
           }
           .padding(.vertical, 20)
@@ -199,7 +199,7 @@ struct FolderSelectorModal: View {
 
       /// Footer with cancel button.
       HStack {
-        Button("Cancel") {
+        AppButton("Cancel") {
           dismiss()
         }
         .keyboardShortcut(.escape)
@@ -273,16 +273,16 @@ struct RecentFolderButton: View {
   var body: some View {
     HStack(spacing: 12) {
       Image(systemName: "folder.fill")
-        .font(.system(size: 16))
+        .appFont(size: 16)
         .foregroundColor(folderExists ? accentColor : .secondary)
 
       VStack(alignment: .leading, spacing: 2) {
         Text(folder.lastPathComponent)
-          .font(.system(size: 13, weight: .medium))
+          .appFont(size: 13, weight: .medium)
           .foregroundColor(folderExists ? .primary : .secondary)
 
         Text(displayPath)
-          .font(.system(size: 11))
+          .appFont(size: 11)
           .foregroundColor(.secondary)
           .lineLimit(1)
           .truncationMode(.middle)
@@ -295,7 +295,7 @@ struct RecentFolderButton: View {
           onRemove()
         } label: {
           Image(systemName: "xmark.circle.fill")
-            .font(.system(size: 14))
+            .appFont(size: 14)
             .foregroundColor(.secondary)
         }
         .buttonStyle(.plain)
@@ -336,7 +336,7 @@ struct PromptPicker: View {
   var body: some View {
     VStack(alignment: .leading, spacing: 8) {
       Text("PROMPT")
-        .font(.system(size: 11, weight: .semibold))
+        .appFont(size: 11, weight: .semibold)
         .foregroundColor(.secondary)
 
       Menu {
@@ -384,12 +384,12 @@ private struct PromptSelectionLabel: View {
     HStack(spacing: 8) {
       VStack(alignment: .leading, spacing: 2) {
         Text(title)
-          .font(.system(size: 12, weight: .medium))
+          .appFont(size: 12, weight: .medium)
           .foregroundColor(.primary)
           .lineLimit(1)
 
         Text(subtitle)
-          .font(.system(size: 11))
+          .appFont(size: 11)
           .foregroundColor(.secondary)
           .lineLimit(1)
       }
@@ -397,7 +397,7 @@ private struct PromptSelectionLabel: View {
       Spacer()
 
       Image(systemName: "chevron.up.chevron.down")
-        .font(.system(size: 10, weight: .semibold))
+        .appFont(size: 10, weight: .semibold)
         .foregroundColor(.secondary)
     }
     .padding(.horizontal, 10)
@@ -426,7 +426,7 @@ private struct PromptMenuRow: View {
           .lineLimit(1)
 
         Text(subtitle)
-          .font(.caption)
+          .appFont(.caption)
           .foregroundColor(.secondary)
           .lineLimit(1)
       }

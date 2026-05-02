@@ -54,7 +54,7 @@ struct WorkspacesSidebarView: View {
 
       if let closeError {
         Text(closeError)
-          .font(.system(size: 11))
+          .appFont(size: 11)
           .foregroundColor(.red)
       }
     }
@@ -65,21 +65,19 @@ struct WorkspacesSidebarView: View {
   private var header: some View {
     VStack(alignment: .leading, spacing: 2) {
       Text("Workspaces")
-        .font(.system(size: 16, weight: .semibold))
+        .appFont(size: 16, weight: .semibold)
 
       Text("Group tabs by project root.")
-        .font(.system(size: 11))
+        .appFont(size: 11)
         .foregroundColor(.secondary)
     }
   }
 
   private var newWorkspaceButton: some View {
-    Button("New workspace") {
-      openFolderPickerForWorkspace()
-    }
-    .buttonStyle(.borderedProminent)
-    .controlSize(.regular)
-    .frame(maxWidth: .infinity, alignment: .leading)
+    AppButton("New workspace", action: openFolderPickerForWorkspace)
+      .buttonStyle(.borderedProminent)
+      .controlSize(.regular)
+      .frame(maxWidth: .infinity, alignment: .leading)
   }
 
   private var emptyState: some View {
@@ -87,22 +85,20 @@ struct WorkspacesSidebarView: View {
       Spacer()
 
       Image(systemName: "square.grid.2x2")
-        .font(.system(size: 30))
+        .appFont(size: 30)
         .foregroundColor(.secondary)
 
       Text("No workspaces yet")
-        .font(.headline)
+        .appFont(.headline)
 
       Text("Open a folder to create your first workspace.")
-        .font(.system(size: 12))
+        .appFont(size: 12)
         .foregroundColor(.secondary)
         .multilineTextAlignment(.center)
 
-      Button("Open Folder") {
-        openFolderPickerForWorkspace()
-      }
-      .buttonStyle(.borderedProminent)
-      .controlSize(.regular)
+      AppButton("Open Folder", action: openFolderPickerForWorkspace)
+        .buttonStyle(.borderedProminent)
+        .controlSize(.regular)
 
       Spacer()
     }
@@ -171,12 +167,12 @@ private struct WorkspaceRowView: View {
         VStack(alignment: .leading, spacing: 4) {
           HStack(spacing: 6) {
             Text(workspace.name)
-              .font(.system(size: 13, weight: .semibold))
+              .appFont(size: 13, weight: .semibold)
               .lineLimit(1)
 
             if isActive {
               Text("Active")
-                .font(.system(size: 9, weight: .bold))
+                .appFont(size: 9, weight: .bold)
                 .foregroundColor(.accentColor)
                 .padding(.horizontal, 6)
                 .padding(.vertical, 2)
@@ -186,7 +182,7 @@ private struct WorkspaceRowView: View {
           }
 
           Text(displayPath)
-            .font(.system(size: 11))
+            .appFont(size: 11)
             .foregroundColor(.secondary)
             .lineLimit(2)
             .truncationMode(.middle)
@@ -202,7 +198,7 @@ private struct WorkspaceRowView: View {
 
       HStack(spacing: 8) {
         Label("\(tabCount) tab\(tabCount == 1 ? "" : "s")", systemImage: "rectangle.on.rectangle")
-          .font(.system(size: 11))
+          .appFont(size: 11)
           .foregroundColor(.secondary)
 
         Spacer()

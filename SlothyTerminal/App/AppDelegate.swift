@@ -1,4 +1,5 @@
 import AppKit
+import os
 import SwiftUI
 
 /// App delegate providing dock menu and other AppKit integrations.
@@ -13,11 +14,28 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     /// calls (e.g., stdin pipes to CLI subprocesses).
     signal(SIGPIPE, SIG_IGN)
 
+    assertBundledFontsRegistered()
+
     /// Restore window state after a short delay to allow window to be created.
     DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
       self?.restoreWindowState()
       self?.observeWindowChanges()
     }
+  }
+
+  /// Verifies in DEBUG builds that fonts bundled via `ATSApplicationFontsPath`
+  /// were registered at launch. A silent regression here would make the
+  /// Appearance picker fall back to system font without any user-visible error.
+  private func assertBundledFontsRegistered() {
+    #if DEBUG
+    let required = ["JetBrainsMono-Regular", "JetBrainsMono-Bold"]
+    for name in required {
+      if NSFont(name: name, size: NSFont.systemFontSize) == nil {
+        Logger.app.error("Bundled font missing: \(name, privacy: .public)")
+        assertionFailure("Bundled font not registered: \(name)")
+      }
+    }
+    #endif
   }
 
   func applicationWillTerminate(_ notification: Notification) {

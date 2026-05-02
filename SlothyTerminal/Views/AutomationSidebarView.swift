@@ -56,10 +56,10 @@ struct AutomationSidebarView: View {
     HStack {
       HStack(spacing: 4) {
         Image(systemName: "gearshape.2")
-          .font(.system(size: 10))
+          .appFont(size: 10)
 
         Text("Scripts")
-          .font(.system(size: 10, weight: .semibold))
+          .appFont(size: 10, weight: .semibold)
       }
       .foregroundColor(.secondary)
 
@@ -69,14 +69,14 @@ struct AutomationSidebarView: View {
         Task { await refreshScripts() }
       } label: {
         Image(systemName: "arrow.clockwise")
-          .font(.system(size: 10))
+          .appFont(size: 10)
           .foregroundColor(.secondary)
       }
       .buttonStyle(.plain)
       .help("Refresh")
 
       Text("\(scripts.count)")
-        .font(.system(size: 9))
+        .appFont(size: 9)
         .foregroundColor(.secondary.opacity(0.6))
     }
     .padding(.horizontal, 8)
@@ -88,10 +88,10 @@ struct AutomationSidebarView: View {
   private var scriptHint: some View {
     HStack(spacing: 4) {
       Image(systemName: "info.circle")
-        .font(.system(size: 9))
+        .appFont(size: 9)
 
       Text("Supports .py and .sh scripts")
-        .font(.system(size: 9))
+        .appFont(size: 9)
     }
     .foregroundColor(.secondary.opacity(0.7))
     .padding(.horizontal, 8)
@@ -105,21 +105,21 @@ struct AutomationSidebarView: View {
       Spacer()
 
       Image(systemName: "doc.text")
-        .font(.system(size: 24))
+        .appFont(size: 24)
         .foregroundColor(.secondary)
 
       Text("No scripts found")
-        .font(.system(size: 11, weight: .medium))
+        .appFont(size: 11, weight: .medium)
         .foregroundColor(.secondary)
 
       if activeDirectory != nil {
         Text("Place .py or .sh files in project root or scripts/ folder.")
-          .font(.system(size: 10))
+          .appFont(size: 10)
           .foregroundColor(.secondary.opacity(0.7))
           .multilineTextAlignment(.center)
       } else {
         Text("Open a tab to scan for scripts.")
-          .font(.system(size: 10))
+          .appFont(size: 10)
           .foregroundColor(.secondary.opacity(0.7))
           .multilineTextAlignment(.center)
       }
@@ -154,10 +154,10 @@ struct AutomationSidebarView: View {
       if let status = actionStatus {
         HStack(spacing: 4) {
           Image(systemName: isStatusError ? "exclamationmark.circle" : "checkmark.circle")
-            .font(.system(size: 9))
+            .appFont(size: 9)
 
           Text(status)
-            .font(.system(size: 9))
+            .appFont(size: 9)
             .lineLimit(1)
         }
         .foregroundColor(isStatusError ? .red : .green)
@@ -290,26 +290,26 @@ private struct ScriptRow: View {
   var body: some View {
     HStack(spacing: 6) {
       Image(systemName: script.kind.iconName)
-        .font(.system(size: 10))
+        .appFont(size: 10)
         .foregroundColor(.secondary)
 
       VStack(alignment: .leading, spacing: 2) {
         Text(script.name)
-          .font(.system(size: 11, weight: .medium))
+          .appFont(size: 11, weight: .medium)
           .foregroundColor(.primary)
           .lineLimit(1)
 
         HStack(spacing: 4) {
           Text(script.kind.displayName)
-            .font(.system(size: 9))
+            .appFont(size: 9)
             .foregroundColor(.secondary.opacity(0.7))
 
           Text("·")
-            .font(.system(size: 9))
+            .appFont(size: 9)
             .foregroundColor(.secondary.opacity(0.5))
 
           Text("\(script.lineCount) lines")
-            .font(.system(size: 9))
+            .appFont(size: 9)
             .foregroundColor(.secondary.opacity(0.7))
         }
       }

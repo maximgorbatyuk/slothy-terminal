@@ -80,7 +80,7 @@ struct MakeCommitSidebarView: View {
     VStack(spacing: 0) {
       HStack {
         Text(title)
-          .font(.system(size: 11, weight: .semibold))
+          .appFont(size: 11, weight: .semibold)
 
         Spacer()
 
@@ -133,16 +133,16 @@ struct MakeCommitSidebarView: View {
           ? "chevron.right"
           : "chevron.down"
       )
-      .font(.system(size: 8, weight: .semibold))
+      .appFont(size: 8, weight: .semibold)
       .foregroundStyle(.secondary)
       .frame(width: 10)
 
       Image(systemName: "folder.fill")
-        .font(.system(size: 11))
+        .appFont(size: 11)
         .foregroundStyle(.blue)
 
       Text(node.name)
-        .font(.system(size: 12))
+        .appFont(size: 12)
         .lineLimit(1)
 
       Spacer()
@@ -190,11 +190,11 @@ struct MakeCommitSidebarView: View {
 
     return HStack(spacing: 4) {
       Image(systemName: "doc.text")
-        .font(.system(size: 11))
+        .appFont(size: 11)
         .foregroundStyle(isSelected ? .white : .secondary)
 
       Text(node.name)
-        .font(.system(size: 12))
+        .appFont(size: 12)
         .foregroundStyle(isSelected ? .white : .primary)
         .lineLimit(1)
 
@@ -202,7 +202,7 @@ struct MakeCommitSidebarView: View {
 
       if let status = node.status {
         Text(status.badge)
-          .font(.system(size: 9, weight: .bold, design: .monospaced))
+          .appFont(size: 9, weight: .bold, design: .monospaced)
           .foregroundStyle(
             isSelected ? .white.opacity(0.8) : statusColor(status)
           )

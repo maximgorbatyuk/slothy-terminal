@@ -241,7 +241,7 @@ struct ActiveTerminalView: View {
         VStack {
           HStack {
             Label(claudeCooldownMessage, systemImage: "clock.badge.exclamationmark")
-              .font(.system(size: 12, weight: .semibold))
+              .appFont(size: 12, weight: .semibold)
               .foregroundStyle(Color.white)
               .padding(.horizontal, 12)
               .padding(.vertical, 8)
@@ -266,7 +266,7 @@ struct ActiveTerminalView: View {
         VStack {
           HStack {
             Label("Starting \(tab.agent?.displayName ?? "session")…", systemImage: "arrow.triangle.2.circlepath")
-              .font(.system(size: 12, weight: .semibold))
+              .appFont(size: 12, weight: .semibold)
               .foregroundStyle(Color.white)
               .padding(.horizontal, 12)
               .padding(.vertical, 8)
@@ -433,25 +433,25 @@ struct AgentUnavailableView: View {
   var body: some View {
     VStack(spacing: 16) {
       Image(systemName: "exclamationmark.triangle.fill")
-        .font(.system(size: 48))
+        .appFont(size: 48)
         .foregroundColor(.orange)
 
       Text("\(agentName) Not Found")
-        .font(.title2)
+        .appFont(.title2)
         .fontWeight(.semibold)
 
       Text(error)
-        .font(.system(size: 12))
+        .appFont(size: 12)
         .foregroundColor(.secondary)
         .multilineTextAlignment(.center)
         .padding(.horizontal, 32)
 
       VStack(alignment: .leading, spacing: 8) {
         Text("To install \(agentName):")
-          .font(.system(size: 12, weight: .medium))
+          .appFont(size: 12, weight: .medium)
 
         Text(installationInstructions)
-          .font(.system(size: 11, design: .monospaced))
+          .appFont(size: 11, design: .monospaced)
           .padding(12)
           .background(appCardColor)
           .cornerRadius(6)
