@@ -230,15 +230,15 @@ struct StartSessionContentView: View {
   private var embeddedHeader: some View {
     VStack(spacing: 10) {
       Image(systemName: "play.square.stack.fill")
-        .font(.system(size: 36))
+        .appFont(size: 36)
         .foregroundColor(.accentColor)
 
       Text("Start Session")
-        .font(.title2)
+        .appFont(.title2)
         .fontWeight(.semibold)
 
       Text("Choose a folder, pick how you want to work, and launch your first session.")
-        .font(.subheadline)
+        .appFont(.subheadline)
         .foregroundColor(.secondary)
         .multilineTextAlignment(.center)
         .frame(maxWidth: 420)
@@ -277,16 +277,16 @@ struct StartSessionContentView: View {
     } label: {
       HStack(spacing: 12) {
         Image(systemName: "folder.fill")
-          .font(.system(size: 24))
+          .appFont(size: 24)
           .foregroundColor(.accentColor)
 
         VStack(alignment: .leading, spacing: 4) {
           Text(currentDirectory.lastPathComponent)
-            .font(.system(size: 14, weight: .medium))
+            .appFont(size: 14, weight: .medium)
             .foregroundColor(.primary)
 
           Text(displayPath)
-            .font(.system(size: 11))
+            .appFont(size: 11)
             .foregroundColor(.secondary)
             .lineLimit(1)
             .truncationMode(.middle)
@@ -295,7 +295,7 @@ struct StartSessionContentView: View {
         Spacer()
 
         Text("Change...")
-          .font(.system(size: 12))
+          .appFont(size: 12)
           .foregroundColor(.secondary)
       }
       .padding(16)
@@ -315,7 +315,7 @@ struct StartSessionContentView: View {
   private var launchTypePicker: some View {
     VStack(alignment: .leading, spacing: 10) {
       Text("LAUNCH TYPE")
-        .font(.system(size: 10, weight: .semibold))
+        .appFont(size: 10, weight: .semibold)
         .foregroundColor(.secondary)
 
       VStack(spacing: 6) {
@@ -341,7 +341,7 @@ struct StartSessionContentView: View {
     } label: {
       HStack(spacing: 12) {
         Image(systemName: launchType.iconName)
-          .font(.system(size: 16, weight: .semibold))
+          .appFont(size: 16, weight: .semibold)
           .foregroundColor(isSelected ? accent : .secondary)
           .frame(width: 32, height: 32)
           .background(
@@ -351,11 +351,11 @@ struct StartSessionContentView: View {
 
         VStack(alignment: .leading, spacing: 2) {
           Text(launchType.displayName)
-            .font(.system(size: 13, weight: .semibold))
+            .appFont(size: 13, weight: .semibold)
             .foregroundColor(available ? .primary : .secondary)
 
           Text(launchType.subtitle)
-            .font(.system(size: 11))
+            .appFont(size: 11)
             .foregroundColor(.secondary)
             .lineLimit(1)
         }
@@ -365,10 +365,10 @@ struct StartSessionContentView: View {
         if !available {
           HStack(spacing: 3) {
             Image(systemName: "exclamationmark.triangle.fill")
-              .font(.system(size: 9))
+              .appFont(size: 9)
 
             Text(unavailabilityHint(for: launchType))
-              .font(.system(size: 10, weight: .medium))
+              .appFont(size: 10, weight: .medium)
           }
           .foregroundColor(.orange)
           .padding(.horizontal, 6)
@@ -377,7 +377,7 @@ struct StartSessionContentView: View {
           .cornerRadius(4)
         } else if isSelected {
           Image(systemName: "checkmark.circle.fill")
-            .font(.system(size: 16))
+            .appFont(size: 16)
             .foregroundColor(accent)
         }
       }
@@ -403,16 +403,16 @@ struct StartSessionContentView: View {
   private var claudeOptionsSection: some View {
     VStack(alignment: .leading, spacing: 12) {
       Text("CLAUDE OPTIONS")
-        .font(.system(size: 10, weight: .semibold))
+        .appFont(size: 10, weight: .semibold)
         .foregroundColor(.secondary)
 
       Toggle(isOn: $claudeSkipPermissions) {
         HStack(spacing: 6) {
           Text("Skip permissions")
-            .font(.system(size: 12))
+            .appFont(size: 12)
 
           Text("(--dangerously-skip-permissions)")
-            .font(.system(size: 10, weight: .medium, design: .monospaced))
+            .appFont(size: 10, weight: .medium, design: .monospaced)
             .foregroundColor(.orange)
         }
       }
@@ -425,12 +425,12 @@ struct StartSessionContentView: View {
   private var openCodeOptionsSection: some View {
     VStack(alignment: .leading, spacing: 12) {
       Text("OPENCODE OPTIONS")
-        .font(.system(size: 10, weight: .semibold))
+        .appFont(size: 10, weight: .semibold)
         .foregroundColor(.secondary)
 
       HStack(spacing: 8) {
         Text("Mode")
-          .font(.system(size: 12))
+          .appFont(size: 12)
           .foregroundColor(.secondary)
 
         Picker("", selection: $openCodeMode) {
@@ -446,12 +446,12 @@ struct StartSessionContentView: View {
 
       HStack(spacing: 8) {
         Text("Model")
-          .font(.system(size: 12))
+          .appFont(size: 12)
           .foregroundColor(.secondary)
 
         if openCodeModelOptions.isEmpty {
           Text("Loading models...")
-            .font(.system(size: 12))
+            .appFont(size: 12)
             .foregroundColor(.secondary.opacity(0.6))
         } else {
           Button {
@@ -459,11 +459,11 @@ struct StartSessionContentView: View {
           } label: {
             HStack(spacing: 4) {
               Text(openCodeModel?.displayName ?? "Default")
-                .font(.system(size: 12, weight: .medium))
+                .appFont(size: 12, weight: .medium)
                 .foregroundColor(.primary)
 
               Image(systemName: "chevron.up.chevron.down")
-                .font(.system(size: 9, weight: .semibold))
+                .appFont(size: 9, weight: .semibold)
                 .foregroundColor(.secondary)
             }
             .padding(.horizontal, 8)
@@ -502,12 +502,12 @@ struct StartSessionContentView: View {
   private func disabledPromptHint(text: String) -> some View {
     VStack(alignment: .leading, spacing: 8) {
       Text("PROMPT")
-        .font(.system(size: 10, weight: .semibold))
+        .appFont(size: 10, weight: .semibold)
         .foregroundColor(.secondary)
 
       HStack(spacing: 8) {
         Text(text)
-          .font(.system(size: 12))
+          .appFont(size: 12)
           .foregroundColor(.secondary)
 
         Spacer()
@@ -527,7 +527,7 @@ struct StartSessionContentView: View {
       handleStart()
     } label: {
       Text("Start")
-        .font(.system(size: 14, weight: .semibold))
+        .appFont(size: 14, weight: .semibold)
         .frame(maxWidth: .infinity)
     }
     .buttonStyle(.borderedProminent)

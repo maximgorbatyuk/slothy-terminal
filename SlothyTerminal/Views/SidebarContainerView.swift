@@ -101,7 +101,7 @@ struct SidebarTabIcon: View {
   var body: some View {
     Button(action: action) {
       Image(systemName: tab.iconName)
-        .font(.system(size: 14))
+        .appFont(size: 14)
         .foregroundColor(isSelected ? .primary : .secondary)
         .frame(width: 28, height: 28)
         .background(

@@ -346,6 +346,21 @@ class AppState {
     switchToTab(id: tab.id)
   }
 
+  /// Creates a brand-new workspace rooted at `directory` and a `.terminal` tab in it.
+  /// Used by the Finder "New Window Here" service — always creates a fresh workspace,
+  /// bypassing the dedupe logic in `resolveWorkspaceID` so a duplicate-rooted
+  /// workspace is never reused or removed.
+  func createWorkspaceAndTerminalTab(directory: URL) {
+    let workspace = createWorkspace(from: directory)
+    let tab = Tab(
+      workspaceID: workspace.id,
+      agentType: .terminal,
+      workingDirectory: directory
+    )
+    tabs.append(tab)
+    switchToTab(id: tab.id)
+  }
+
   /// Creates a new Git client tab with the specified working directory.
   func createGitTab(directory: URL) {
     let workspaceID = resolveWorkspaceID(for: directory)

@@ -23,17 +23,17 @@ struct AboutView: View {
           .frame(width: 80, height: 80)
 
         Text(BuildConfig.current.appName)
-          .font(.title)
+          .appFont(.title)
           .fontWeight(.semibold)
           .foregroundColor(.primary)
 
         Text("Version \(appVersion) (\(buildNumber))")
-          .font(.subheadline)
+          .appFont(.subheadline)
           .foregroundColor(.secondary)
 
         if BuildConfig.isDevelopment {
           Text("Development Build")
-            .font(.caption)
+            .appFont(.caption)
             .foregroundColor(.orange)
             .padding(.horizontal, 8)
             .padding(.vertical, 2)
@@ -48,11 +48,11 @@ struct AboutView: View {
       /// Developer info.
       VStack(spacing: 8) {
         Text("Developed by")
-          .font(.caption)
+          .appFont(.caption)
           .foregroundColor(.secondary)
 
         Text(BuildConfig.developerName)
-          .font(.body)
+          .appFont(.body)
           .fontWeight(.medium)
           .foregroundColor(.primary)
       }
@@ -65,9 +65,9 @@ struct AboutView: View {
       } label: {
         HStack(spacing: 6) {
           Image(systemName: "link")
-            .font(.system(size: 12))
+            .appFont(size: 12)
           Text("View on GitHub")
-            .font(.system(size: 12))
+            .appFont(size: 12)
         }
       }
       .buttonStyle(.link)
@@ -76,7 +76,7 @@ struct AboutView: View {
 
       /// Copyright.
       Text("© 2026 \(BuildConfig.developerName). All rights reserved.")
-        .font(.caption2)
+        .appFont(.caption2)
         .foregroundColor(.secondary)
     }
     .padding(24)

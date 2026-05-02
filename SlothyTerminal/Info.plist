@@ -2,11 +2,82 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<!--
+		ATSApplicationFontsPath is "." (Resources root), not "Fonts", because
+		the Xcode PBXFileSystemSynchronizedRootGroup flattens TTF files under
+		Resources/Fonts/ into Contents/Resources/ at build time. Do NOT change
+		to "Fonts" — bundled fonts will silently fail to register and the
+		Appearance picker will fall back to the system font. See
+		AppDelegate.assertBundledFontsRegistered().
+		Note: this Info.plist is run through the C preprocessor
+		(INFOPLIST_PREPROCESS = YES), so avoid bare slash-star tokens here.
+	-->
+	<key>ATSApplicationFontsPath</key>
+	<string>.</string>
 	<key>SUEnableAutomaticChecks</key>
 	<string>YES</string>
 	<key>SUFeedURL</key>
 	<string>https://raw.githubusercontent.com/maximgorbatyuk/slothy-terminal/main/appcast.xml</string>
 	<key>SUPublicEDKey</key>
 	<string>WKYpwXsj2OHGdtIcizX21dysIJZncZm8OaEVNpn42yQ=</string>
+	<!--
+		Finder Services menu entries. Selectors live in FinderServicesProvider.
+		NSPortName must equal the built CFBundleName (PRODUCT_NAME in pbxproj
+		= "SlothyTerminal" for both Debug and Release). NSMessage is the
+		selector base name; macOS calls <NSMessage>:userData:error:.
+		Title strings are preprocessed via INFOPLIST_PREPROCESS to add
+		" [DEBUG]" in Debug builds.
+	-->
+	<key>NSServices</key>
+	<array>
+		<dict>
+			<key>NSMenuItem</key>
+			<dict>
+				<key>default</key>
+#ifdef DEBUG_BUILD
+				<string>New SlothyTerminal Tab Here [DEBUG]</string>
+#else
+				<string>New SlothyTerminal Tab Here</string>
+#endif
+			</dict>
+			<key>NSMessage</key>
+			<string>newTabHere</string>
+			<key>NSPortName</key>
+			<string>SlothyTerminal</string>
+			<key>NSRequiredContext</key>
+			<dict>
+				<key>NSTextContent</key>
+				<string>FilePath</string>
+			</dict>
+			<key>NSSendTypes</key>
+			<array>
+				<string>public.folder</string>
+			</array>
+		</dict>
+		<dict>
+			<key>NSMenuItem</key>
+			<dict>
+				<key>default</key>
+#ifdef DEBUG_BUILD
+				<string>New SlothyTerminal Window Here [DEBUG]</string>
+#else
+				<string>New SlothyTerminal Window Here</string>
+#endif
+			</dict>
+			<key>NSMessage</key>
+			<string>newWindowHere</string>
+			<key>NSPortName</key>
+			<string>SlothyTerminal</string>
+			<key>NSRequiredContext</key>
+			<dict>
+				<key>NSTextContent</key>
+				<string>FilePath</string>
+			</dict>
+			<key>NSSendTypes</key>
+			<array>
+				<string>public.folder</string>
+			</array>
+		</dict>
+	</array>
 </dict>
 </plist>

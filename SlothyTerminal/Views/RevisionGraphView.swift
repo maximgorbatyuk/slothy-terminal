@@ -73,7 +73,7 @@ struct RevisionGraphView: View {
   private var graphHeaderBar: some View {
     HStack {
       Text("\(assignments.count) commits")
-        .font(.system(size: 11))
+        .appFont(size: 11)
         .foregroundColor(.secondary)
 
       Spacer()
@@ -84,7 +84,7 @@ struct RevisionGraphView: View {
         }
       }
       .buttonStyle(.plain)
-      .font(.system(size: 11))
+      .appFont(size: 11)
       .foregroundColor(.secondary)
     }
     .padding(.horizontal, 12)
@@ -153,7 +153,7 @@ struct RevisionGraphView: View {
         }
       } label: {
         Image(systemName: "arrow.clockwise")
-          .font(.system(size: 10))
+          .appFont(size: 10)
           .foregroundColor(.secondary)
       }
       .buttonStyle(.plain)
@@ -170,24 +170,24 @@ struct RevisionGraphView: View {
         .frame(width: 22, height: 22)
         .overlay(
           Text(String(commit.authorName.prefix(1)).uppercased())
-            .font(.system(size: 10, weight: .semibold))
+            .appFont(size: 10, weight: .semibold)
             .foregroundColor(.accentColor)
         )
 
       Text(commit.authorName)
-        .font(.system(size: 11, weight: .medium))
+        .appFont(size: 11, weight: .medium)
         .lineLimit(1)
 
       Text(commit.shortHash)
-        .font(.system(size: 11, design: .monospaced))
+        .appFont(size: 11, design: .monospaced)
         .foregroundColor(.secondary)
 
       Text(Self.absoluteDateFormatter.string(from: commit.authorDate))
-        .font(.system(size: 11))
+        .appFont(size: 11)
         .foregroundColor(.secondary)
 
       Text(commit.subject)
-        .font(.system(size: 11))
+        .appFont(size: 11)
         .foregroundColor(.secondary)
         .lineLimit(1)
         .truncationMode(.tail)
@@ -214,11 +214,11 @@ struct RevisionGraphView: View {
   private var emptyInspectorState: some View {
     VStack(spacing: 8) {
       Image(systemName: "cursorarrow.click.2")
-        .font(.system(size: 24))
+        .appFont(size: 24)
         .foregroundColor(.secondary.opacity(0.5))
 
       Text("Select a commit to inspect")
-        .font(.system(size: 12))
+        .appFont(size: 12)
         .foregroundColor(.secondary)
     }
     .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -261,7 +261,7 @@ struct RevisionGraphView: View {
             Divider()
 
             Text(body.trimmingCharacters(in: .whitespacesAndNewlines))
-              .font(.system(size: 11, design: .monospaced))
+              .appFont(size: 11, design: .monospaced)
               .textSelection(.enabled)
               .frame(maxWidth: .infinity, alignment: .leading)
           }
@@ -274,12 +274,12 @@ struct RevisionGraphView: View {
   private func labeledField(_ label: String, value: String) -> some View {
     HStack(alignment: .top, spacing: 6) {
       Text(label)
-        .font(.system(size: 10, weight: .medium))
+        .appFont(size: 10, weight: .medium)
         .foregroundColor(.secondary)
         .frame(width: 50, alignment: .trailing)
 
       Text(value)
-        .font(.system(size: 11))
+        .appFont(size: 11)
         .textSelection(.enabled)
         .lineLimit(2)
     }
@@ -296,7 +296,7 @@ struct RevisionGraphView: View {
           .frame(maxWidth: .infinity, maxHeight: .infinity)
       } else if changedFiles.isEmpty {
         Text("No changes")
-          .font(.system(size: 11))
+          .appFont(size: 11)
           .foregroundColor(.secondary)
           .frame(maxWidth: .infinity, maxHeight: .infinity)
       } else {
@@ -333,11 +333,11 @@ struct RevisionGraphView: View {
   private var changesToolbar: some View {
     HStack(spacing: 6) {
       Image(systemName: "magnifyingglass")
-        .font(.system(size: 10))
+        .appFont(size: 10)
         .foregroundColor(.secondary)
 
       Text("\(changedFiles.count) files")
-        .font(.system(size: 10))
+        .appFont(size: 10)
         .foregroundColor(.secondary)
 
       Spacer()
@@ -350,7 +350,7 @@ struct RevisionGraphView: View {
         }
       } label: {
         Image(systemName: expandedDirectories.isEmpty ? "chevron.down.square" : "chevron.right.square")
-          .font(.system(size: 10))
+          .appFont(size: 10)
           .foregroundColor(.secondary)
       }
       .buttonStyle(.plain)
@@ -368,16 +368,16 @@ struct RevisionGraphView: View {
       } label: {
         HStack(spacing: 4) {
           Image(systemName: expandedDirectories.contains(node.path) ? "chevron.down" : "chevron.right")
-            .font(.system(size: 8))
+            .appFont(size: 8)
             .foregroundColor(.secondary)
             .frame(width: 10)
 
           Image(systemName: "folder.fill")
-            .font(.system(size: 10))
+            .appFont(size: 10)
             .foregroundColor(.secondary)
 
           Text(node.name)
-            .font(.system(size: 11))
+            .appFont(size: 11)
             .lineLimit(1)
 
           Spacer()
@@ -398,17 +398,17 @@ struct RevisionGraphView: View {
             .frame(width: 10)
 
           Image(systemName: fileIconName(for: change))
-            .font(.system(size: 10))
+            .appFont(size: 10)
             .foregroundColor(.secondary)
 
           Text(node.name)
-            .font(.system(size: 11))
+            .appFont(size: 11)
             .lineLimit(1)
 
           Spacer()
 
           Text(change.status.badge)
-            .font(.system(size: 9, weight: .bold, design: .monospaced))
+            .appFont(size: 9, weight: .bold, design: .monospaced)
             .foregroundColor(fileStatusColor(change.status))
         }
         .padding(.leading, CGFloat(depth) * 14 + 4)
@@ -449,18 +449,18 @@ struct RevisionGraphView: View {
       } else if selectedFilePath == nil {
         VStack(spacing: 6) {
           Text("Select a file to view diff")
-            .font(.system(size: 11))
+            .appFont(size: 11)
             .foregroundColor(.secondary)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
       } else if diffDocument.isBinary {
         Text("Binary file")
-          .font(.system(size: 11))
+          .appFont(size: 11)
           .foregroundColor(.secondary)
           .frame(maxWidth: .infinity, maxHeight: .infinity)
       } else if diffDocument.isEmpty {
         Text("No diff available")
-          .font(.system(size: 11))
+          .appFont(size: 11)
           .foregroundColor(.secondary)
           .frame(maxWidth: .infinity, maxHeight: .infinity)
       } else {
@@ -481,11 +481,11 @@ struct RevisionGraphView: View {
   private var diffHeader: some View {
     HStack(spacing: 6) {
       Image(systemName: "doc.text")
-        .font(.system(size: 10))
+        .appFont(size: 10)
         .foregroundColor(.secondary)
 
       Text(selectedFilePath ?? "No file selected")
-        .font(.system(size: 11, design: .monospaced))
+        .appFont(size: 11, design: .monospaced)
         .foregroundColor(selectedFilePath != nil ? .primary : .secondary)
         .lineLimit(1)
         .truncationMode(.middle)
@@ -522,12 +522,12 @@ struct RevisionGraphView: View {
   ) -> some View {
     HStack(alignment: .top, spacing: 6) {
       Text(lineNumber.map(String.init) ?? "")
-        .font(.system(size: 10, design: .monospaced))
+        .appFont(size: 10, design: .monospaced)
         .foregroundColor(.secondary)
         .frame(width: 32, alignment: .trailing)
 
       Text(verbatim: text.isEmpty ? " " : text)
-        .font(.system(size: 11, design: .monospaced))
+        .appFont(size: 11, design: .monospaced)
         .frame(maxWidth: .infinity, alignment: .leading)
         .textSelection(.enabled)
     }
@@ -820,7 +820,7 @@ struct RevisionGraphRow: View {
         }
 
         Text(assignment.commit.subject)
-          .font(.system(size: 12))
+          .appFont(size: 12)
           .lineLimit(1)
           .truncationMode(.tail)
       }
@@ -829,14 +829,14 @@ struct RevisionGraphRow: View {
 
       // Author
       Text(assignment.commit.authorName)
-        .font(.system(size: 11))
+        .appFont(size: 11)
         .foregroundColor(.secondary)
         .lineLimit(1)
         .frame(width: 120, alignment: .leading)
 
       // Short hash
       Text(assignment.commit.shortHash)
-        .font(.system(size: 11, design: .monospaced))
+        .appFont(size: 11, design: .monospaced)
         .foregroundColor(.secondary)
         .frame(width: 70, alignment: .leading)
 
@@ -845,7 +845,7 @@ struct RevisionGraphRow: View {
         for: assignment.commit.authorDate,
         relativeTo: Date()
       ))
-      .font(.system(size: 11))
+      .appFont(size: 11)
       .foregroundColor(.secondary)
       .frame(width: 80, alignment: .trailing)
       .padding(.trailing, 8)
@@ -970,7 +970,7 @@ struct RevisionGraphRow: View {
     HStack(spacing: 3) {
       ForEach(assignment.commit.decorations, id: \.self) { decoration in
         Text(decoration)
-          .font(.system(size: 9, weight: .semibold))
+          .appFont(size: 9, weight: .semibold)
           .padding(.horizontal, 4)
           .padding(.vertical, 1)
           .background(decorationColor(for: decoration).opacity(0.2))
@@ -1006,7 +1006,7 @@ private struct InspectorTabButton: View {
   var body: some View {
     Button(action: action) {
       Text(title)
-        .font(.system(size: 11, weight: isSelected ? .semibold : .regular))
+        .appFont(size: 11, weight: isSelected ? .semibold : .regular)
         .foregroundColor(isSelected ? .primary : .secondary)
         .padding(.horizontal, 10)
         .padding(.vertical, 4)

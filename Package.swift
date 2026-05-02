@@ -34,11 +34,13 @@ let package = Package(
         "Services/UpdateManager.swift",
         "Services/ExternalAppManager.swift",
         "Services/DirectoryTreeManager.swift",
+        "Services/FinderServicesProvider.swift",
         "Terminal/GhosttyApp.swift",
         "Terminal/GhosttySurfaceView.swift"
       ],
       sources: [
         "Services/RecentFoldersManager.swift",
+        "Services/FinderServiceRequestQueue.swift",
         "Services/ConfigManager.swift",
         "Services/BuildConfig.swift",
         "Services/Logger.swift",

@@ -16,13 +16,13 @@ struct MakeCommitComposerView: View {
           "Commit blocked — staged changes exist outside this scoped directory.",
           systemImage: "exclamationmark.triangle.fill"
         )
-        .font(.system(size: 10))
+        .appFont(size: 10)
         .foregroundStyle(.orange)
       }
 
       HStack(spacing: 6) {
         Image(systemName: "plus")
-          .font(.system(size: 10))
+          .appFont(size: 10)
           .foregroundStyle(.secondary)
 
         TextField(
@@ -33,11 +33,11 @@ struct MakeCommitComposerView: View {
           )
         )
         .textFieldStyle(.plain)
-        .font(.system(size: 12))
+        .appFont(size: 12)
         .disabled(isBusy)
 
         Text("\(commitMessage.count)")
-          .font(.system(size: 10, design: .monospaced))
+          .appFont(size: 10, design: .monospaced)
           .foregroundStyle(commitMessage.count > 72 ? .orange : .secondary)
       }
       .padding(.horizontal, 10)
@@ -52,7 +52,7 @@ struct MakeCommitComposerView: View {
       HStack {
         Toggle("Amend", isOn: $isAmendingLastCommit)
           .toggleStyle(.checkbox)
-          .font(.system(size: 11))
+          .appFont(size: 11)
           .disabled(isBusy)
 
         Spacer()

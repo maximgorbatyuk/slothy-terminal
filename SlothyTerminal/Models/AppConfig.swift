@@ -46,6 +46,9 @@ struct AppConfig: Codable, Equatable {
   /// The color scheme for the app.
   var colorScheme: AppColorScheme = .system
 
+  /// The app UI font (separate from the terminal font).
+  var appFont: AppFont = .system
+
   /// Terminal font family name.
   var terminalFontName: String = "SF Mono"
 
@@ -141,6 +144,7 @@ struct AppConfig: Codable, Equatable {
     opencodePath = try? c.decode(String.self, forKey: .opencodePath)
 
     colorScheme = (try? c.decode(AppColorScheme.self, forKey: .colorScheme)) ?? d.colorScheme
+    appFont = (try? c.decode(AppFont.self, forKey: .appFont)) ?? d.appFont
     terminalFontName = (try? c.decode(String.self, forKey: .terminalFontName)) ?? d.terminalFontName
     terminalFontSize = (try? c.decode(CGFloat.self, forKey: .terminalFontSize)) ?? d.terminalFontSize
     terminalInteractionMode = (try? c.decode(TerminalInteractionMode.self, forKey: .terminalInteractionMode)) ?? d.terminalInteractionMode
@@ -256,6 +260,35 @@ enum SidebarTab: String, Codable, CaseIterable, Identifiable {
     let rawValue = try container.decode(String.self)
 
     self = SidebarTab(rawValue: rawValue) ?? .explorer
+  }
+}
+
+/// App UI font options. Independent of the terminal font.
+enum AppFont: String, Codable, CaseIterable {
+  case system
+  case jetBrainsMono
+
+  var displayName: String {
+    switch self {
+    case .system:
+      return "System"
+
+    case .jetBrainsMono:
+      return "JetBrains Mono"
+    }
+  }
+
+  /// Font family name for use with `Font.custom(_:size:)`. Using the family
+  /// (not a per-face PostScript name) lets SwiftUI's `.bold()` / `.italic()`
+  /// resolve to the matching bundled face. Nil means use the system font.
+  var fontName: String? {
+    switch self {
+    case .system:
+      return nil
+
+    case .jetBrainsMono:
+      return "JetBrains Mono"
+    }
   }
 }
 

@@ -116,7 +116,7 @@ struct GeneralSettingsTab: View {
 
         if let lastCheck = UpdateManager.shared.lastUpdateCheckDate {
           Text("Last checked: \(lastCheck.formatted(date: .abbreviated, time: .shortened))")
-            .font(.caption)
+            .appFont(.caption)
             .foregroundColor(.secondary)
         }
 
@@ -137,13 +137,13 @@ struct GeneralSettingsTab: View {
         if !recentFoldersManager.recentFolders.isEmpty {
           VStack(alignment: .leading, spacing: 4) {
             Text("Recent folder history:")
-              .font(.caption)
+              .appFont(.caption)
               .foregroundColor(.secondary)
 
             ForEach(recentFoldersManager.recentFolders.prefix(5), id: \.path) { folder in
               HStack {
                 Text(shortenedPath(folder.path))
-                  .font(.system(size: 11, design: .monospaced))
+                  .appFont(size: 11, design: .monospaced)
                   .lineLimit(1)
                   .truncationMode(.middle)
 
@@ -172,7 +172,7 @@ struct GeneralSettingsTab: View {
 
       Section("Configuration File") {
         Text(shortenedPath(configManager.configFilePath))
-          .font(.system(size: 11, design: .monospaced))
+          .appFont(size: 11, design: .monospaced)
           .foregroundColor(.secondary)
           .lineLimit(1)
           .truncationMode(.middle)
@@ -189,11 +189,11 @@ struct GeneralSettingsTab: View {
                     .frame(width: 16, height: 16)
                 } else {
                   Image(systemName: app.icon)
-                    .font(.system(size: 12))
+                    .appFont(size: 12)
                 }
 
                 Text(app.name)
-                  .font(.system(size: 12))
+                  .appFont(size: 12)
               }
             }
             .buttonStyle(.bordered)
@@ -202,7 +202,7 @@ struct GeneralSettingsTab: View {
 
         if editorApps.isEmpty {
           Text("No supported editors found. Install VS Code, Cursor, or Antigravity.")
-            .font(.caption)
+            .appFont(.caption)
             .foregroundColor(.secondary)
         }
       }
@@ -242,6 +242,34 @@ struct AppearanceSettingsTab: View {
         .pickerStyle(.segmented)
       }
 
+      Section("App Font") {
+        Picker("UI font", selection: Bindable(configManager).config.appFont) {
+          ForEach(AppFont.allCases, id: \.self) { font in
+            Text(font.displayName).tag(font)
+          }
+        }
+        .pickerStyle(.segmented)
+
+        VStack(alignment: .leading, spacing: 4) {
+          Text("Preview")
+            .appFont(.caption)
+            .foregroundColor(.secondary)
+
+          Text("The quick brown fox jumps over the lazy dog. 0123456789")
+            .appFont(configManager.config.appFont)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(8)
+            .background(appCardColor)
+            .cornerRadius(6)
+        }
+
+        /// This caption intentionally renders in the picked font — it doubles
+        /// as a live preview of the selection. Do not force it back to system.
+        Text("Affects in-app UI text. Native window chrome and the terminal use their own fonts.")
+          .appFont(.caption)
+          .foregroundColor(.secondary)
+      }
+
       Section("Terminal Font") {
         Picker("Font family", selection: Bindable(configManager).config.terminalFontName) {
           ForEach(ConfigManager.availableMonospacedFonts, id: \.self) { font in
@@ -264,7 +292,7 @@ struct AppearanceSettingsTab: View {
         /// Font preview.
         VStack(alignment: .leading, spacing: 4) {
           Text("Preview")
-            .font(.caption)
+            .appFont(.caption)
             .foregroundColor(.secondary)
 
           Text("claude ❯ Hello, this is a preview.\nABCDEFGHIJKLMNOPQRSTUVWXYZ\nabcdefghijklmnopqrstuvwxyz\n0123456789 !@#$%^&*()")
@@ -288,7 +316,7 @@ struct AppearanceSettingsTab: View {
         .pickerStyle(.segmented)
 
         Text(configManager.config.terminalInteractionMode.description)
-          .font(.caption)
+          .appFont(.caption)
           .foregroundColor(.secondary)
       }
 
@@ -336,7 +364,7 @@ struct AgentColorPicker: View {
         Button("Reset") {
           customColor = nil
         }
-        .font(.caption)
+        .appFont(.caption)
       }
     }
   }
@@ -390,7 +418,7 @@ struct ShortcutRow: View {
       Spacer()
 
       Text(shortcut)
-        .font(.system(size: 12, design: .monospaced))
+        .appFont(size: 12, design: .monospaced)
         .padding(.horizontal, 8)
         .padding(.vertical, 4)
         .background(appCardColor)
@@ -469,7 +497,7 @@ struct PromptsSettingsTab: View {
     VStack(alignment: .leading, spacing: 12) {
       HStack {
         Text("Saved Prompts")
-          .font(.headline)
+          .appFont(.headline)
 
         Spacer()
 
@@ -484,15 +512,15 @@ struct PromptsSettingsTab: View {
       if configManager.config.savedPrompts.isEmpty {
         VStack(spacing: 12) {
           Image(systemName: "text.bubble")
-            .font(.system(size: 32))
+            .appFont(size: 32)
             .foregroundColor(.secondary)
 
           Text("No saved prompts")
-            .font(.subheadline)
+            .appFont(.subheadline)
             .foregroundColor(.secondary)
 
           Text("Create reusable prompts to attach when opening AI agent tabs.")
-            .font(.caption)
+            .appFont(.caption)
             .foregroundColor(.secondary)
             .multilineTextAlignment(.center)
         }
@@ -530,7 +558,7 @@ struct PromptsSettingsTab: View {
 
           TableColumn("Prompt") { prompt in
             Text(prompt.previewText())
-              .font(.system(size: 11, design: .monospaced))
+              .appFont(size: 11, design: .monospaced)
               .lineLimit(1)
               .foregroundColor(.secondary)
           }
@@ -587,7 +615,7 @@ struct PromptsSettingsTab: View {
       }
 
       Text("Tags are shared across prompts and can be renamed or deleted globally.")
-        .font(.caption)
+        .appFont(.caption)
         .foregroundColor(.secondary)
     }
     .padding()
@@ -735,7 +763,7 @@ struct PromptTagsManagerSheet: View {
     VStack(spacing: 0) {
       HStack {
         Text("Manage Prompt Tags")
-          .font(.headline)
+          .appFont(.headline)
 
         Spacer()
 
@@ -743,7 +771,7 @@ struct PromptTagsManagerSheet: View {
           dismiss()
         } label: {
           Image(systemName: "xmark.circle.fill")
-            .font(.system(size: 20))
+            .appFont(size: 20)
             .foregroundColor(.secondary)
         }
         .buttonStyle(.plain)
@@ -765,22 +793,22 @@ struct PromptTagsManagerSheet: View {
 
         if let validationMessage {
           Text(validationMessage)
-            .font(.caption)
+            .appFont(.caption)
             .foregroundColor(.red)
         } else if let validationError {
           Text(validationError)
-            .font(.caption)
+            .appFont(.caption)
             .foregroundColor(.red)
         }
 
         if tags.isEmpty {
           VStack(spacing: 8) {
             Image(systemName: "tag")
-              .font(.system(size: 24))
+              .appFont(size: 24)
               .foregroundColor(.secondary)
 
             Text("No tags yet")
-              .font(.subheadline)
+              .appFont(.subheadline)
               .foregroundColor(.secondary)
           }
           .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -808,14 +836,14 @@ struct PromptTagsManagerSheet: View {
       Divider()
 
       HStack {
-        Button("Cancel") {
+        AppButton("Cancel") {
           dismiss()
         }
         .keyboardShortcut(.escape)
 
         Spacer()
 
-        Button("Save") {
+        AppButton("Save") {
           save()
         }
         .buttonStyle(.borderedProminent)
@@ -901,7 +929,7 @@ struct PromptEditorSheet: View {
       /// Header.
       HStack {
         Text(prompt == nil ? "New Prompt" : "Edit Prompt")
-          .font(.headline)
+          .appFont(.headline)
 
         Spacer()
 
@@ -909,7 +937,7 @@ struct PromptEditorSheet: View {
           dismiss()
         } label: {
           Image(systemName: "xmark.circle.fill")
-            .font(.system(size: 20))
+            .appFont(size: 20)
             .foregroundColor(.secondary)
         }
         .buttonStyle(.plain)
@@ -922,7 +950,7 @@ struct PromptEditorSheet: View {
       VStack(alignment: .leading, spacing: 16) {
         VStack(alignment: .leading, spacing: 6) {
           Text("Name")
-            .font(.system(size: 11, weight: .semibold))
+            .appFont(size: 11, weight: .semibold)
             .foregroundColor(.secondary)
 
           TextField("e.g. Code Reviewer", text: $name)
@@ -931,7 +959,7 @@ struct PromptEditorSheet: View {
 
         VStack(alignment: .leading, spacing: 6) {
           Text("Description (optional)")
-            .font(.system(size: 11, weight: .semibold))
+            .appFont(size: 11, weight: .semibold)
             .foregroundColor(.secondary)
 
           TextField("Brief description of this prompt", text: $promptDescription)
@@ -941,7 +969,7 @@ struct PromptEditorSheet: View {
         if !availableTags.isEmpty {
           VStack(alignment: .leading, spacing: 6) {
             Text("Tags")
-              .font(.system(size: 11, weight: .semibold))
+              .appFont(size: 11, weight: .semibold)
               .foregroundColor(.secondary)
 
             ScrollView {
@@ -949,7 +977,7 @@ struct PromptEditorSheet: View {
                 ForEach(sortedAvailableTags) { tag in
                   Toggle(isOn: tagBinding(for: tag.id)) {
                     Text(tag.name)
-                      .font(.system(size: 12))
+                      .appFont(size: 12)
                   }
                   .toggleStyle(.checkbox)
                 }
@@ -964,11 +992,11 @@ struct PromptEditorSheet: View {
 
         VStack(alignment: .leading, spacing: 6) {
           Text("Prompt Text")
-            .font(.system(size: 11, weight: .semibold))
+            .appFont(size: 11, weight: .semibold)
             .foregroundColor(.secondary)
 
           TextEditor(text: $promptText)
-            .font(.system(size: 12, design: .monospaced))
+            .appFont(size: 12, design: .monospaced)
             .frame(maxHeight: .infinity)
             .scrollContentBackground(.hidden)
             .padding(8)
@@ -979,7 +1007,7 @@ struct PromptEditorSheet: View {
             Spacer()
 
             Text("\(promptText.count) / \(maxPromptLength)")
-              .font(.system(size: 10))
+              .appFont(size: 10)
               .foregroundColor(promptText.count > maxPromptLength ? .red : .secondary)
           }
         }
@@ -990,14 +1018,14 @@ struct PromptEditorSheet: View {
 
       /// Footer with action buttons.
       HStack {
-        Button("Cancel") {
+        AppButton("Cancel") {
           dismiss()
         }
         .keyboardShortcut(.escape)
 
         Spacer()
 
-        Button("Save") {
+        AppButton("Save") {
           save()
         }
         .buttonStyle(.borderedProminent)
@@ -1091,7 +1119,7 @@ struct UsageSettingsTab: View {
         ))
 
         Text("When enabled, SlothyTerminal periodically fetches usage and rate-limit data for connected providers and shows them in the status bar.")
-          .font(.caption)
+          .appFont(.caption)
           .foregroundColor(.secondary)
       }
 
@@ -1104,10 +1132,10 @@ struct UsageSettingsTab: View {
 
           VStack(alignment: .leading, spacing: 2) {
             Text(cursorStatusHeadline)
-              .font(.system(size: 12, weight: .medium))
+              .appFont(size: 12, weight: .medium)
 
             Text(cursorStatusDetail)
-              .font(.caption)
+              .appFont(.caption)
               .foregroundColor(.secondary)
               .fixedSize(horizontal: false, vertical: true)
           }
@@ -1118,13 +1146,13 @@ struct UsageSettingsTab: View {
         DisclosureGroup(isExpanded: $showManualOverride) {
           VStack(alignment: .leading, spacing: 8) {
             Text("Use this only when Cursor.app isn't installed or auto-detect isn't working. Open cursor.com signed in, copy the `WorkosCursorSessionToken` cookie, and paste the part after `::` below.")
-              .font(.caption)
+              .appFont(.caption)
               .foregroundColor(.secondary)
               .fixedSize(horizontal: false, vertical: true)
 
             SecureField("Cursor session JWT", text: $cursorJWTInput)
               .textFieldStyle(.roundedBorder)
-              .font(.system(size: 11, design: .monospaced))
+              .appFont(size: 11, design: .monospaced)
 
             HStack {
               Button("Save Token") {
@@ -1141,7 +1169,7 @@ struct UsageSettingsTab: View {
 
               if let saveError {
                 Text(saveError)
-                  .font(.caption)
+                  .appFont(.caption)
                   .foregroundColor(.red)
               }
             }
@@ -1149,7 +1177,7 @@ struct UsageSettingsTab: View {
           .padding(.top, 4)
         } label: {
           Text("Manual override")
-            .font(.system(size: 11, weight: .semibold))
+            .appFont(size: 11, weight: .semibold)
             .foregroundColor(.secondary)
         }
       }
@@ -1275,13 +1303,13 @@ struct UsageSettingsTab: View {
   private var providerResponsesSection: some View {
     Section {
       Text("The most recent JSON each provider returned. Useful when deciding what new data to surface — auth headers aren't stored, and email-shaped strings are scrubbed before display.")
-        .font(.caption)
+        .appFont(.caption)
         .foregroundColor(.secondary)
         .fixedSize(horizontal: false, vertical: true)
 
       if sortedResponses.isEmpty {
         Text("No responses captured yet. Enable usage tracking and connect a provider, then trigger a fetch.")
-          .font(.caption)
+          .appFont(.caption)
           .foregroundColor(.secondary)
       } else {
         ForEach(sortedResponses) { entry in
@@ -1327,10 +1355,10 @@ private struct ProviderResponseRow: View {
     VStack(alignment: .leading, spacing: 6) {
       HStack(spacing: 8) {
         Text(entry.provider.displayName)
-          .font(.system(size: 12, weight: .semibold))
+          .appFont(size: 12, weight: .semibold)
 
         Text(entry.endpoint)
-          .font(.system(size: 11, design: .monospaced))
+          .appFont(size: 11, design: .monospaced)
           .padding(.horizontal, 6)
           .padding(.vertical, 2)
           .background(appCardColor)
@@ -1341,7 +1369,7 @@ private struct ProviderResponseRow: View {
         Spacer()
 
         Text(entry.fetchedAt, style: .relative)
-          .font(.caption)
+          .appFont(.caption)
           .foregroundColor(.secondary)
 
         Button {
@@ -1357,21 +1385,21 @@ private struct ProviderResponseRow: View {
       /// even when the row is narrow. Full URL is reachable via Copy JSON
       /// for the rare case it matters.
       Text(displayURL)
-        .font(.system(size: 10, design: .monospaced))
+        .appFont(size: 10, design: .monospaced)
         .foregroundColor(.secondary)
         .lineLimit(1)
         .truncationMode(.middle)
 
       if let error = entry.error {
         Text("Error: \(error)")
-          .font(.caption)
+          .appFont(.caption)
           .foregroundColor(.red)
       }
 
       if isExpanded {
         ScrollView([.horizontal, .vertical]) {
           Text(entry.prettyBody)
-            .font(.system(size: 11, design: .monospaced))
+            .appFont(size: 11, design: .monospaced)
             .textSelection(.enabled)
             .padding(8)
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -1399,7 +1427,7 @@ private struct ProviderResponseRow: View {
           Spacer()
 
           Text("\(entry.byteCount) bytes")
-            .font(.caption)
+            .appFont(.caption)
             .foregroundColor(.secondary)
         }
       }
@@ -1424,7 +1452,7 @@ private struct ProviderResponseRow: View {
     let descriptor = statusDescriptor
 
     return Text(descriptor.label)
-      .font(.system(size: 10, weight: .semibold, design: .monospaced))
+      .appFont(size: 10, weight: .semibold, design: .monospaced)
       .foregroundColor(descriptor.foreground)
       .padding(.horizontal, 6)
       .padding(.vertical, 2)
@@ -1496,7 +1524,7 @@ struct LogsSettingsTab: View {
 
       if let lastError {
         Text("Failed to read logs: \(lastError)")
-          .font(.caption)
+          .appFont(.caption)
           .foregroundColor(.red)
       }
 
@@ -1578,15 +1606,15 @@ struct LogsSettingsTab: View {
   private var emptyState: some View {
     VStack(spacing: 8) {
       Image(systemName: "doc.text.magnifyingglass")
-        .font(.system(size: 32))
+        .appFont(size: 32)
         .foregroundColor(.secondary)
 
       Text(hasLoadedOnce ? "No log entries match the current filter." : "Loading…")
-        .font(.subheadline)
+        .appFont(.subheadline)
         .foregroundColor(.secondary)
 
       Text("Showing entries from the last 2 hours.")
-        .font(.caption)
+        .appFont(.caption)
         .foregroundColor(.secondary)
     }
     .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -1609,7 +1637,7 @@ struct LogsSettingsTab: View {
     HStack {
       TimelineView(.periodic(from: .now, by: 1.0)) { context in
         Text(statusText(now: context.date))
-          .font(.caption)
+          .appFont(.caption)
           .foregroundColor(.secondary)
       }
 
@@ -1690,12 +1718,12 @@ private struct LogRow: View {
   var body: some View {
     HStack(alignment: .top, spacing: 8) {
       Text(Self.timeFormatter.string(from: entry.date))
-        .font(.system(size: 11, design: .monospaced))
+        .appFont(size: 11, design: .monospaced)
         .foregroundColor(.secondary)
         .frame(width: 90, alignment: .leading)
 
       Text(entry.level.displayName.uppercased())
-        .font(.system(size: 10, weight: .semibold, design: .monospaced))
+        .appFont(size: 10, weight: .semibold, design: .monospaced)
         .foregroundColor(.white)
         .padding(.horizontal, 6)
         .padding(.vertical, 2)
@@ -1704,12 +1732,12 @@ private struct LogRow: View {
         .frame(width: 60, alignment: .leading)
 
       Text(entry.category)
-        .font(.system(size: 11, design: .monospaced))
+        .appFont(size: 11, design: .monospaced)
         .foregroundColor(.primary)
         .frame(width: 90, alignment: .leading)
 
       Text(entry.message)
-        .font(.system(size: 11, design: .monospaced))
+        .appFont(size: 11, design: .monospaced)
         .frame(maxWidth: .infinity, alignment: .leading)
         .textSelection(.enabled)
     }
@@ -1749,7 +1777,7 @@ struct LicensesSettingsTab: View {
 
       Section("Third-Party Licenses") {
         Text("SlothyTerminal uses the following open source software:")
-          .font(.caption)
+          .appFont(.caption)
           .foregroundColor(.secondary)
 
         LicenseSection(
@@ -1785,10 +1813,10 @@ struct LicenseSection: View {
       HStack {
         VStack(alignment: .leading, spacing: 4) {
           Text(name)
-            .font(.headline)
+            .appFont(.headline)
 
           Text(description)
-            .font(.caption)
+            .appFont(.caption)
             .foregroundColor(.secondary)
         }
 
@@ -1800,7 +1828,7 @@ struct LicenseSection: View {
           }
         } label: {
           Text(isExpanded ? "Hide License" : "View License")
-            .font(.caption)
+            .appFont(.caption)
         }
         .buttonStyle(.bordered)
       }
@@ -1808,7 +1836,7 @@ struct LicenseSection: View {
       if isExpanded {
         ScrollView {
           Text(licenseText)
-            .font(.system(size: 10, design: .monospaced))
+            .appFont(size: 10, design: .monospaced)
             .foregroundColor(.secondary)
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(8)

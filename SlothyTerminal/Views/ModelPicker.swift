@@ -12,7 +12,7 @@ struct ModelPicker: View {
   var body: some View {
     VStack(alignment: .leading, spacing: 8) {
       Text("Select Model")
-        .font(.system(size: 12, weight: .semibold))
+        .appFont(size: 12, weight: .semibold)
 
       TextField("Search models", text: $searchText)
         .textFieldStyle(.roundedBorder)
@@ -31,7 +31,7 @@ struct ModelPicker: View {
 
           if filteredModels.isEmpty && !searchText.isEmpty {
             Text("No matching models")
-              .font(.system(size: 12))
+              .appFont(size: 12)
               .foregroundColor(.secondary)
               .padding(.horizontal, 8)
               .padding(.vertical, 6)
@@ -56,7 +56,7 @@ struct ModelPicker: View {
   private var groupedModelList: some View {
     ForEach(groupedFilteredModels, id: \.name) { group in
       Text(group.name)
-        .font(.system(size: 10, weight: .semibold))
+        .appFont(size: 10, weight: .semibold)
         .foregroundColor(.secondary)
         .padding(.horizontal, 8)
         .padding(.top, 6)
@@ -100,13 +100,13 @@ struct ModelPicker: View {
     } label: {
       HStack(spacing: 6) {
         Text(title)
-          .font(.system(size: 12))
+          .appFont(size: 12)
 
         Spacer(minLength: 0)
 
         if isSelected {
           Image(systemName: "checkmark")
-            .font(.system(size: 10, weight: .semibold))
+            .appFont(size: 10, weight: .semibold)
             .foregroundColor(.accentColor)
         }
       }

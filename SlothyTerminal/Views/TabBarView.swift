@@ -287,7 +287,7 @@ struct TabItemView: View {
 
         /// Tab title.
         Text(label)
-          .font(.system(size: 12))
+          .appFont(size: 12)
           .foregroundColor(isActive || isInSplit ? .primary : .gray)
           .lineLimit(1)
 
@@ -338,17 +338,17 @@ struct TabItemView: View {
           ZStack {
             Image(systemName: tabIconName)
               .foregroundColor(tabAccentColor)
-              .font(.system(size: 12))
+              .appFont(size: 12)
 
             Image(systemName: "rectangle.split.2x1.fill")
               .foregroundColor(.accentColor)
-              .font(.system(size: 6))
+              .appFont(size: 6)
               .offset(x: 4, y: 4)
           }
         } else {
           Image(systemName: tabIconName)
             .foregroundColor(isActive ? tabAccentColor : .gray)
-            .font(.system(size: 12))
+            .appFont(size: 12)
         }
       }
       .frame(width: 12, height: 12)
@@ -371,7 +371,7 @@ struct NewTabButton: View {
       appState.showStartupPage()
     } label: {
       Image(systemName: "plus")
-        .font(.system(size: 12, weight: .medium))
+        .appFont(size: 12, weight: .medium)
         .foregroundColor(.secondary)
     }
     .buttonStyle(.plain)

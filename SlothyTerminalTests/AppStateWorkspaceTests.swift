@@ -615,6 +615,79 @@ struct AppStateWorkspaceTests {
     #expect(appState.activeWorkspaceID == wsC.id)
   }
 
+  // MARK: - createWorkspaceAndTerminalTab
+
+  @Test("createWorkspaceAndTerminalTab from empty state creates one workspace and one tab")
+  @MainActor
+  func createWorkspaceAndTerminalTab_emptyState() throws {
+    let appState = AppState()
+
+    appState.createWorkspaceAndTerminalTab(directory: dirA)
+
+    #expect(appState.workspaces.count == 1)
+    #expect(appState.tabs.count == 1)
+
+    let workspace = try #require(appState.workspaces.first)
+    let tab = try #require(appState.tabs.first)
+
+    #expect(appState.activeWorkspaceID == workspace.id)
+    #expect(appState.activeTabID == tab.id)
+    #expect(workspace.rootDirectory == dirA)
+    #expect(tab.workspaceID == workspace.id)
+    #expect(tab.workingDirectory == dirA)
+    #expect(tab.agentType == .terminal)
+  }
+
+  @Test("createWorkspaceAndTerminalTab always creates a fresh workspace, even for a duplicate root")
+  @MainActor
+  func createWorkspaceAndTerminalTab_alwaysCreatesFreshWorkspace() throws {
+    let appState = AppState()
+
+    /// Establish an existing workspace rooted at dirA, with a tab in it so
+    /// the dedupe path in resolveWorkspaceID would otherwise reuse it.
+    let existing = appState.createWorkspace(from: dirA)
+    appState.createTab(agent: .terminal, directory: dirA)
+
+    appState.createWorkspaceAndTerminalTab(directory: dirA)
+
+    let dirAWorkspaces = appState.workspaces.filter { $0.rootDirectory == dirA }
+    #expect(dirAWorkspaces.count == 2)
+    #expect(appState.workspaces.count == 2)
+
+    let newActiveID = try #require(appState.activeWorkspaceID)
+    #expect(newActiveID != existing.id)
+    #expect(dirAWorkspaces.contains(where: { $0.id == newActiveID }))
+
+    let activeTab = try #require(appState.activeTab)
+    #expect(activeTab.workspaceID == newActiveID)
+    #expect(activeTab.workingDirectory == dirA)
+    #expect(activeTab.agentType == .terminal)
+  }
+
+  @Test("createWorkspaceAndTerminalTab does not mutate existing workspaces or tabs")
+  @MainActor
+  func createWorkspaceAndTerminalTab_doesNotMutateExistingWorkspaces() throws {
+    let appState = AppState()
+
+    appState.createWorkspace(from: dirA)
+    appState.createTab(agent: .claude, directory: dirA)
+    let preexistingWorkspaceIDs = appState.workspaces.map(\.id)
+    let preexistingTabIDs = appState.tabs.map(\.id)
+
+    appState.createWorkspaceAndTerminalTab(directory: dirB)
+
+    /// All previously created workspaces and tabs are still present.
+    for id in preexistingWorkspaceIDs {
+      #expect(appState.workspaces.contains(where: { $0.id == id }))
+    }
+    for id in preexistingTabIDs {
+      #expect(appState.tabs.contains(where: { $0.id == id }))
+    }
+
+    #expect(appState.workspaces.count == preexistingWorkspaceIDs.count + 1)
+    #expect(appState.tabs.count == preexistingTabIDs.count + 1)
+  }
+
   @Test("Step-by-step swaps simulate downward drag correctly")
   @MainActor
   func stepByStepDownwardDrag() {

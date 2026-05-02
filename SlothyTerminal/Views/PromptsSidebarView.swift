@@ -55,14 +55,14 @@ struct PromptsSidebarView: View {
     VStack(spacing: 0) {
       HStack {
         Text("Prompts")
-          .font(.system(size: 10, weight: .semibold))
+          .appFont(size: 10, weight: .semibold)
           .foregroundColor(.secondary)
 
         Spacer()
 
         SettingsLink {
           Image(systemName: "gear")
-            .font(.system(size: 10))
+            .appFont(size: 10)
             .foregroundColor(.secondary)
         }
         .buttonStyle(.plain)
@@ -71,7 +71,7 @@ struct PromptsSidebarView: View {
         })
 
         Text("\(prompts.count)")
-          .font(.system(size: 9))
+          .appFont(size: 9)
           .foregroundColor(.secondary.opacity(0.6))
       }
       .padding(.horizontal, 8)
@@ -80,10 +80,10 @@ struct PromptsSidebarView: View {
       if let status = actionStatus {
         HStack(spacing: 4) {
           Image(systemName: isStatusError ? "exclamationmark.circle" : "checkmark.circle")
-            .font(.system(size: 9))
+            .appFont(size: 9)
 
           Text(status)
-            .font(.system(size: 9))
+            .appFont(size: 9)
             .lineLimit(1)
         }
         .foregroundColor(isStatusError ? .red : .green)
@@ -101,15 +101,15 @@ struct PromptsSidebarView: View {
       Spacer()
 
       Image(systemName: "text.bubble")
-        .font(.system(size: 24))
+        .appFont(size: 24)
         .foregroundColor(.secondary)
 
       Text("No saved prompts")
-        .font(.system(size: 11, weight: .medium))
+        .appFont(size: 11, weight: .medium)
         .foregroundColor(.secondary)
 
       Text("Create prompts in Settings.")
-        .font(.system(size: 10))
+        .appFont(size: 10)
         .foregroundColor(.secondary.opacity(0.7))
 
       Spacer()
@@ -143,7 +143,7 @@ struct PromptsSidebarView: View {
   private var promptFilesHeader: some View {
     HStack {
       Text("Files from docs/prompts")
-        .font(.system(size: 10, weight: .semibold))
+        .appFont(size: 10, weight: .semibold)
         .foregroundColor(.secondary)
 
       Spacer()
@@ -152,14 +152,14 @@ struct PromptsSidebarView: View {
         Task { await reloadPromptFiles() }
       } label: {
         Image(systemName: "arrow.clockwise")
-          .font(.system(size: 9))
+          .appFont(size: 9)
           .foregroundColor(.secondary)
       }
       .buttonStyle(.plain)
       .help("Refresh")
 
       Text("\(promptFiles.count)")
-        .font(.system(size: 9))
+        .appFont(size: 9)
         .foregroundColor(.secondary.opacity(0.6))
     }
     .padding(.bottom, 2)
@@ -169,18 +169,18 @@ struct PromptsSidebarView: View {
     VStack(alignment: .leading, spacing: 4) {
       HStack(spacing: 4) {
         Image(systemName: "doc.text")
-          .font(.system(size: 10))
+          .appFont(size: 10)
           .foregroundColor(.secondary)
 
         Text(file.fileName)
-          .font(.system(size: 11, weight: .medium))
+          .appFont(size: 11, weight: .medium)
           .foregroundColor(.primary)
           .lineLimit(1)
       }
 
       if file.relativePath != file.fileName {
         Text(file.relativePath)
-          .font(.system(size: 9, design: .monospaced))
+          .appFont(size: 9, design: .monospaced)
           .foregroundColor(.secondary.opacity(0.7))
           .lineLimit(1)
       }
@@ -208,19 +208,19 @@ struct PromptsSidebarView: View {
   private func promptBlock(_ prompt: SavedPrompt) -> some View {
     VStack(alignment: .leading, spacing: 4) {
       Text(prompt.name)
-        .font(.system(size: 11, weight: .medium))
+        .appFont(size: 11, weight: .medium)
         .foregroundColor(.primary)
         .lineLimit(1)
 
       if !prompt.promptDescription.isEmpty {
         Text(prompt.promptDescription)
-          .font(.system(size: 10))
+          .appFont(size: 10)
           .foregroundColor(.secondary)
           .lineLimit(2)
       }
 
       Text(prompt.previewText(maxLength: 60))
-        .font(.system(size: 9, design: .monospaced))
+        .appFont(size: 9, design: .monospaced)
         .foregroundColor(.secondary.opacity(0.7))
         .lineLimit(1)
 
@@ -229,7 +229,7 @@ struct PromptsSidebarView: View {
         HStack(spacing: 4) {
           ForEach(promptTags) { tag in
             Text(tag.name)
-              .font(.system(size: 8, weight: .medium))
+              .appFont(size: 8, weight: .medium)
               .foregroundColor(.secondary)
               .padding(.horizontal, 4)
               .padding(.vertical, 1)

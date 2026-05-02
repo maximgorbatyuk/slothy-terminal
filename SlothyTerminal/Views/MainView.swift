@@ -206,9 +206,9 @@ struct StatusBarView: View {
       if let path = displayPath {
         HStack(spacing: 4) {
           Image(systemName: "folder.fill")
-            .font(.system(size: 9))
+            .appFont(size: 9)
           Text(path)
-            .font(.system(size: 10))
+            .appFont(size: 10)
             .lineLimit(1)
             .truncationMode(.middle)
         }
@@ -221,9 +221,9 @@ struct StatusBarView: View {
 
         HStack(spacing: 4) {
           Image(systemName: "arrow.triangle.branch")
-            .font(.system(size: 9))
+            .appFont(size: 9)
           Text(branch)
-            .font(.system(size: 10))
+            .appFont(size: 10)
         }
         .foregroundColor(.secondary)
       }
@@ -251,9 +251,9 @@ struct StatusBarView: View {
         } label: {
           HStack(spacing: 3) {
             Image(systemName: "arrow.up.forward.app")
-              .font(.system(size: 9))
+              .appFont(size: 9)
             Text("Open in...")
-              .font(.system(size: 10))
+              .appFont(size: 10)
           }
           .foregroundColor(.secondary)
         }
@@ -271,12 +271,12 @@ struct StatusBarView: View {
       /// Version info on the right.
       HStack(spacing: 6) {
         Text("v\(appVersion)")
-          .font(.system(size: 10))
+          .appFont(size: 10)
           .foregroundColor(.secondary)
 
         if isDevelopment {
           Text("dev")
-            .font(.system(size: 9, weight: .medium))
+            .appFont(size: 9, weight: .medium)
             .foregroundColor(.orange)
             .padding(.horizontal, 4)
             .padding(.vertical, 1)
@@ -298,7 +298,7 @@ struct StatusBarView: View {
 
   private var statusSeparator: some View {
     Text("|")
-      .font(.system(size: 10))
+      .appFont(size: 10)
       .foregroundColor(.secondary.opacity(0.5))
   }
 

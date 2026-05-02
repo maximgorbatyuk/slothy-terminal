@@ -87,7 +87,7 @@ private struct NewBranchSheet: View {
   var body: some View {
     VStack(alignment: .leading, spacing: 16) {
       Text("Create and Switch Branch")
-        .font(.system(size: 16, weight: .semibold))
+        .appFont(size: 16, weight: .semibold)
 
       TextField("Branch name", text: $branchName)
         .textFieldStyle(.roundedBorder)
@@ -95,11 +95,11 @@ private struct NewBranchSheet: View {
       HStack {
         Spacer()
 
-        Button("Cancel") {
+        AppButton("Cancel") {
           dismiss()
         }
 
-        Button("Create Branch") {
+        AppButton("Create Branch") {
           Task {
             let didCreate = await onCreate()
 
@@ -264,15 +264,15 @@ struct MakeCommitView: View {
   private var toolbar: some View {
     HStack(spacing: 10) {
       Image(systemName: "magnifyingglass")
-        .font(.system(size: 12))
+        .appFont(size: 12)
         .foregroundStyle(.secondary)
 
       Text(repositoryName)
-        .font(.system(size: 12, weight: .medium))
+        .appFont(size: 12, weight: .medium)
         .lineLimit(1)
 
       Text(branchName)
-        .font(.system(size: 10, weight: .medium, design: .monospaced))
+        .appFont(size: 10, weight: .medium, design: .monospaced)
         .padding(.horizontal, 6)
         .padding(.vertical, 2)
         .background(Color.accentColor.opacity(0.12))
@@ -283,11 +283,11 @@ struct MakeCommitView: View {
       if let selectedChange {
         HStack(spacing: 4) {
           Image(systemName: "doc.text")
-            .font(.system(size: 10))
+            .appFont(size: 10)
             .foregroundStyle(.secondary)
 
           Text(selectedChange.path)
-            .font(.system(size: 11))
+            .appFont(size: 11)
             .foregroundStyle(.secondary)
             .lineLimit(1)
             .truncationMode(.middle)
@@ -298,7 +298,7 @@ struct MakeCommitView: View {
 
       if let lastOperation {
         Text(lastOperation)
-          .font(.system(size: 10))
+          .appFont(size: 10)
           .foregroundStyle(.tertiary)
           .lineLimit(1)
       }
@@ -309,7 +309,7 @@ struct MakeCommitView: View {
         }
       } label: {
         Image(systemName: "arrow.clockwise")
-          .font(.system(size: 11))
+          .appFont(size: 11)
       }
       .buttonStyle(.plain)
       .foregroundStyle(.secondary)
@@ -320,7 +320,7 @@ struct MakeCommitView: View {
         isShowingNewBranchSheet = true
       } label: {
         Image(systemName: "point.topleft.down.curvedto.point.bottomright.up")
-          .font(.system(size: 11))
+          .appFont(size: 11)
       }
       .buttonStyle(.plain)
       .foregroundStyle(.secondary)
@@ -333,7 +333,7 @@ struct MakeCommitView: View {
         }
       } label: {
         Image(systemName: "arrow.up.circle")
-          .font(.system(size: 11))
+          .appFont(size: 11)
       }
       .buttonStyle(.plain)
       .foregroundStyle(.secondary)
