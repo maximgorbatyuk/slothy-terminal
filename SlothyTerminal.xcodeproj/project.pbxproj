@@ -290,6 +290,9 @@
 				INFOPLIST_KEY_CFBundleDisplayName = "Slothy Terminal";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				INFOPLIST_OTHER_PREPROCESSOR_FLAGS = "-traditional-cpp";
+				INFOPLIST_PREPROCESS = YES;
+				INFOPLIST_PREPROCESSOR_DEFINITIONS = "DEBUG_BUILD=1";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
@@ -325,6 +328,8 @@
 				INFOPLIST_KEY_CFBundleDisplayName = "Slothy Terminal";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				INFOPLIST_OTHER_PREPROCESSOR_FLAGS = "-traditional-cpp";
+				INFOPLIST_PREPROCESS = YES;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",

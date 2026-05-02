@@ -7,6 +7,18 @@ class AppDelegate: NSObject, NSApplicationDelegate {
   private var recentFoldersManager = RecentFoldersManager.shared
   private var configManager = ConfigManager.shared
   private var windowObserver: NSObjectProtocol?
+  /// Strong ref so the provider isn't deallocated; Services callbacks
+  /// dispatch through this object.
+  private var finderServicesProvider: FinderServicesProvider?
+
+  func applicationWillFinishLaunching(_ notification: Notification) {
+    /// Register the Services provider before SwiftUI's scene attaches so
+    /// cold-launch invocations from Finder are received and queued.
+    let provider = FinderServicesProvider()
+    finderServicesProvider = provider
+    NSApp.servicesProvider = provider
+    NSUpdateDynamicServices()
+  }
 
   func applicationDidFinishLaunching(_ notification: Notification) {
     /// Ignore SIGPIPE so a broken-pipe write returns an error instead

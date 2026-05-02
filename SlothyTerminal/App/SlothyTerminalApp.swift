@@ -13,6 +13,19 @@ struct SlothyTerminalApp: App {
         .environment(appState)
         .preferredColorScheme(configManager.config.colorScheme.colorScheme)
         .appFont(configManager.config.appFont)
+        .onAppear {
+          /// Attach the Finder Services sink and drain any cold-launch
+          /// requests queued before the scene was ready.
+          FinderServiceRequestQueue.shared.attach { request in
+            switch request {
+            case .newTab(let folder):
+              appState.createTab(agent: .terminal, directory: folder)
+
+            case .newWindow(let folder):
+              appState.createWorkspaceAndTerminalTab(directory: folder)
+            }
+          }
+        }
         .onReceive(NotificationCenter.default.publisher(for: .newTabRequested)) { notification in
           if let agentType = notification.userInfo?["agentType"] as? AgentType {
             appState.showFolderSelector(for: agentType)
