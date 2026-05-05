@@ -89,13 +89,7 @@ Use Claude CLI, OpenCode, or plain terminal sessions in a clean tabbed interface
 - Lazy-loads subdirectories for performance
 
 ### Open in External Apps
-- Quick-access dropdown to open working directory in installed apps
-- Supports popular development tools:
-  - Finder, VS Code, Cursor, Xcode
-  - Claude Desktop, ChatGPT
-  - iTerm, Warp, Ghostty, Terminal
-  - Rider, IntelliJ, Fleet
-  - Sublime Text, Nova, BBEdit, TextMate
+- Quick-access dropdown to open the working directory in installed editors and chat apps. Detection is by bundle identifier — the menu shows whatever is actually installed on the machine.
 
 ![](/docs/assets/open_in.png)
 
@@ -251,73 +245,34 @@ If new code is intended to be part of the SwiftPM-covered core and is SwiftPM-co
 
 ## Project Structure
 
-```
-SlothyTerminal/
-├── App/
-│   ├── SlothyTerminalApp.swift    # App entry point and menu commands
-│   ├── AppState.swift             # Global state management
-│   └── AppDelegate.swift          # macOS app delegate
-├── Agents/
-│   ├── AIAgent.swift              # Agent protocol and factory
-│   ├── ClaudeAgent.swift          # Claude CLI integration
-│   ├── OpenCodeAgent.swift        # OpenCode CLI integration
-│   └── TerminalAgent.swift        # Plain terminal agent
-├── Injection/
-│   ├── Models/                    # InjectionPayload, InjectionRequest, InjectionTarget
-│   ├── Orchestrator/              # Per-tab FIFO injection queues
-│   └── Registry/                  # TerminalSurfaceRegistry for live surfaces
-├── Models/
-│   ├── Tab.swift                  # Tab model (terminal/git modes)
-│   ├── AgentType.swift            # Agent type enum (Terminal/Claude/OpenCode)
-│   ├── Workspace.swift            # Workspace model for tab grouping
-│   ├── GitStats.swift             # Git statistics and graph models
-│   ├── GitTab.swift               # Git client sub-tab enum
-│   ├── SavedPrompt.swift          # Saved prompt model
-│   ├── LaunchType.swift           # Session launch type enum
-│   └── AppConfig.swift            # Configuration model
-├── Services/
-│   ├── ConfigManager.swift        # Configuration persistence
-│   ├── GitService.swift           # Async git operations
-│   ├── GitStatsService.swift      # Repository statistics
-│   ├── GitProcessRunner.swift     # Git command runner (deadlock-safe)
-│   ├── GitWorkingTreeService.swift# Working tree change detection
-│   ├── GraphLaneCalculator.swift  # Revision graph lane assignment
-│   ├── OpenCodeCLIService.swift   # OpenCode CLI wrapper
-│   ├── ANSIStripper.swift         # ANSI escape sequence removal
-│   ├── DirectoryTreeManager.swift # Directory tree scanning
-│   ├── ExternalAppManager.swift   # External app integration
-│   ├── RecentFoldersManager.swift # Recent folders tracking
-│   ├── UpdateManager.swift        # Sparkle update manager
-│   └── BuildConfig.swift          # Build environment config
-├── Terminal/
-│   ├── GhosttyApp.swift           # Libghostty app singleton and callbacks
-│   └── GhosttySurfaceView.swift   # NSView subclass for terminal surfaces
-├── Views/
-│   ├── MainView.swift             # Main window layout
-│   ├── TabBarView.swift           # Tab bar with agent indicators
-│   ├── TerminalView.swift         # Libghostty SwiftUI bridge
-│   ├── TerminalContainerView.swift# Terminal display container
-│   ├── SidebarView.swift          # Session statistics sidebar
-│   ├── WorkspacesSidebarView.swift# Workspace management sidebar
-│   ├── PromptsSidebarView.swift   # Saved prompts sidebar
-│   ├── GitClientView.swift        # Git client container
-│   ├── MakeCommitView.swift       # Commit composer
-│   ├── RevisionGraphView.swift    # Commit history graph
-│   ├── GitChangesView.swift       # Working tree changes
-│   ├── StartupPageView.swift      # New session startup page
-│   ├── SettingsView.swift         # Settings window
-│   ├── AboutView.swift            # About window
-│   └── FolderSelectorModal.swift  # Folder browser modal
-└── Resources/
-    ├── Config.debug.json          # Debug build configuration
-    └── Config.release.json        # Release build configuration
-```
+Source lives under [`SlothyTerminal/`](SlothyTerminal/). Each subdirectory has a single responsibility:
+
+| Path | Purpose |
+|---|---|
+| [`App/`](SlothyTerminal/App) | `@main` entry point, `AppDelegate`, global `AppState`. |
+| [`Agents/`](SlothyTerminal/Agents) | `AIAgent` protocol and per-agent CLI integration (Claude, OpenCode, plain terminal). |
+| [`Models/`](SlothyTerminal/Models) | Plain value types — `Tab`, `Workspace`, `AppConfig`, `SavedPrompt`, etc. |
+| [`Services/`](SlothyTerminal/Services) | Long-running services and stateless utilities — config, git, usage, logging, scanners. |
+| [`Injection/`](SlothyTerminal/Injection) | Per-tab FIFO queue and live-surface registry for programmatic terminal input. |
+| [`Terminal/`](SlothyTerminal/Terminal) | libghostty C-ABI boundary (`GhosttyApp`, `GhosttySurfaceView`). Xcode-only. |
+| [`Views/`](SlothyTerminal/Views) | All SwiftUI views — main window, tab bar, sidebars, settings, git client, dialogs. |
+| [`Resources/`](SlothyTerminal/Resources) | Build-config JSON, bundled fonts, third-party licences. |
+
+For module responsibilities and the SPM-vs-Xcode build split, see [`docs/architecture.md`](docs/architecture.md).
 
 ## Documentation
 
-- [Release Process](docs/RELEASE.md) - Full step-by-step release instructions
-- [UI Guidelines](docs/ui-guideline.md) - Design guidelines
-- [Roadmap](docs/roadmap.md) - Project roadmap
+- [`AGENTS.md`](AGENTS.md) — orientation, hard rules, build commands, Swift style guidance for AI assistants and human contributors ([`CLAUDE.md`](CLAUDE.md) re-exports this)
+- [`docs/architecture.md`](docs/architecture.md) — runtime boundary, modules, deployment surface
+- [`docs/domain.md`](docs/domain.md) — Workspace / Tab / AgentType / Injection lifecycle and invariants
+- [`docs/authentication.md`](docs/authentication.md) — Keychain, notarization, Sparkle EdDSA
+- [`docs/interactions.md`](docs/interactions.md) — libghostty boundary, spawned subprocesses, outbound HTTP
+- [`docs/testing.md`](docs/testing.md) — what `swift test` covers, what it can't, CI gates
+- [`docs/gotchas.md`](docs/gotchas.md) — known traps and unsafe shortcuts
+- [`docs/release.md`](docs/release.md) — full step-by-step release instructions
+- [`docs/ui-guideline.md`](docs/ui-guideline.md) — design guidelines
+- [`docs/roadmap.md`](docs/roadmap.md) — project roadmap
+- [`KNOWN_ISSUES.md`](KNOWN_ISSUES.md) — unresolved product behaviour
 
 ## Release Process
 
@@ -327,7 +282,7 @@ Ensure `GhosttyKit.xcframework` is present in the project root, then:
 ./scripts/build-release.sh 2026.2.6
 ```
 
-This archives, notarizes, creates a DMG, and signs for Sparkle updates. See [RELEASE.md](docs/RELEASE.md) for full step-by-step instructions.
+This archives, notarizes, creates a DMG, and signs for Sparkle updates. See [`docs/release.md`](docs/release.md) for full step-by-step instructions.
 
 ## Changelog
 
