@@ -37,7 +37,7 @@ class Tab: Identifiable {
   let startTime: Date = Date()
   var isTerminalBusy: Bool = false
   private var terminalActivityResetTask: Task<Void, Never>?
-  private let terminalActivityIdleDelayNanoseconds: UInt64 = 800_000_000
+  private let terminalActivityIdleDelayNanoseconds: UInt64 = 2_000_000_000
 
   /// The saved prompt to pass as the first message to the AI agent.
   let initialPrompt: SavedPrompt?

@@ -5,7 +5,7 @@ import Testing
 
 @Suite("Tab Activity")
 struct TabActivityTests {
-  private let activityIdleWait: UInt64 = 1_200_000_000
+  private let activityIdleWait: UInt64 = 2_400_000_000
 
   @Test("Terminal command entry marks tab busy")
   @MainActor
@@ -53,6 +53,28 @@ struct TabActivityTests {
     )
 
     tab.handleTerminalLaunch(shouldAutoRunCommand: false)
+
+    #expect(tab.isExecuting == false)
+  }
+
+  @Test("Terminal stays busy through the 2s idle window")
+  @MainActor
+  func terminalStaysBusyWithinIdleWindow() async {
+    let tab = Tab(
+      workspaceID: UUID(),
+      agentType: .claude,
+      workingDirectory: URL(fileURLWithPath: "/tmp")
+    )
+
+    tab.recordTerminalActivity()
+
+    /// Sample at ~1s — under the 2s idle window.
+    try? await Task.sleep(nanoseconds: 1_000_000_000)
+
+    #expect(tab.isExecuting)
+
+    /// Pass the 2s threshold (1s + 1.4s = 2.4s).
+    try? await Task.sleep(nanoseconds: 1_400_000_000)
 
     #expect(tab.isExecuting == false)
   }
