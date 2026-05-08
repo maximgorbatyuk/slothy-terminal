@@ -202,6 +202,11 @@ class AppState {
     tabs.filter { $0.workspaceID == workspaceID }
   }
 
+  /// True when any tab in the workspace has unread background output.
+  func hasBackgroundActivity(in workspaceID: UUID) -> Bool {
+    tabs.contains { $0.workspaceID == workspaceID && $0.hasBackgroundActivity }
+  }
+
   /// Looks up a workspace by ID.
   func workspace(for id: UUID) -> Workspace? {
     workspaces.first { $0.id == id }
@@ -223,6 +228,11 @@ class AppState {
     }
 
     activeWorkspaceID = id
+
+    // Entering a workspace acknowledges all of its unread tabs.
+    for tab in tabs where tab.workspaceID == id {
+      tab.clearBackgroundActivity()
+    }
 
     // If current active tab already belongs to this workspace, keep it.
     if let current = activeTab, current.workspaceID == id {

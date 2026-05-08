@@ -332,7 +332,7 @@ struct TabItemView: View {
     ZStack(alignment: .topTrailing) {
       Group {
         if tab.isExecuting {
-          ExecutingIndicator(color: isActive || isInSplit ? tabAccentColor : .gray)
+          ExecutingIndicator(color: tabAccentColor)
         } else if isInSplit {
           // Split-member tabs show a split icon overlaid on the agent icon.
           ZStack {
@@ -353,7 +353,7 @@ struct TabItemView: View {
       }
       .frame(width: 12, height: 12)
 
-      if tab.hasBackgroundActivity && !isActive && !tab.isExecuting {
+      if tab.hasBackgroundActivity && !isActive {
         BackgroundActivityIndicator()
           .offset(x: 4, y: -4)
       }
@@ -383,6 +383,7 @@ struct NewTabButton: View {
 /// Small dot shown when an inactive terminal tab has unseen output.
 /// Animation only runs while the indicator is on screen.
 struct BackgroundActivityIndicator: View {
+  var help: String = "New terminal activity"
   @State private var isPulsing = false
 
   var body: some View {
@@ -405,7 +406,7 @@ struct BackgroundActivityIndicator: View {
       .onDisappear {
         isPulsing = false
       }
-      .help("New terminal activity")
+      .help(help)
   }
 }
 

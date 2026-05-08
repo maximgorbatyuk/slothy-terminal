@@ -19,10 +19,13 @@ struct WorkspacesSidebarView: View {
         ScrollView {
           VStack(alignment: .leading, spacing: 10) {
             ForEach(appState.workspaces) { workspace in
+              let isActive = workspace.id == appState.activeWorkspaceID
               WorkspaceRowView(
                 workspace: workspace,
-                isActive: workspace.id == appState.activeWorkspaceID,
+                isActive: isActive,
                 tabCount: appState.tabs(in: workspace.id).count,
+                hasBackgroundActivity: !isActive
+                  && appState.hasBackgroundActivity(in: workspace.id),
                 isDragging: draggedWorkspaceID == workspace.id,
                 onSelect: {
                   appState.switchWorkspace(id: workspace.id)
@@ -146,6 +149,7 @@ private struct WorkspaceRowView: View {
   let workspace: Workspace
   let isActive: Bool
   let tabCount: Int
+  let hasBackgroundActivity: Bool
   let isDragging: Bool
   let onSelect: () -> Void
   let onClose: () -> Void
@@ -169,6 +173,10 @@ private struct WorkspaceRowView: View {
             Text(workspace.name)
               .appFont(size: 13, weight: .semibold)
               .lineLimit(1)
+
+            if hasBackgroundActivity {
+              BackgroundActivityIndicator(help: "Workspace has unread terminal activity")
+            }
 
             if isActive {
               Text("Active")

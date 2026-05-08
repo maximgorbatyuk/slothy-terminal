@@ -688,6 +688,63 @@ struct AppStateWorkspaceTests {
     #expect(appState.tabs.count == preexistingTabIDs.count + 1)
   }
 
+  // MARK: - Background activity rollup
+
+  @Test("Workspace background activity rolls up from inactive tabs")
+  @MainActor
+  func workspaceBackgroundActivityRollup() throws {
+    let appState = AppState()
+
+    let workspaceA = appState.createWorkspace(from: dirA)
+    appState.createTab(agent: .terminal, directory: dirA)
+    let tabA1 = try #require(appState.activeTab)
+
+    let workspaceB = appState.createWorkspace(from: dirB)
+    appState.createTab(agent: .terminal, directory: dirB)
+
+    /// No activity yet on either workspace.
+    #expect(appState.hasBackgroundActivity(in: workspaceA.id) == false)
+    #expect(appState.hasBackgroundActivity(in: workspaceB.id) == false)
+
+    tabA1.markBackgroundActivity()
+
+    #expect(appState.hasBackgroundActivity(in: workspaceA.id))
+    #expect(appState.hasBackgroundActivity(in: workspaceB.id) == false)
+
+    /// Switching back clears the rollup.
+    appState.switchWorkspace(id: workspaceA.id)
+
+    #expect(appState.hasBackgroundActivity(in: workspaceA.id) == false)
+  }
+
+  @Test("Switching into a workspace clears every unread tab in it")
+  @MainActor
+  func switchingWorkspaceClearsAllUnreadTabs() throws {
+    let appState = AppState()
+
+    let workspaceA = appState.createWorkspace(from: dirA)
+    appState.createTab(agent: .terminal, directory: dirA)
+    let tabA1 = try #require(appState.activeTab)
+    appState.createTab(agent: .claude, directory: dirA)
+    let tabA2 = try #require(appState.activeTab)
+
+    appState.createWorkspace(from: dirB)
+    appState.createTab(agent: .terminal, directory: dirB)
+
+    tabA1.markBackgroundActivity()
+    tabA2.markBackgroundActivity()
+
+    #expect(tabA1.hasBackgroundActivity)
+    #expect(tabA2.hasBackgroundActivity)
+
+    appState.switchWorkspace(id: workspaceA.id)
+
+    /// Both tabs in the entered workspace are acknowledged, even the
+    /// one that doesn't become the active tab on entry.
+    #expect(tabA1.hasBackgroundActivity == false)
+    #expect(tabA2.hasBackgroundActivity == false)
+  }
+
   @Test("Step-by-step swaps simulate downward drag correctly")
   @MainActor
   func stepByStepDownwardDrag() {

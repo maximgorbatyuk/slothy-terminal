@@ -198,7 +198,7 @@ if [ "$XCODE_RESULT" = "FAILED" ]; then
   echo "  Reference implementation:"
   echo "    $GHOSTTY_DIR/macos/Sources/Ghostty/"
   echo ""
-  echo "  See docs/RELEASE.md 'Updating Embedded Libghostty' for details."
+  echo "  See docs/release.md 'Updating Embedded Libghostty' for details."
   exit 1
 fi
 
@@ -223,7 +223,7 @@ echo "  xcframework:     $XCFRAMEWORK_DST"
 echo "  Size:            $FRAMEWORK_SIZE"
 echo ""
 echo "  Next steps:"
-echo "    1. Run the app and smoke test (see docs/RELEASE.md)"
+echo "    1. Run the app and smoke test (see docs/release.md)"
 echo "    2. Commit the update:"
 echo "       git add GhosttyKit.xcframework SlothyTerminal/Terminal/"
 echo "       git commit -m \"chore: update GhosttyKit.xcframework to Ghostty $GHOSTTY_DESC\""
