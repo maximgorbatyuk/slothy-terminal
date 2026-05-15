@@ -415,6 +415,52 @@ final class UsageModelsTests: XCTestCase {
     XCTAssertEqual(window?.utilization, 0)
   }
 
+  func testClaudeOAuthParseEmitsAllPublishedPerModelWindows() {
+    // Real response shape: Sonnet/Omelette are objects (util=0), other
+    // per-model channels are JSON null. The parser must surface the
+    // non-null channels — even at 0% — and skip the null ones.
+    let raw = """
+    {
+      "extra_usage": {
+        "currency": null,
+        "disabled_reason": null,
+        "is_enabled": false,
+        "monthly_limit": null,
+        "used_credits": null,
+        "utilization": null
+      },
+      "five_hour": { "resets_at": "2026-05-15T15:00:00.697503+00:00", "utilization": 22 },
+      "iguana_necktie": null,
+      "omelette_promotional": null,
+      "seven_day": { "resets_at": "2026-05-16T05:00:00.697524+00:00", "utilization": 46 },
+      "seven_day_cowork": null,
+      "seven_day_oauth_apps": null,
+      "seven_day_omelette": { "resets_at": null, "utilization": 0 },
+      "seven_day_opus": null,
+      "seven_day_sonnet": { "resets_at": null, "utilization": 0 },
+      "tangelo": null
+    }
+    """
+    let data = raw.data(using: .utf8)!
+
+    let snapshot = UsageService.parseClaudeOAuthUsageResponse(
+      data: data,
+      subscriptionType: nil,
+      rateLimitTier: nil
+    )
+
+    let labels = snapshot.metrics.map(\.label)
+
+    XCTAssertTrue(labels.contains("Sonnet (7d)"), "Sonnet metric missing")
+    XCTAssertTrue(labels.contains("Omelette (7d)"), "Omelette metric missing")
+    XCTAssertFalse(labels.contains("Cowork (7d)"), "Cowork should be filtered (null)")
+    XCTAssertFalse(labels.contains("Opus (7d)"), "Opus should be filtered (null)")
+    XCTAssertFalse(labels.contains("OAuth apps (7d)"), "OAuth apps should be filtered (null)")
+
+    let sonnet = snapshot.metrics.first { $0.label == "Sonnet (7d)" }
+    XCTAssertEqual(sonnet?.value, "0% used")
+  }
+
   // MARK: - MinimaxUsageProvider
 
   func testMinimaxParseHeadlineSnapshot() throws {
@@ -467,19 +513,85 @@ final class UsageModelsTests: XCTestCase {
 
     let snapshot = try MinimaxUsageProvider.parseSnapshot(data: payload)
 
+    // MiniMax's `*_usage_count` fields are actually *remaining*, so the
+    // headline row (interval 4462/4500) means 38 used, 4462 remaining.
     XCTAssertEqual(snapshot.provider, .minimax)
     XCTAssertEqual(snapshot.account, "MiniMax-M*")
-    XCTAssertEqual(snapshot.used, "4462")
+    XCTAssertEqual(snapshot.used, "38")
     XCTAssertEqual(snapshot.limit, "4500")
-    XCTAssertEqual(snapshot.remaining, "38")
+    XCTAssertEqual(snapshot.remaining, "4462")
     XCTAssertNotNil(snapshot.percentUsed)
-    XCTAssertEqual(snapshot.percentUsed ?? 0, 0.9915555, accuracy: 0.0001)
+    XCTAssertEqual(snapshot.percentUsed ?? 0, 38.0 / 4500.0, accuracy: 0.0001)
 
     XCTAssertFalse(snapshot.metrics.contains { $0.label == "coding-plan-vlm" })
 
     XCTAssertTrue(snapshot.metrics.contains { $0.label == "speech-hd" })
 
-    XCTAssertTrue(snapshot.metrics.contains { $0.label == "Weekly used" })
+    let weeklyUsed = snapshot.metrics.first { $0.label == "Weekly used" }
+    XCTAssertEqual(weeklyUsed?.value, "46 / 45000")
+  }
+
+  func testMinimaxFullRemainingReportsZeroPercent() throws {
+    let payload = """
+    {
+      "model_remains": [
+        {
+          "start_time": 1778839200000,
+          "end_time": 1778857200000,
+          "remains_time": 15042910,
+          "current_interval_total_count": 4500,
+          "current_interval_usage_count": 4500,
+          "model_name": "MiniMax-M*",
+          "current_weekly_total_count": 45000,
+          "current_weekly_usage_count": 45000,
+          "weekly_start_time": 1778457600000,
+          "weekly_end_time": 1779062400000,
+          "weekly_remains_time": 220242910
+        }
+      ],
+      "base_resp": { "status_code": 0, "status_msg": "success" }
+    }
+    """.data(using: .utf8)!
+
+    let snapshot = try MinimaxUsageProvider.parseSnapshot(data: payload)
+
+    XCTAssertEqual(snapshot.used, "0")
+    XCTAssertEqual(snapshot.remaining, "4500")
+    XCTAssertEqual(snapshot.percentUsed ?? -1, 0.0, accuracy: 0.0001)
+    XCTAssertEqual(
+      snapshot.metrics.first { $0.label == "Weekly used" }?.value,
+      "0 / 45000"
+    )
+  }
+
+  func testMinimaxWeeklyUsedSubtractsRemaining() throws {
+    let payload = """
+    {
+      "model_remains": [
+        {
+          "start_time": 1778839200000,
+          "end_time": 1778857200000,
+          "remains_time": 15042910,
+          "current_interval_total_count": 4500,
+          "current_interval_usage_count": 4500,
+          "model_name": "MiniMax-M*",
+          "current_weekly_total_count": 45000,
+          "current_weekly_usage_count": 44676,
+          "weekly_start_time": 1778457600000,
+          "weekly_end_time": 1779062400000,
+          "weekly_remains_time": 220242910
+        }
+      ],
+      "base_resp": { "status_code": 0, "status_msg": "success" }
+    }
+    """.data(using: .utf8)!
+
+    let snapshot = try MinimaxUsageProvider.parseSnapshot(data: payload)
+
+    XCTAssertEqual(
+      snapshot.metrics.first { $0.label == "Weekly used" }?.value,
+      "324 / 45000"
+    )
   }
 
   func testMinimaxParseRejectsErrorStatus() {
@@ -491,7 +603,7 @@ final class UsageModelsTests: XCTestCase {
     """.data(using: .utf8)!
 
     do {
-      try MinimaxUsageProvider.parseSnapshot(data: payload)
+      _ = try MinimaxUsageProvider.parseSnapshot(data: payload)
       XCTFail("Expected parseError to be thrown")
     } catch UsageFetchError.parseError {
       // Expected

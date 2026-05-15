@@ -149,23 +149,35 @@ struct UsagePopoverView: View {
 
   var body: some View {
     VStack(spacing: 0) {
-      /// Header: provider tabs + close button.
-      HStack(alignment: .center) {
-        Picker("Provider", selection: $selectedProvider) {
+      /// Header: title row above the segmented tab picker.
+      /// Two rows so the picker spans the full popover width — with 4+
+      /// segments at 320 pt, an inline picker label gets squeezed to ~8 pt
+      /// and wraps one character per line.
+      VStack(alignment: .leading, spacing: 8) {
+        HStack(alignment: .center) {
+          Text("Providers")
+            .appFont(size: 10, weight: .semibold)
+            .foregroundColor(.secondary)
+
+          Spacer()
+
+          Button {
+            isPresented = false
+          } label: {
+            Image(systemName: "xmark")
+              .appFont(size: 9, weight: .medium)
+              .foregroundColor(.secondary)
+          }
+          .buttonStyle(.plain)
+        }
+
+        Picker("Providers", selection: $selectedProvider) {
           ForEach(UsageProvider.statusBarProviders, id: \.self) { provider in
             Text(provider.displayName).tag(provider)
           }
         }
         .pickerStyle(.segmented)
-
-        Button {
-          isPresented = false
-        } label: {
-          Image(systemName: "xmark")
-            .appFont(size: 9, weight: .medium)
-            .foregroundColor(.secondary)
-        }
-        .buttonStyle(.plain)
+        .labelsHidden()
       }
       .padding(.horizontal, 12)
       .padding(.top, 12)
@@ -173,15 +185,18 @@ struct UsagePopoverView: View {
 
       Divider()
 
-      /// Content area. Right padding is wider so the AppKit overlay
-      /// scrollbar doesn't clip trailing numeric values.
+      /// Content area. Fixed height keeps the popover from resizing as the
+      /// user clicks through providers (each has different content). Sized
+      /// for the worst case — Claude with a long `Usage by model` list.
+      /// Right padding is wider so the AppKit overlay scrollbar doesn't
+      /// clip trailing numeric values.
       ScrollView {
         popoverContent(provider: selectedProvider)
           .padding(.leading, 12)
           .padding(.trailing, 12)
           .padding(.vertical, 12)
       }
-      .frame(maxHeight: 320)
+      .frame(height: 400)
     }
     .frame(width: 320)
   }
@@ -189,11 +204,16 @@ struct UsagePopoverView: View {
   @ViewBuilder
   private func popoverContent(provider: UsageProvider) -> some View {
     let status = usageService.status(for: provider)
+    let globalEnabled = ConfigManager.shared.config.usagePreferences.isEnabled
 
     VStack(spacing: 6) {
       switch status {
       case .idle:
-        disabledView()
+        if globalEnabled {
+          notConnectedView(provider: provider)
+        } else {
+          disabledView()
+        }
 
       case .loading:
         loadingView()
@@ -477,7 +497,7 @@ struct UsagePopoverView: View {
 
   @ViewBuilder
   private func disabledView() -> some View {
-    VStack(spacing: 4) {
+    VStack(spacing: 8) {
       HStack(spacing: 6) {
         Image(systemName: "chart.bar")
           .appFont(size: 11)
@@ -488,9 +508,40 @@ struct UsagePopoverView: View {
           .foregroundColor(.secondary)
       }
 
-      Text("Enable in Settings > Usage")
+      Button {
+        ConfigManager.shared.config.usagePreferences.isEnabled = true
+        usageService.startIfEnabled()
+      } label: {
+        Text("Turn on usage tracking")
+          .appFont(size: 11, weight: .medium)
+      }
+      .buttonStyle(.bordered)
+      .controlSize(.small)
+    }
+    .padding(.vertical, 20)
+  }
+
+  /// Shown when global usage tracking IS enabled, but this specific provider
+  /// has no resolved auth source (e.g. user hasn't pasted an API key yet).
+  /// Distinct from `disabledView` so the copy doesn't blame the global toggle
+  /// when the real issue is provider-specific credentials.
+  @ViewBuilder
+  private func notConnectedView(provider: UsageProvider) -> some View {
+    VStack(spacing: 4) {
+      HStack(spacing: 6) {
+        Image(systemName: "link.badge.plus")
+          .appFont(size: 11)
+          .foregroundColor(.secondary)
+
+        Text("\(provider.displayName) not connected")
+          .appFont(size: 11)
+          .foregroundColor(.secondary)
+      }
+
+      Text("Add credentials in Settings → Usage → \(provider.displayName)")
         .appFont(size: 10)
         .foregroundColor(.secondary.opacity(0.7))
+        .multilineTextAlignment(.center)
     }
     .padding(.vertical, 20)
   }

@@ -1,4 +1,5 @@
 import AppKit
+import OSLog
 import SwiftUI
 
 /// Main settings view with sidebar navigation.
@@ -1108,6 +1109,7 @@ struct UsageSettingsTab: View {
   @State private var expandedResponseIDs: Set<String> = []
   @State private var minimaxAPIKeyInput: String = ""
   @State private var hasSavedMinimaxKey: Bool = false
+  @State private var minimaxTestResult: String? = nil
 
   var body: some View {
     Form {
@@ -1214,11 +1216,27 @@ struct UsageSettingsTab: View {
             .disabled(minimaxAPIKeyInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
 
             if hasSavedMinimaxKey {
+              Button("Fetch Usage") {
+                fetchMinimaxUsageViaService()
+              }
+
+              Button("Test Connection") {
+                testMinimaxConnection()
+              }
+              .buttonStyle(.borderless)
+
               Button("Clear Saved Key") {
                 clearMinimaxKey()
               }
               .buttonStyle(.borderless)
             }
+          }
+
+          if let result = minimaxTestResult {
+            Text(result)
+              .appFont(.caption)
+              .foregroundColor(result.hasPrefix("✓") ? .green : (result.hasPrefix("✗") ? .red : .secondary))
+              .fixedSize(horizontal: false, vertical: true)
           }
         }
       }
@@ -1230,6 +1248,19 @@ struct UsageSettingsTab: View {
     .onAppear {
       refreshCursorState()
       refreshMinimaxState()
+
+      // Re-resolve auth sources whenever Settings opens. Catches the case
+      // where the app launched without the MiniMax key in Keychain (so
+      // .minimax wasn't in resolvedSources), the user later saved a key,
+      // but the save-time fetch somehow didn't reach the status bar.
+      Task {
+        Logger.usage.info("[usage-settings] onAppear — re-resolving auth + fetching MiniMax")
+        await usageService.resolveAuthSources()
+
+        if usageService.authSource(for: .minimax) != nil {
+          await usageService.fetch(provider: .minimax)
+        }
+      }
     }
   }
 
@@ -1337,7 +1368,10 @@ struct UsageSettingsTab: View {
   private func saveMinimaxKey() {
     let trimmed = minimaxAPIKeyInput.trimmingCharacters(in: .whitespacesAndNewlines)
 
+    Logger.usage.info("[minimax] saveMinimaxKey entry — inputLength=\(trimmed.count)")
+
     guard !trimmed.isEmpty else {
+      Logger.usage.warning("[minimax] Save aborted — empty input")
       return
     }
 
@@ -1347,12 +1381,17 @@ struct UsageSettingsTab: View {
       sourceKind: .apiKey
     )
 
+    Logger.usage.info("[minimax] Keychain save returned: \(saved)")
+
     if saved {
       hasSavedMinimaxKey = true
       minimaxAPIKeyInput = ""
       Task {
+        Logger.usage.info("[minimax] Save-time Task starting")
         await usageService.resolveAuthSources()
+        Logger.usage.info("[minimax] resolveAuthSources done — about to fetch")
         await usageService.fetch(provider: .minimax)
+        Logger.usage.info("[minimax] Save-time fetch complete")
       }
     } else {
       saveError = "Failed to save MiniMax key to Keychain."
@@ -1363,7 +1402,86 @@ struct UsageSettingsTab: View {
     UsageKeychainStore.delete(provider: .minimax, sourceKind: .apiKey)
     hasSavedMinimaxKey = false
     minimaxAPIKeyInput = ""
+    minimaxTestResult = nil
     usageService.clearProvider(.minimax)
+  }
+
+  /// Direct end-to-end smoke test that bypasses the status-bar wiring.
+  /// Reads the saved key from Keychain, calls MiniMax, and shows the
+  /// outcome inline. Used to isolate API/auth issues from SwiftUI
+  /// plumbing issues.
+  private func testMinimaxConnection() {
+    minimaxTestResult = "Testing…"
+
+    Task {
+      guard let key = UsageKeychainStore.loadString(
+        provider: .minimax,
+        sourceKind: .apiKey
+      ) else {
+        minimaxTestResult = "✗ No saved key in Keychain"
+        return
+      }
+
+      do {
+        let snapshot = try await MinimaxUsageProvider.fetchUsage(apiKey: key)
+
+        if let percent = snapshot.percentUsed {
+          minimaxTestResult = "✓ Connected — \(snapshot.used) / \(snapshot.limit ?? "?") (\(Int(percent * 100))%)"
+        } else {
+          minimaxTestResult = "✓ Connected — \(snapshot.used)"
+        }
+      } catch UsageFetchError.tokenExpired {
+        minimaxTestResult = "✗ HTTP 401/403 — key rejected by MiniMax"
+      } catch UsageFetchError.httpError(let code) {
+        minimaxTestResult = "✗ HTTP \(code) — see Console.app logs"
+      } catch UsageFetchError.parseError {
+        minimaxTestResult = "✗ Could not parse response — see Console.app logs"
+      } catch {
+        minimaxTestResult = "✗ \(error.localizedDescription)"
+      }
+    }
+  }
+
+  /// Runs the full UsageService fetch chain — same path the status bar
+  /// reads from. Distinct from `testMinimaxConnection`, which calls the
+  /// provider's HTTP client directly. Reading back `status(for: .minimax)`
+  /// after the await makes any Observable / service-layer issue inspectable.
+  private func fetchMinimaxUsageViaService() {
+    minimaxTestResult = "Fetching via UsageService…"
+
+    Task {
+      await usageService.resolveAuthSources()
+      await usageService.fetch(provider: .minimax)
+
+      let status = usageService.status(for: .minimax)
+      let snapshot = usageService.snapshot(for: .minimax)
+
+      switch status {
+      case .loaded:
+        if let snapshot, let percent = snapshot.percentUsed {
+          minimaxTestResult = "✓ Status: loaded — \(snapshot.used) / \(snapshot.limit ?? "?") (\(Int(percent * 100))%) — bar should be visible"
+        } else if let snapshot {
+          minimaxTestResult = "✓ Status: loaded — \(snapshot.used) — bar should be visible"
+        } else {
+          minimaxTestResult = "✓ Status: loaded but snapshot is nil (Observable bug?)"
+        }
+
+      case .loading:
+        minimaxTestResult = "… Status: loading (still in flight)"
+
+      case .failed(let msg):
+        minimaxTestResult = "✗ Status: failed — \(msg)"
+
+      case .tokenExpired:
+        minimaxTestResult = "✗ Status: token expired — MiniMax rejected the key"
+
+      case .unavailable(let reason):
+        minimaxTestResult = "✗ Status: unavailable — \(reason)"
+
+      case .idle:
+        minimaxTestResult = "✗ Status: idle — fetch never ran (Task cancelled / Observable bug)"
+      }
+    }
   }
 
   // MARK: - Provider Responses
