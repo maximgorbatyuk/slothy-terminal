@@ -19,13 +19,17 @@ enum UsageKeychainStore {
     /// Remove existing entry first.
     delete(provider: provider, sourceKind: sourceKind)
 
+    // The legacy file-based macOS keychain is intentional. The
+    // data-protection keychain (`kSecUseDataProtectionKeychain: true`)
+    // requires `application-identifier` or `keychain-access-groups`
+    // entitlements, which a non-sandboxed app like SlothyTerminal does
+    // not have — using it produces errSecMissingEntitlement (-34018).
     let query: [String: Any] = [
       kSecClass as String: kSecClassGenericPassword,
       kSecAttrService as String: serviceName,
       kSecAttrAccount as String: account,
       kSecValueData as String: data,
       kSecAttrAccessible as String: kSecAttrAccessibleWhenUnlockedThisDeviceOnly,
-      kSecUseDataProtectionKeychain as String: true,
     ]
 
     let status = SecItemAdd(query as CFDictionary, nil)
@@ -66,7 +70,6 @@ enum UsageKeychainStore {
       kSecAttrAccount as String: account,
       kSecReturnData as String: true,
       kSecMatchLimit as String: kSecMatchLimitOne,
-      kSecUseDataProtectionKeychain as String: true,
     ]
 
     var result: AnyObject?
@@ -103,7 +106,6 @@ enum UsageKeychainStore {
       kSecClass as String: kSecClassGenericPassword,
       kSecAttrService as String: serviceName,
       kSecAttrAccount as String: account,
-      kSecUseDataProtectionKeychain as String: true,
     ]
 
     let status = SecItemDelete(query as CFDictionary)

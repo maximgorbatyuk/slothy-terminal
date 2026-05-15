@@ -384,7 +384,10 @@ class UsageService {
   /// Resolves MiniMax auth. The platform API key is pasted in Settings
   /// and stored in the Keychain — there is no auto-detect source.
   func resolveMinimaxAuth() -> UsageAuthSource? {
-    if UsageKeychainStore.loadString(provider: .minimax, sourceKind: .apiKey) != nil {
+    let key = UsageKeychainStore.loadString(provider: .minimax, sourceKind: .apiKey)
+
+    if let key, !key.isEmpty {
+      Logger.usage.info("[minimax] Auth resolved from Keychain (key length: \(key.count))")
       return UsageAuthSource(
         provider: .minimax,
         kind: .apiKey,
@@ -393,6 +396,7 @@ class UsageService {
       )
     }
 
+    Logger.usage.info("[minimax] No API key in Keychain — provider will be unavailable")
     return nil
   }
 
@@ -522,13 +526,14 @@ class UsageService {
 
   /// Reads cached OAuth credentials from the app's own data-protection keychain.
   nonisolated private static func readCachedClaudeOAuth() -> CachedOAuth? {
+    // Legacy file-based keychain (no data-protection flag) — see
+    // UsageKeychainStore for the entitlement rationale.
     let query: [String: Any] = [
       kSecClass as String: kSecClassGenericPassword,
       kSecAttrService as String: oauthCacheService,
       kSecAttrAccount as String: oauthCacheAccount,
       kSecReturnData as String: true,
       kSecMatchLimit as String: kSecMatchLimitOne,
-      kSecUseDataProtectionKeychain as String: true,
     ]
 
     var result: AnyObject?
@@ -555,7 +560,7 @@ class UsageService {
     )
   }
 
-  /// Caches OAuth credentials in the app's own data-protection keychain.
+  /// Caches OAuth credentials in the app's own keychain.
   nonisolated private static func cacheClaudeOAuth(
     _ creds: ClaudeOAuthCredentials,
     expiresAt: Date
@@ -571,12 +576,10 @@ class UsageService {
       return
     }
 
-    // Delete existing cache entry.
     let deleteQuery: [String: Any] = [
       kSecClass as String: kSecClassGenericPassword,
       kSecAttrService as String: oauthCacheService,
       kSecAttrAccount as String: oauthCacheAccount,
-      kSecUseDataProtectionKeychain as String: true,
     ]
     SecItemDelete(deleteQuery as CFDictionary)
 
@@ -586,7 +589,6 @@ class UsageService {
       kSecAttrAccount as String: oauthCacheAccount,
       kSecValueData as String: data,
       kSecAttrAccessible as String: kSecAttrAccessibleWhenUnlockedThisDeviceOnly,
-      kSecUseDataProtectionKeychain as String: true,
     ]
 
     let status = SecItemAdd(addQuery as CFDictionary, nil)
@@ -601,7 +603,6 @@ class UsageService {
       kSecClass as String: kSecClassGenericPassword,
       kSecAttrService as String: oauthCacheService,
       kSecAttrAccount as String: oauthCacheAccount,
-      kSecUseDataProtectionKeychain as String: true,
     ]
     SecItemDelete(query as CFDictionary)
   }
@@ -1075,23 +1076,27 @@ class UsageService {
     ))
 
     // Per-model 7d rows: prefix-merged so future revisions surface automatically.
-    if let sonnet = mergedClaudeWindow(json, baseKey: "seven_day_sonnet"),
-       sonnet.utilization > 0
-    {
-      metrics.append(UsageMetric(
-        label: "Sonnet (7d)",
-        value: "\(Int(sonnet.utilization))% used",
-        style: sonnet.utilization >= 90 ? .warning : .normal
-      ))
-    }
+    // Render every window the API actually published (i.e., a non-null object) —
+    // including 0% — so the user can see at a glance which channels are tracked.
+    // Channels not present in the response (JSON null) are filtered by
+    // mergedClaudeWindow returning nil.
+    let perModelWindows: [(baseKey: String, label: String)] = [
+      ("seven_day_sonnet", "Sonnet (7d)"),
+      ("seven_day_opus", "Opus (7d)"),
+      ("seven_day_cowork", "Cowork (7d)"),
+      ("seven_day_omelette", "Omelette (7d)"),
+      ("seven_day_oauth_apps", "OAuth apps (7d)"),
+    ]
 
-    if let opus = mergedClaudeWindow(json, baseKey: "seven_day_opus"),
-       opus.utilization > 0
-    {
+    for entry in perModelWindows {
+      guard let window = mergedClaudeWindow(json, baseKey: entry.baseKey) else {
+        continue
+      }
+
       metrics.append(UsageMetric(
-        label: "Opus (7d)",
-        value: "\(Int(opus.utilization))% used",
-        style: opus.utilization >= 90 ? .warning : .normal
+        label: entry.label,
+        value: "\(Int(window.utilization))% used",
+        style: window.utilization >= 90 ? .warning : .normal
       ))
     }
 
@@ -1791,7 +1796,10 @@ class UsageService {
   // MARK: - Minimax Fetching
 
   private func fetchMinimaxUsage(source: UsageAuthSource) async throws -> UsageSnapshot {
+    Logger.usage.info("[minimax] fetchMinimaxUsage entry — source.kind=\(source.kind.rawValue)")
+
     guard source.kind == .apiKey else {
+      Logger.usage.error("[minimax] Unsupported source kind: \(source.kind.rawValue)")
       throw UsageFetchError.unsupportedSource
     }
 
@@ -1799,10 +1807,11 @@ class UsageService {
       provider: .minimax,
       sourceKind: .apiKey
     ) else {
-      Logger.usage.error("[minimax] No API key in Keychain")
+      Logger.usage.error("[minimax] No API key in Keychain at fetch time")
       throw UsageFetchError.noCredentials
     }
 
+    Logger.usage.info("[minimax] Loaded API key from Keychain (length: \(apiKey.count))")
     return try await MinimaxUsageProvider.fetchUsage(apiKey: apiKey)
   }
 

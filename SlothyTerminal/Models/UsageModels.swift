@@ -250,14 +250,21 @@ struct MinimaxBaseResp: Codable {
 }
 
 /// A single model's usage data from MiniMax API.
+///
+/// Despite their names, `current_interval_usage_count` and
+/// `current_weekly_usage_count` report **remaining** quota in the window —
+/// not consumed quota. Real consumption is `total - usage_count`. The field
+/// names mirror the wire format; do not rename. See `MinimaxUsageProvider`.
 struct MinimaxModelRemains: Codable {
   let modelName: String
   let startTime: Int64
   let endTime: Int64
   let remainsTime: Int64
   let currentIntervalTotalCount: Int
+  /// Remaining (not consumed) calls in the current interval, despite the name.
   let currentIntervalUsageCount: Int
   let currentWeeklyTotalCount: Int
+  /// Remaining (not consumed) calls in the current week, despite the name.
   let currentWeeklyUsageCount: Int
   let weeklyStartTime: Int64
   let weeklyEndTime: Int64
