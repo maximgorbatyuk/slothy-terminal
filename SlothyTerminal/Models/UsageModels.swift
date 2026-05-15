@@ -6,6 +6,7 @@ enum UsageProvider: String, Codable, CaseIterable {
   case codex
   case opencode
   case cursor
+  case minimax
 
   var displayName: String {
     switch self {
@@ -20,11 +21,14 @@ enum UsageProvider: String, Codable, CaseIterable {
 
     case .cursor:
       return "Cursor"
+
+    case .minimax:
+      return "MiniMax"
     }
   }
 
   /// Providers shown in the status bar usage area.
-  static let statusBarProviders: [UsageProvider] = [.claude, .codex, .cursor]
+  static let statusBarProviders: [UsageProvider] = [.claude, .codex, .cursor, .minimax]
 
   /// SF Symbol icon name for the usage display.
   var iconName: String {
@@ -40,6 +44,9 @@ enum UsageProvider: String, Codable, CaseIterable {
 
     case .cursor:
       return "cursorarrow.rays"
+
+    case .minimax:
+      return "sparkles"
     }
   }
 }
@@ -218,6 +225,57 @@ struct AnthropicOrganizationsResponse: Codable {
 struct AnthropicOrganization: Codable {
   let id: String
   let name: String
+}
+
+/// MiniMax usage API response.
+struct MinimaxUsageResponse: Codable {
+  let modelRemains: [MinimaxModelRemains]
+  let baseResp: MinimaxBaseResp
+
+  enum CodingKeys: String, CodingKey {
+    case modelRemains = "model_remains"
+    case baseResp = "base_resp"
+  }
+}
+
+/// MiniMax API response status.
+struct MinimaxBaseResp: Codable {
+  let statusCode: Int
+  let statusMsg: String
+
+  enum CodingKeys: String, CodingKey {
+    case statusCode = "status_code"
+    case statusMsg = "status_msg"
+  }
+}
+
+/// A single model's usage data from MiniMax API.
+struct MinimaxModelRemains: Codable {
+  let modelName: String
+  let startTime: Int64
+  let endTime: Int64
+  let remainsTime: Int64
+  let currentIntervalTotalCount: Int
+  let currentIntervalUsageCount: Int
+  let currentWeeklyTotalCount: Int
+  let currentWeeklyUsageCount: Int
+  let weeklyStartTime: Int64
+  let weeklyEndTime: Int64
+  let weeklyRemainsTime: Int64
+
+  enum CodingKeys: String, CodingKey {
+    case modelName = "model_name"
+    case startTime = "start_time"
+    case endTime = "end_time"
+    case remainsTime = "remains_time"
+    case currentIntervalTotalCount = "current_interval_total_count"
+    case currentIntervalUsageCount = "current_interval_usage_count"
+    case currentWeeklyTotalCount = "current_weekly_total_count"
+    case currentWeeklyUsageCount = "current_weekly_usage_count"
+    case weeklyStartTime = "weekly_start_time"
+    case weeklyEndTime = "weekly_end_time"
+    case weeklyRemainsTime = "weekly_remains_time"
+  }
 }
 
 // MARK: - Errors

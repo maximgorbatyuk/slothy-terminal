@@ -61,6 +61,7 @@ let package = Package(
         "Services/UsageKeychainStore.swift",
         "Services/UsageService.swift",
         "Services/CursorUsageProvider.swift",
+        "Services/MinimaxUsageProvider.swift",
         "Services/ProviderResponseStore.swift",
         "Models/AgentType.swift",
         "Models/GitDiffModels.swift",

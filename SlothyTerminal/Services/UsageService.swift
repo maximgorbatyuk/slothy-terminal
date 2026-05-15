@@ -233,6 +233,8 @@ class UsageService {
 
     resolvedSources[.cursor] = resolveCursorAuth()
 
+    resolvedSources[.minimax] = resolveMinimaxAuth()
+
     for provider in UsageProvider.statusBarProviders {
       if let source = resolvedSources[provider] {
         Logger.usage.info(
@@ -379,6 +381,21 @@ class UsageService {
     return nil
   }
 
+  /// Resolves MiniMax auth. The platform API key is pasted in Settings
+  /// and stored in the Keychain — there is no auto-detect source.
+  func resolveMinimaxAuth() -> UsageAuthSource? {
+    if UsageKeychainStore.loadString(provider: .minimax, sourceKind: .apiKey) != nil {
+      return UsageAuthSource(
+        provider: .minimax,
+        kind: .apiKey,
+        label: "API Key",
+        detail: "Manually pasted (Keychain)"
+      )
+    }
+
+    return nil
+  }
+
   // MARK: - Credential Paths
 
   nonisolated static let claudeCredentialPaths = [
@@ -407,45 +424,15 @@ class UsageService {
 
     case .cursor:
       return try await fetchCursorUsage(source: source)
+
+    case .minimax:
+      return try await fetchMinimaxUsage(source: source)
     }
   }
 
-  // MARK: - Cursor Fetching
+  // MARK: - OpenCode Fetching
 
-  private func fetchCursorUsage(source: UsageAuthSource) async throws -> UsageSnapshot {
-    switch source.kind {
-    case .cliOAuth:
-      let jwt = try await Task.detached {
-        try CursorUsageProvider.readJWTFromCursorState()
-      }.value
-
-      return try await CursorUsageProvider.fetchUsage(
-        jwt: jwt,
-        sourceKind: .cliOAuth,
-        sourceLabel: "Cursor app"
-      )
-
-    case .apiKey:
-      guard let jwt = UsageKeychainStore.loadString(
-        provider: .cursor,
-        sourceKind: .apiKey
-      ) else {
-        Logger.usage.error("[cursor] No JWT found in Keychain")
-        throw UsageFetchError.noCredentials
-      }
-
-      return try await CursorUsageProvider.fetchUsage(
-        jwt: jwt,
-        sourceKind: .apiKey,
-        sourceLabel: "Session token"
-      )
-
-    case .browser, .experimental:
-      throw UsageFetchError.unsupportedSource
-    }
-  }
-
-  // MARK: - Claude Fetching
+  /// OpenCode usage fetching (experimental / placeholder).
 
   private func fetchClaudeUsage(source: UsageAuthSource) async throws -> UsageSnapshot {
     switch source.kind {
@@ -736,7 +723,7 @@ class UsageService {
   ) -> ClaudeWindow? {
     // Exact match is always authoritative — don't merge siblings on top of it.
     if let exact = json[baseKey] as? [String: Any] {
-      let util = normalizeUtilization(exact["utilization"] as? Double ?? 0)
+      let util = exact["utilization"] as? Double ?? 0
       let resetsAt = (exact["resets_at"] as? String).flatMap { parseClaudeISO8601($0) }
       return ClaudeWindow(utilization: util, resetsAt: resetsAt)
     }
@@ -754,7 +741,7 @@ class UsageService {
       }
 
       foundAny = true
-      let util = normalizeUtilization(dict["utilization"] as? Double ?? 0)
+      let util = dict["utilization"] as? Double ?? 0
 
       if util > maxUtil {
         maxUtil = util
@@ -797,7 +784,11 @@ class UsageService {
   /// UserDefaults key prefix for cached per-window utilization & reset.
   /// Cache is consulted when (a) a fresh response says 0% before reset
   /// (idle-session API gap), and (b) the API call itself fails transiently.
-  nonisolated private static let claudeMetricCachePrefix = "claudeUsageCache."
+  /// Bumped to `v2.` when the utilization-normalization bug was fixed
+  /// (issue #12). Pre-fix entries stored values inflated 100× and would
+  /// otherwise linger in the cache for up to 7 days; the prefix bump
+  /// invalidates them immediately by missing the key entirely on read.
+  nonisolated private static let claudeMetricCachePrefix = "claudeUsageCache.v2."
 
   nonisolated private static func claudeCacheKey(
     _ baseKey: String,
@@ -1135,16 +1126,6 @@ class UsageService {
       metrics: metrics,
       fetchedAt: now
     )
-  }
-
-  /// Normalizes a utilization value to a 0-100 percentage.
-  /// Handles both 0-1 fraction and 0-100 percentage conventions defensively.
-  nonisolated private static func normalizeUtilization(_ value: Double) -> Double {
-    if value > 0 && value <= 1.0 {
-      return value * 100
-    }
-
-    return value
   }
 
   /// Formats a reset Date to "in Xh Ym" relative string.
@@ -1770,6 +1751,59 @@ class UsageService {
       ],
       fetchedAt: Date()
     )
+  }
+
+  // MARK: - Cursor Fetching
+
+  private func fetchCursorUsage(source: UsageAuthSource) async throws -> UsageSnapshot {
+    switch source.kind {
+    case .cliOAuth:
+      let jwt = try await Task.detached {
+        try CursorUsageProvider.readJWTFromCursorState()
+      }.value
+
+      return try await CursorUsageProvider.fetchUsage(
+        jwt: jwt,
+        sourceKind: .cliOAuth,
+        sourceLabel: "Cursor app"
+      )
+
+    case .apiKey:
+      guard let jwt = UsageKeychainStore.loadString(
+        provider: .cursor,
+        sourceKind: .apiKey
+      ) else {
+        Logger.usage.error("[cursor] No JWT found in Keychain")
+        throw UsageFetchError.noCredentials
+      }
+
+      return try await CursorUsageProvider.fetchUsage(
+        jwt: jwt,
+        sourceKind: .apiKey,
+        sourceLabel: "Session token"
+      )
+
+    case .browser, .experimental:
+      throw UsageFetchError.unsupportedSource
+    }
+  }
+
+  // MARK: - Minimax Fetching
+
+  private func fetchMinimaxUsage(source: UsageAuthSource) async throws -> UsageSnapshot {
+    guard source.kind == .apiKey else {
+      throw UsageFetchError.unsupportedSource
+    }
+
+    guard let apiKey = UsageKeychainStore.loadString(
+      provider: .minimax,
+      sourceKind: .apiKey
+    ) else {
+      Logger.usage.error("[minimax] No API key in Keychain")
+      throw UsageFetchError.noCredentials
+    }
+
+    return try await MinimaxUsageProvider.fetchUsage(apiKey: apiKey)
   }
 
   // MARK: - Response Parsing
