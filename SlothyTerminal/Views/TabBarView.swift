@@ -368,7 +368,11 @@ struct NewTabButton: View {
 
   var body: some View {
     Button {
-      appState.showStartupPage()
+      let directory = appState.activeWorkspace?.rootDirectory
+        ?? appState.currentContextDirectory
+        ?? FileManager.default.homeDirectoryForCurrentUser
+
+      appState.createTab(agent: .terminal, directory: directory)
     } label: {
       Image(systemName: "plus")
         .appFont(size: 12, weight: .medium)

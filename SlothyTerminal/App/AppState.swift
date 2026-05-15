@@ -10,18 +10,12 @@ enum CloseWorkspaceResult: Equatable {
 
 /// The type of modal currently being displayed.
 enum ModalType: Identifiable {
-  case startupPage
-  case startupPageSplit
   case folderSelector(AgentType)
 
   case settings
 
   var id: String {
     switch self {
-    case .startupPage:
-      return "startupPage"
-    case .startupPageSplit:
-      return "startupPageSplit"
     case .folderSelector(let agent):
       return "folderSelector-\(agent.rawValue)"
     case .settings:
@@ -256,6 +250,28 @@ class AppState {
     }
   }
 
+  /// User-initiated selection of an existing workspace from the sidebar.
+  /// Switches to the workspace and ensures there is at least one tab to
+  /// land the user in — never returning them to an empty placeholder.
+  func selectWorkspace(id: UUID) {
+    switchWorkspace(id: id)
+
+    guard activeWorkspaceID == id,
+          !hasTabs(in: id),
+          let workspace = workspace(for: id)
+    else {
+      return
+    }
+
+    let tab = Tab(
+      workspaceID: workspace.id,
+      agentType: .terminal,
+      workingDirectory: workspace.rootDirectory
+    )
+    tabs.append(tab)
+    switchToTab(id: tab.id)
+  }
+
   /// Closes the workspace with the specified ID.
   /// Fails if the workspace still has open tabs.
   @discardableResult
@@ -381,6 +397,26 @@ class AppState {
     )
     tabs.append(tab)
     switchToTab(id: tab.id)
+  }
+
+  /// Activates the existing Git client tab in the active workspace, or
+  /// creates one rooted at the workspace's directory if none exists.
+  func openGitClientTab() {
+    guard let workspace = activeWorkspace else {
+      guard let directory = currentContextDirectory else {
+        return
+      }
+
+      createGitTab(directory: directory)
+      return
+    }
+
+    if let existing = tabs.first(where: { $0.workspaceID == workspace.id && $0.mode == .git }) {
+      switchToTab(id: existing.id)
+      return
+    }
+
+    createGitTab(directory: workspace.rootDirectory)
   }
 
   /// Closes the tab with the specified ID.
@@ -653,11 +689,6 @@ class AppState {
     replaceTabs(in: snapshot.workspaceID, with: restoredTabs)
   }
 
-  /// Shows the startup page for creating a new session.
-  func showStartupPage() {
-    activeModal = .startupPage
-  }
-
   /// Shows the folder selector for creating a new tab with the specified agent.
   func showFolderSelector(for agent: AgentType) {
     activeModal = .folderSelector(agent)
@@ -846,17 +877,6 @@ extension AppState {
   /// Closes a split pane: closes the tab and heals the split.
   func closeSplitPane(tabID: UUID) {
     closeTab(id: tabID)
-  }
-
-  /// Shows the startup page in split-destination mode.
-  func showStartupPageForSplit() {
-    guard activeTabID != nil else {
-      // No focused tab — use normal creation.
-      showStartupPage()
-      return
-    }
-
-    activeModal = .startupPageSplit
   }
 
   /// Removes a tab from the split state and collapses if needed.

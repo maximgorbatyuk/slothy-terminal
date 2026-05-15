@@ -486,16 +486,192 @@ struct AgentUnavailableView: View {
   }
 }
 
-/// Empty state shown when no tabs are open.
+/// Empty state shown when no tabs are visible — either at cold start with
+/// no workspaces yet, or after the user closed the last tab in a workspace.
+/// In both cases the welcome card guides the user to a folder.
 struct EmptyTerminalView: View {
   var body: some View {
-    VStack {
-      StartSessionContentView(presentation: .embedded)
+    OpenFolderWelcomeView()
+      .frame(maxWidth: .infinity, maxHeight: .infinity)
+      .padding(.horizontal, 32)
+      .padding(.vertical, 28)
+      .background(appBackgroundColor)
+  }
+}
+
+/// Welcome card with a folder picker and recent-folders list.
+///
+/// Selecting a folder routes through `AppState.createTab`, which retargets
+/// the active workspace when it's empty (so closing the last tab and then
+/// picking a folder rebases the same workspace), or creates a fresh
+/// workspace when none exists.
+struct OpenFolderWelcomeView: View {
+  @Environment(AppState.self) private var appState
+  private let recentFoldersManager = RecentFoldersManager.shared
+
+  /// URL of the recent folder row under the cursor, used to render a
+  /// hover border that telegraphs the row is clickable.
+  @State private var hoveredFolder: URL?
+
+  /// Cap on the number of recent folders surfaced as quick-picks.
+  private let maxRecents = 5
+
+  private var recentFolders: [URL] {
+    Array(recentFoldersManager.recentFolders.prefix(maxRecents))
+  }
+
+  /// True when there is an active workspace that simply has no tabs —
+  /// i.e., the user just closed the last tab. Used to switch the copy
+  /// from a fresh-start framing to a workspace-rebase framing.
+  private var hasEmptyActiveWorkspace: Bool {
+    appState.activeWorkspace != nil && appState.visibleTabs.isEmpty
+  }
+
+  private var headlineText: String {
+    hasEmptyActiveWorkspace
+      ? "Pick a folder for this workspace"
+      : "Open a folder to get started"
+  }
+
+  private var subtitleText: String {
+    hasEmptyActiveWorkspace
+      ? "Choose a folder to rebase this workspace on, and we'll open a terminal tab in it."
+      : "Pick a project folder. SlothyTerminal will open it as a workspace with a terminal tab."
+  }
+
+  var body: some View {
+    VStack(spacing: 18) {
+      Image(systemName: "folder.fill.badge.plus")
+        .appFont(size: 42)
+        .foregroundColor(.accentColor)
+
+      VStack(spacing: 6) {
+        Text(headlineText)
+          .appFont(.title3)
+          .fontWeight(.semibold)
+
+        Text(subtitleText)
+          .appFont(size: 12)
+          .foregroundColor(.secondary)
+          .multilineTextAlignment(.center)
+          .frame(maxWidth: 360)
+      }
+
+      AppButton("Open Folder...", action: openFolderPicker)
+        .buttonStyle(.borderedProminent)
+        .controlSize(.regular)
+        .keyboardShortcut(.defaultAction)
+
+      if !recentFolders.isEmpty {
+        recentSection
+      }
     }
-    .frame(maxWidth: .infinity, maxHeight: .infinity)
-    .padding(.horizontal, 32)
-    .padding(.vertical, 28)
-    .background(appBackgroundColor)
+    .padding(28)
+    .frame(maxWidth: 460)
+    .background(appCardColor)
+    .clipShape(RoundedRectangle(cornerRadius: 14))
+    .overlay {
+      RoundedRectangle(cornerRadius: 14)
+        .strokeBorder(Color.primary.opacity(0.08), lineWidth: 1)
+    }
+  }
+
+  private var recentSection: some View {
+    VStack(alignment: .leading, spacing: 8) {
+      Text("RECENT")
+        .appFont(size: 10, weight: .semibold)
+        .foregroundColor(.secondary)
+        .frame(maxWidth: .infinity, alignment: .leading)
+
+      VStack(spacing: 4) {
+        ForEach(recentFolders, id: \.self) { url in
+          recentFolderRow(url)
+        }
+      }
+    }
+    .padding(.top, 4)
+  }
+
+  private func recentFolderRow(_ url: URL) -> some View {
+    let isHovered = hoveredFolder == url
+
+    return Button {
+      openFolder(at: url)
+    } label: {
+      HStack(spacing: 10) {
+        Image(systemName: "folder")
+          .appFont(size: 13)
+          .foregroundColor(.secondary)
+
+        VStack(alignment: .leading, spacing: 2) {
+          Text(url.lastPathComponent)
+            .appFont(size: 13, weight: .medium)
+            .foregroundColor(.primary)
+
+          Text(displayPath(for: url))
+            .appFont(size: 10)
+            .foregroundColor(.secondary)
+            .lineLimit(1)
+            .truncationMode(.middle)
+        }
+
+        Spacer()
+      }
+      .padding(.horizontal, 10)
+      .padding(.vertical, 8)
+      .frame(maxWidth: .infinity, alignment: .leading)
+      .background(appBackgroundColor)
+      .clipShape(RoundedRectangle(cornerRadius: 8))
+      .overlay {
+        RoundedRectangle(cornerRadius: 8)
+          .strokeBorder(
+            isHovered ? Color.accentColor : Color.clear,
+            lineWidth: 1.5
+          )
+      }
+    }
+    .buttonStyle(.plain)
+    .onHover { hovering in
+      hoveredFolder = hovering ? url : (hoveredFolder == url ? nil : hoveredFolder)
+    }
+  }
+
+  private func displayPath(for url: URL) -> String {
+    let homeDir = FileManager.default.homeDirectoryForCurrentUser.path
+    let fullPath = url.path
+
+    if fullPath.hasPrefix(homeDir) {
+      return "~" + fullPath.dropFirst(homeDir.count)
+    }
+
+    return fullPath
+  }
+
+  private func openFolderPicker() {
+    let panel = NSOpenPanel()
+    panel.canChooseFiles = false
+    panel.canChooseDirectories = true
+    panel.allowsMultipleSelection = false
+    panel.canCreateDirectories = true
+    panel.message = "Select a folder for the new workspace"
+    panel.prompt = "Open Folder"
+
+    panel.begin { response in
+      guard response == .OK, let url = panel.url else {
+        return
+      }
+
+      openFolder(at: url)
+    }
+  }
+
+  /// Routes the picked folder through `createTab`, which retargets an
+  /// empty active workspace to the chosen directory or creates a fresh
+  /// workspace when none exists. Recording the folder here keeps the
+  /// recent-folder quick-pick list current across visits.
+  private func openFolder(at url: URL) {
+    recentFoldersManager.addRecentFolder(url)
+    appState.createTab(agent: .terminal, directory: url)
   }
 }
 

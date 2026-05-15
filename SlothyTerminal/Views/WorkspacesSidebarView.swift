@@ -28,7 +28,7 @@ struct WorkspacesSidebarView: View {
                   && appState.hasBackgroundActivity(in: workspace.id),
                 isDragging: draggedWorkspaceID == workspace.id,
                 onSelect: {
-                  appState.switchWorkspace(id: workspace.id)
+                  appState.selectWorkspace(id: workspace.id)
                   closeError = nil
                 },
                 onClose: {
@@ -122,7 +122,8 @@ struct WorkspacesSidebarView: View {
         return
       }
 
-      appState.createWorkspace(from: url)
+      RecentFoldersManager.shared.addRecentFolder(url)
+      appState.createWorkspaceAndTerminalTab(directory: url)
     }
   }
 

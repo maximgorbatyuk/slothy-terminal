@@ -27,9 +27,6 @@ struct AppConfig: Codable, Equatable {
   /// Maximum number of recent folders to remember.
   var maxRecentFolders: Int = 10
 
-  /// Last used launch type on the startup page, restored across sessions.
-  var lastUsedLaunchType: LaunchType?
-
   /// Whether to launch Claude CLI with --dangerously-skip-permissions.
   var claudeSkipPermissions: Bool = false
 
@@ -137,7 +134,6 @@ struct AppConfig: Codable, Equatable {
     defaultTabMode = TabMode.defaultOptions.contains(decodedTabMode) ? decodedTabMode : d.defaultTabMode
     defaultAgent = (try? c.decode(AgentType.self, forKey: .defaultAgent)) ?? d.defaultAgent
     maxRecentFolders = (try? c.decode(Int.self, forKey: .maxRecentFolders)) ?? d.maxRecentFolders
-    lastUsedLaunchType = try? c.decode(LaunchType.self, forKey: .lastUsedLaunchType)
     claudeSkipPermissions = (try? c.decode(Bool.self, forKey: .claudeSkipPermissions)) ?? d.claudeSkipPermissions
 
     claudePath = try? c.decode(String.self, forKey: .claudePath)
