@@ -83,7 +83,6 @@ let package = Package(
         "Agents/TerminalAgent.swift",
         "Models/PromptFile.swift",
         "Models/SavedPrompt.swift",
-        "Models/LaunchType.swift",
         "Models/ChatModelMode.swift",
         "Models/UsageModels.swift",
 

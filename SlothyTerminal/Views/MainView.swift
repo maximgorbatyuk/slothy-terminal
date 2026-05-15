@@ -320,12 +320,6 @@ struct ModalRouter: View {
 
   var body: some View {
     switch modal {
-    case .startupPage:
-      StartupPageView()
-
-    case .startupPageSplit:
-      StartupPageView(splitDestination: true)
-
     case .folderSelector(let agent):
       FolderSelectorModal(agent: agent) { selectedDirectory, selectedPrompt in
         appState.createTab(agent: agent, directory: selectedDirectory, initialPrompt: selectedPrompt)

@@ -32,7 +32,7 @@ struct SlothyTerminalApp: App {
           }
         }
         .onReceive(NotificationCenter.default.publisher(for: .newSessionRequested)) { _ in
-          appState.showStartupPage()
+          openNewTerminalTab()
         }
         .onReceive(NotificationCenter.default.publisher(for: .openFolderRequested)) { notification in
           if let folder = notification.userInfo?["folder"] as? URL,
@@ -65,20 +65,20 @@ struct SlothyTerminalApp: App {
 
       /// File menu.
       CommandGroup(replacing: .newItem) {
-        Button("New Session...") {
-          appState.showStartupPage()
+        Button("New Terminal Tab") {
+          openNewTerminalTab()
         }
         .keyboardShortcut("t", modifiers: .command)
 
-        Button("New Session in Split View...") {
-          appState.showStartupPageForSplit()
+        Button("New Terminal Tab in Split View") {
+          openNewTerminalTabInSplit()
         }
         .keyboardShortcut("t", modifiers: [.command, .option])
         .disabled(appState.activeTab == nil)
 
         Divider()
 
-        Button("New Terminal Tab") {
+        Button("New Terminal Tab in Folder...") {
           appState.showFolderSelector(for: .terminal)
         }
         .keyboardShortcut("t", modifiers: [.command, .shift, .option])
@@ -187,6 +187,22 @@ struct SlothyTerminalApp: App {
 
     let previousIndex = currentIndex == 0 ? visible.count - 1 : currentIndex - 1
     appState.switchToTab(id: visible[previousIndex].id)
+  }
+
+  /// Resolves the working directory for a new terminal tab opened via the
+  /// File menu or the `.newSessionRequested` notification.
+  private func directoryForNewTerminalTab() -> URL {
+    appState.activeWorkspace?.rootDirectory
+      ?? appState.currentContextDirectory
+      ?? FileManager.default.homeDirectoryForCurrentUser
+  }
+
+  private func openNewTerminalTab() {
+    appState.createTab(agent: .terminal, directory: directoryForNewTerminalTab())
+  }
+
+  private func openNewTerminalTabInSplit() {
+    appState.createTabInSplit(agent: .terminal, directory: directoryForNewTerminalTab())
   }
 
   private func switchToTabAtIndex(_ index: Int) {

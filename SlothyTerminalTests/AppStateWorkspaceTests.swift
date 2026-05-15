@@ -760,4 +760,92 @@ struct AppStateWorkspaceTests {
 
     #expect(appState.workspaces.map(\.id) == [wsB.id, wsC.id, wsA.id])
   }
+
+  // MARK: - selectWorkspace auto-opens a terminal
+
+  @Test("selectWorkspace creates a terminal tab when target has no tabs")
+  @MainActor
+  func selectWorkspaceCreatesTerminalTabWhenEmpty() throws {
+    let appState = AppState()
+
+    let workspaceA = appState.createWorkspace(from: dirA)
+    appState.createTab(agent: .terminal, directory: dirA)
+
+    /// Create an empty workspace B and switch back to A so B has no tabs.
+    let workspaceB = appState.createWorkspace(from: dirB)
+    appState.switchWorkspace(id: workspaceA.id)
+
+    #expect(appState.tabs(in: workspaceB.id).isEmpty)
+
+    appState.selectWorkspace(id: workspaceB.id)
+
+    let activeTab = try #require(appState.activeTab)
+    #expect(appState.activeWorkspaceID == workspaceB.id)
+    #expect(activeTab.workspaceID == workspaceB.id)
+    #expect(activeTab.agentType == .terminal)
+    #expect(activeTab.workingDirectory == dirB)
+    #expect(appState.tabs(in: workspaceB.id).count == 1)
+  }
+
+  @Test("selectWorkspace preserves existing tabs when target is non-empty")
+  @MainActor
+  func selectWorkspaceKeepsTabsWhenNonEmpty() throws {
+    let appState = AppState()
+
+    let workspaceA = appState.createWorkspace(from: dirA)
+    appState.createTab(agent: .terminal, directory: dirA)
+    let workspaceB = appState.createWorkspace(from: dirB)
+    appState.createTab(agent: .claude, directory: dirB)
+    let existingBTabID = try #require(appState.activeTabID)
+
+    /// Switch away, then come back via selectWorkspace.
+    appState.switchWorkspace(id: workspaceA.id)
+    appState.selectWorkspace(id: workspaceB.id)
+
+    /// No new tab; the existing one is restored.
+    #expect(appState.tabs(in: workspaceB.id).count == 1)
+    #expect(appState.activeTabID == existingBTabID)
+  }
+
+  // MARK: - openGitClientTab
+
+  @Test("openGitClientTab creates a Git tab in the active workspace when none exists")
+  @MainActor
+  func openGitClientTabCreatesNewWhenAbsent() throws {
+    let appState = AppState()
+
+    let workspace = appState.createWorkspace(from: dirA)
+    appState.createTab(agent: .terminal, directory: dirA)
+
+    appState.openGitClientTab()
+
+    let activeTab = try #require(appState.activeTab)
+    #expect(activeTab.mode == .git)
+    #expect(activeTab.workspaceID == workspace.id)
+    #expect(activeTab.workingDirectory == dirA)
+  }
+
+  @Test("openGitClientTab activates an existing Git tab in the active workspace")
+  @MainActor
+  func openGitClientTabActivatesExisting() throws {
+    let appState = AppState()
+
+    appState.createWorkspace(from: dirA)
+    appState.createTab(agent: .terminal, directory: dirA)
+    appState.createGitTab(directory: dirA)
+    let firstGitTabID = try #require(appState.activeTabID)
+
+    /// Move focus off the Git tab.
+    let terminalTabID = try #require(
+      appState.tabs.first(where: { $0.mode == .terminal })?.id
+    )
+    appState.switchToTab(id: terminalTabID)
+    #expect(appState.activeTabID == terminalTabID)
+
+    appState.openGitClientTab()
+
+    #expect(appState.activeTabID == firstGitTabID)
+    /// No additional Git tabs were created.
+    #expect(appState.tabs.filter { $0.mode == .git }.count == 1)
+  }
 }
