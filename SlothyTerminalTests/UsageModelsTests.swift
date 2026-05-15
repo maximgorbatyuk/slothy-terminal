@@ -26,7 +26,7 @@ final class UsageModelsTests: XCTestCase {
   }
 
   func testUsageStatusBarProviders() {
-    XCTAssertEqual(UsageProvider.statusBarProviders, [.claude, .codex, .cursor])
+    XCTAssertEqual(UsageProvider.statusBarProviders, [.claude, .codex, .cursor, .minimax])
   }
 
   func testUsageAuthSourceExperimental() {
@@ -362,5 +362,141 @@ final class UsageModelsTests: XCTestCase {
     XCTAssertEqual(response.data.count, 1)
     XCTAssertEqual(response.data[0].id, "org-123")
     XCTAssertEqual(response.data[0].name, "My Org")
+  }
+
+  // MARK: - mergedClaudeWindow
+
+  /// Regression: Anthropic returns utilization as a 0-100 percentage. A value
+  /// of `1` means 1% used — not 100%. An earlier "defensive" normalization
+  /// step multiplied any value in (0, 1] by 100, which broke the 1% case.
+  func testMergedClaudeWindowReturnsRawPercentage() throws {
+    // Mirrors the payload from https://github.com/maximgorbatyuk/slothy-terminal/issues/12:
+    // Anthropic returns utilization as an already-scaled 0-100 percentage, so
+    // `utilization: 1` is 1% — not 100%.
+    let raw = """
+    {
+      "five_hour": {
+        "resets_at": "2026-05-11T14:10:00.489581+00:00",
+        "utilization": 1
+      },
+      "seven_day": {
+        "resets_at": "2026-05-16T05:00:00.489601+00:00",
+        "utilization": 7
+      }
+    }
+    """
+    let data = raw.data(using: .utf8)!
+    let json = try XCTUnwrap(
+      JSONSerialization.jsonObject(with: data) as? [String: Any]
+    )
+
+    let fiveHour = UsageService.mergedClaudeWindow(json, baseKey: "five_hour")
+    let sevenDay = UsageService.mergedClaudeWindow(json, baseKey: "seven_day")
+
+    XCTAssertEqual(fiveHour?.utilization, 1)
+    XCTAssertEqual(sevenDay?.utilization, 7)
+  }
+
+  func testMergedClaudeWindowZeroUtilization() throws {
+    let raw = """
+    {
+      "seven_day_sonnet": {
+        "resets_at": null,
+        "utilization": 0
+      }
+    }
+    """
+    let data = raw.data(using: .utf8)!
+    let json = try XCTUnwrap(
+      JSONSerialization.jsonObject(with: data) as? [String: Any]
+    )
+
+    let window = UsageService.mergedClaudeWindow(json, baseKey: "seven_day_sonnet")
+    XCTAssertEqual(window?.utilization, 0)
+  }
+
+  // MARK: - MinimaxUsageProvider
+
+  func testMinimaxParseHeadlineSnapshot() throws {
+    let payload = """
+    {
+      "model_remains": [
+        {
+          "start_time": 1778821200000,
+          "end_time": 1778839200000,
+          "remains_time": 15395586,
+          "current_interval_total_count": 4500,
+          "current_interval_usage_count": 4462,
+          "model_name": "MiniMax-M*",
+          "current_weekly_total_count": 45000,
+          "current_weekly_usage_count": 44954,
+          "weekly_start_time": 1778457600000,
+          "weekly_end_time": 1779062400000,
+          "weekly_remains_time": 238595586
+        },
+        {
+          "start_time": 1778803200000,
+          "end_time": 1778889600000,
+          "remains_time": 65795584,
+          "current_interval_total_count": 4000,
+          "current_interval_usage_count": 4000,
+          "model_name": "speech-hd",
+          "current_weekly_total_count": 28000,
+          "current_weekly_usage_count": 28000,
+          "weekly_start_time": 1778457600000,
+          "weekly_end_time": 1779062400000,
+          "weekly_remains_time": 238595584
+        },
+        {
+          "start_time": 1778821200000,
+          "end_time": 1778839200000,
+          "remains_time": 15395540,
+          "current_interval_total_count": 4500,
+          "current_interval_usage_count": 4462,
+          "model_name": "coding-plan-vlm",
+          "current_weekly_total_count": 45000,
+          "current_weekly_usage_count": 44954,
+          "weekly_start_time": 1778457600000,
+          "weekly_end_time": 1779062400000,
+          "weekly_remains_time": 238595540
+        }
+      ],
+      "base_resp": { "status_code": 0, "status_msg": "success" }
+    }
+    """.data(using: .utf8)!
+
+    let snapshot = try MinimaxUsageProvider.parseSnapshot(data: payload)
+
+    XCTAssertEqual(snapshot.provider, .minimax)
+    XCTAssertEqual(snapshot.account, "MiniMax-M*")
+    XCTAssertEqual(snapshot.used, "4462")
+    XCTAssertEqual(snapshot.limit, "4500")
+    XCTAssertEqual(snapshot.remaining, "38")
+    XCTAssertNotNil(snapshot.percentUsed)
+    XCTAssertEqual(snapshot.percentUsed ?? 0, 0.9915555, accuracy: 0.0001)
+
+    XCTAssertFalse(snapshot.metrics.contains { $0.label == "coding-plan-vlm" })
+
+    XCTAssertTrue(snapshot.metrics.contains { $0.label == "speech-hd" })
+
+    XCTAssertTrue(snapshot.metrics.contains { $0.label == "Weekly used" })
+  }
+
+  func testMinimaxParseRejectsErrorStatus() {
+    let payload = """
+    {
+      "model_remains": [],
+      "base_resp": { "status_code": 1004, "status_msg": "invalid api key" }
+    }
+    """.data(using: .utf8)!
+
+    do {
+      try MinimaxUsageProvider.parseSnapshot(data: payload)
+      XCTFail("Expected parseError to be thrown")
+    } catch UsageFetchError.parseError {
+      // Expected
+    } catch {
+      XCTFail("Expected parseError but got \(error)")
+    }
   }
 }

@@ -1106,6 +1106,8 @@ struct UsageSettingsTab: View {
   @State private var saveError: String?
   @State private var showManualOverride: Bool = false
   @State private var expandedResponseIDs: Set<String> = []
+  @State private var minimaxAPIKeyInput: String = ""
+  @State private var hasSavedMinimaxKey: Bool = false
 
   var body: some View {
     Form {
@@ -1181,6 +1183,45 @@ struct UsageSettingsTab: View {
             .foregroundColor(.secondary)
         }
       }
+
+      Section("MiniMax") {
+        HStack(alignment: .top, spacing: 8) {
+          Image(systemName: hasSavedMinimaxKey ? "checkmark.circle.fill" : "exclamationmark.circle")
+            .foregroundColor(hasSavedMinimaxKey ? .green : .secondary)
+
+          VStack(alignment: .leading, spacing: 2) {
+            Text(hasSavedMinimaxKey ? "API key saved" : "MiniMax not connected")
+              .appFont(size: 12, weight: .medium)
+
+            Text("Get your key from platform.minimax.io → User Center → Interface Key.")
+              .appFont(.caption)
+              .foregroundColor(.secondary)
+              .fixedSize(horizontal: false, vertical: true)
+          }
+
+          Spacer()
+        }
+
+        VStack(alignment: .leading, spacing: 8) {
+          SecureField("MiniMax API key", text: $minimaxAPIKeyInput)
+            .textFieldStyle(.roundedBorder)
+            .appFont(size: 11, design: .monospaced)
+
+          HStack {
+            Button("Save Key") {
+              saveMinimaxKey()
+            }
+            .disabled(minimaxAPIKeyInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+
+            if hasSavedMinimaxKey {
+              Button("Clear Saved Key") {
+                clearMinimaxKey()
+              }
+              .buttonStyle(.borderless)
+            }
+          }
+        }
+      }
     }
     .formStyle(.grouped)
     .scrollContentBackground(.hidden)
@@ -1188,6 +1229,7 @@ struct UsageSettingsTab: View {
     .background(appBackgroundColor)
     .onAppear {
       refreshCursorState()
+      refreshMinimaxState()
     }
   }
 
@@ -1283,6 +1325,45 @@ struct UsageSettingsTab: View {
     cursorJWTInput = ""
     saveError = nil
     usageService.clearProvider(.cursor)
+  }
+
+  private func refreshMinimaxState() {
+    hasSavedMinimaxKey = UsageKeychainStore.loadString(
+      provider: .minimax,
+      sourceKind: .apiKey
+    ) != nil
+  }
+
+  private func saveMinimaxKey() {
+    let trimmed = minimaxAPIKeyInput.trimmingCharacters(in: .whitespacesAndNewlines)
+
+    guard !trimmed.isEmpty else {
+      return
+    }
+
+    let saved = UsageKeychainStore.saveString(
+      trimmed,
+      provider: .minimax,
+      sourceKind: .apiKey
+    )
+
+    if saved {
+      hasSavedMinimaxKey = true
+      minimaxAPIKeyInput = ""
+      Task {
+        await usageService.resolveAuthSources()
+        await usageService.fetch(provider: .minimax)
+      }
+    } else {
+      saveError = "Failed to save MiniMax key to Keychain."
+    }
+  }
+
+  private func clearMinimaxKey() {
+    UsageKeychainStore.delete(provider: .minimax, sourceKind: .apiKey)
+    hasSavedMinimaxKey = false
+    minimaxAPIKeyInput = ""
+    usageService.clearProvider(.minimax)
   }
 
   // MARK: - Provider Responses
