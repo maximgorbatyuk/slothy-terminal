@@ -17,9 +17,10 @@ SlothyTerminal provides a unified macOS workspace for AI coding agents with:
 - Claude CLI and OpenCode CLI terminal tabs
 - plain shell terminal tabs
 - a built-in Git repository browser
+- a built-in file editor with tree-sitter syntax highlighting (Swift, Markdown)
 - workspace-based tab organization
 
-Use Claude CLI, OpenCode, or plain terminal sessions in a clean tabbed interface with workspaces, saved prompts, and session statistics.
+Use Claude CLI, OpenCode, or plain terminal sessions in a clean tabbed interface with workspaces, saved prompts, an integrated file editor, and session statistics.
 
 ## Features
 
@@ -71,6 +72,17 @@ Use Claude CLI, OpenCode, or plain terminal sessions in a clean tabbed interface
 - Commit composer with file picker, diff viewer, and commit message editor
 - Working tree changes display
 
+### File Editor
+- Built-in `.editor` tab mode (no PTY, no agent — pure SwiftUI on top of [STTextView](https://github.com/krzyzanowskim/STTextView))
+- Tree-sitter syntax highlighting with bundled Swift and Markdown grammars; other file types open as plain text on a theme-appropriate canvas
+- Per-file-type theme — code on a dark canvas, prose (`.md`, `.markdown`, `.txt`) on a light canvas — independent of the system appearance
+- Double-click a file in the Files sidebar to open it; existing editor tabs are focused instead of duplicated (symlink-resolved canonical URLs)
+- Dirty-state indicator in the tab label (`● filename.swift`) and a Save / Don't Save / Cancel sheet on close
+- Save (`Cmd+S`), Save As (`Cmd+Shift+S`), and Revert to Saved via the File menu
+- Save-confirmation toast on every successful write
+- Safety guards: 10 MB size cap, NUL-byte binary sniff, atomic write, symlink-follow on save, fallback decode through UTF-8 → CP1252 → MacRoman → ISO Latin-1
+- Configurable editor font family and size from Settings → Appearance
+
 ### Saved Prompts
 - Save and reuse prompts for AI agent sessions
 - Inject saved prompts into active terminal sessions from the sidebar
@@ -81,7 +93,7 @@ Use Claude CLI, OpenCode, or plain terminal sessions in a clean tabbed interface
 - Displays files and folders with native system icons
 - Shows hidden files (.github, .claude, .gitignore, etc.)
 - Sorted display: folders first, then files (alphabetically)
-- Double-click to copy relative path to clipboard
+- Double-click a file to open it in the built-in editor (accent-color hover state highlights the focused row)
 - Right-click context menu:
   - Copy Relative Path
   - Copy Filename
@@ -94,9 +106,9 @@ Use Claude CLI, OpenCode, or plain terminal sessions in a clean tabbed interface
 ![](/docs/assets/open_in.png)
 
 ### Settings
-- **General** - Default agent, sidebar preferences, recent folders
+- **General** - Default agent, default tab mode, sidebar preferences, recent folders
 - **Agents** - Custom paths for Claude and OpenCode CLIs
-- **Appearance** - Terminal font family and size, agent accent colors
+- **Appearance** - Terminal font family and size, editor font family and size, agent accent colors
 - **Shortcuts** - View keyboard shortcuts
 - **Prompts** - Manage saved prompts
 - **Licenses** - Third-party license information
@@ -148,6 +160,15 @@ Download the latest DMG from [GitHub Releases](https://github.com/maximgorbatyuk
 | Previous Tab | `Cmd+Shift+[` |
 | Switch to Tab 1-9 | `Cmd+1` through `Cmd+9` |
 
+### Editor
+| Action | Shortcut |
+|--------|----------|
+| Save | `Cmd+S` |
+| Save As… | `Cmd+Shift+S` |
+| Revert to Saved | — (File menu) |
+
+The editor File menu items are always rendered so `Cmd+S` stays claimed app-wide — otherwise it would fall through to the focused terminal and send `^S` (XOFF), freezing the foreground process.
+
 ### Window
 | Action | Shortcut |
 |--------|----------|
@@ -172,6 +193,7 @@ Access settings via `Cmd+,` or **SlothyTerminal → Settings**.
 ### Appearance Settings
 - Terminal font family (monospaced fonts)
 - Terminal font size (10-24pt)
+- Editor font family and size
 - Custom accent colors for agents
 
 ## Building from Source
@@ -187,6 +209,10 @@ Access settings via `Cmd+,` or **SlothyTerminal → Settings**.
 
 - [libghostty](https://github.com/ghostty-org/ghostty) - GPU-accelerated terminal rendering (Metal) and PTY management via `GhosttyKit.xcframework`
 - [Sparkle](https://github.com/sparkle-project/Sparkle) - Auto-updates (via Swift Package Manager)
+- [STTextView](https://github.com/krzyzanowskim/STTextView) - AppKit text view backing the built-in file editor (SPM)
+- [SwiftTreeSitter](https://github.com/ChimeHQ/SwiftTreeSitter) + bundled `TreeSitterSwift` / `TreeSitterMarkdown` grammars - syntax highlighting for the editor (SPM)
+
+The STTextView and tree-sitter packages are linked only into the Xcode app target; the SPM test target excludes them. See [`docs/architecture.md`](docs/architecture.md) and [`docs/testing.md`](docs/testing.md).
 
 ### Build
 
@@ -256,6 +282,7 @@ Source lives under [`SlothyTerminal/`](SlothyTerminal/). Each subdirectory has a
 | [`Injection/`](SlothyTerminal/Injection) | Per-tab FIFO queue and live-surface registry for programmatic terminal input. |
 | [`Terminal/`](SlothyTerminal/Terminal) | libghostty C-ABI boundary (`GhosttyApp`, `GhosttySurfaceView`). Xcode-only. |
 | [`Views/`](SlothyTerminal/Views) | All SwiftUI views — main window, tab bar, sidebars, settings, git client, dialogs. |
+| [`Views/Editor/`](SlothyTerminal/Views/Editor) | File editor tab — STTextView host, tree-sitter highlighting plugin, theme palette, File menu hooks. Xcode-only. |
 | [`Resources/`](SlothyTerminal/Resources) | Build-config JSON, bundled fonts, third-party licences. |
 
 For module responsibilities and the SPM-vs-Xcode build split, see [`docs/architecture.md`](docs/architecture.md).
@@ -276,13 +303,31 @@ For module responsibilities and the SPM-vs-Xcode build split, see [`docs/archite
 
 ## Release Process
 
-Ensure `GhosttyKit.xcframework` is present in the project root, then:
+The release pipeline is driven by `scripts/release.sh`. It is **idempotent on `VERSION`** — a failed run can be re-invoked with the same version and it will resume rather than re-bump the build number.
+
+Prerequisites:
+
+- `GhosttyKit.xcframework` present in the project root
+- `.env` with Apple notarization credentials
+- `sparkle-tools/bin/sign_update` installed
+- `gh` CLI authenticated
+
+Before running, hand-edit two files:
+
+1. `CHANGELOG.md` — add a `[VERSION]` entry.
+2. `appcast.xml` — add an `<item>` with `BUILD_NUMBER`, `SIGNATURE_HERE`, and `FILE_SIZE_IN_BYTES` placeholders. The script substitutes them after building.
+
+Then:
 
 ```bash
-./scripts/build-release.sh 2026.2.6
+./scripts/release.sh 2026.2.6
+# or, to auto-bump the patch segment of the current MARKETING_VERSION:
+./scripts/release.sh
 ```
 
-This archives, notarizes, creates a DMG, and signs for Sparkle updates. See [`docs/release.md`](docs/release.md) for full step-by-step instructions.
+`release.sh` bumps `MARKETING_VERSION` + `CURRENT_PROJECT_VERSION` in `project.pbxproj`, invokes `build-release.sh` (archive → notarize → DMG → staple), signs the DMG with Sparkle, fills the appcast placeholders, commits the release files, pushes, merges to `main`, and creates a GitHub Release with the DMG attached.
+
+See [`docs/release.md`](docs/release.md) for the full step-by-step description, idempotency rules, and troubleshooting.
 
 ## Changelog
 

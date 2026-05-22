@@ -6,14 +6,14 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Slothy Terminal — Take it slow, ship it fast</title>
   <meta name="description"
-    content="Slothy Terminal is a native GPU‑accelerated macOS terminal for AI coding assistants with workspaces, automation sidebars, prompts, and native chat sessions for Claude CLI and OpenCode.">
+    content="Slothy Terminal is a native GPU‑accelerated macOS terminal for AI coding assistants with workspaces, automation sidebars, prompts, a built-in Git client, and a syntax-highlighting file editor for Claude CLI and OpenCode workflows.">
   <link rel="canonical" href="https://mgorbatyuk.dev/slothy-terminal/">
   <meta name="theme-color" content="#0F172A">
 
   <!-- Open Graph -->
   <meta property="og:title" content="Slothy Terminal">
   <meta property="og:description"
-    content="Take it slow, ship it fast. GPU-accelerated macOS terminal for AI coding assistants with workspaces, prompts, and automation sidebars.">
+    content="Take it slow, ship it fast. GPU-accelerated macOS terminal for AI coding assistants with workspaces, prompts, a built-in Git client, and a syntax-highlighting file editor.">
   <meta property="og:image" content="assets/SlothyTerminalIcon.jpg">
   <meta property="og:type" content="website">
 
@@ -87,7 +87,7 @@
       <p class="hero-description">
         A GPU-accelerated macOS terminal for AI coding assistants.<br>
         Powered by <a href="https://github.com/ghostty-org/ghostty" target="_blank" rel="noopener noreferrer" class="inline-link">libghostty</a> with Metal rendering,
-        workspace-aware tabs, automation sidebars, and native chat sessions.
+        workspace-aware tabs, automation sidebars, a built-in Git client, and a syntax-highlighting file editor.
       </p>
       <div class="hero-actions">
         <a href="#install" class="btn btn-primary">
@@ -123,8 +123,8 @@
           <span class="workflow-value">scripts + prompt paste</span>
         </div>
         <div class="workflow-pill">
-          <span class="workflow-label">Awareness</span>
-          <span class="workflow-value">docs + activity badges</span>
+          <span class="workflow-label">Editor</span>
+          <span class="workflow-value">syntax-highlighted in-window</span>
         </div>
         <div class="workflow-pill">
           <span class="workflow-label">Git Client</span>
@@ -195,10 +195,12 @@
               <line x1="9" y1="21" x2="9" y2="9"></line>
             </svg>
           </div>
-          <h3 class="feature-title">Native Chat + CLI Tabs</h3>
+          <h3 class="feature-title">Claude CLI + OpenCode CLI Tabs</h3>
           <p class="feature-description">
-            Use Claude and OpenCode in native chat tabs or classic CLI tabs in the same window.
-            Jump between modes without breaking flow.
+            Run Claude CLI, OpenCode CLI, and plain shell sessions side-by-side in the same window —
+            each one a real PTY rendered by libghostty. Switch between tabs with
+            <code style="font-family: var(--font-mono); font-size: 0.85em;">Cmd+1</code>–<code style="font-family: var(--font-mono); font-size: 0.85em;">9</code>
+            without breaking flow.
           </p>
         </div>
 
@@ -223,16 +225,19 @@
 
         <div class="feature-card">
           <div class="feature-icon">
+            <!-- Pencil-on-document icon for the file editor -->
             <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-              <path d="M12 2L2 7l10 5 10-5-10-5z"></path>
-              <path d="M2 17l10 5 10-5"></path>
-              <path d="M2 12l10 5 10-5"></path>
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+              <polyline points="14 2 14 8 20 8"></polyline>
+              <path d="M10.5 16.5l4-4 2 2-4 4H10.5z"></path>
             </svg>
           </div>
-          <h3 class="feature-title">Production Chat Engine</h3>
+          <h3 class="feature-title">Built-in File Editor</h3>
           <p class="feature-description">
-            State-machine architecture with transport and storage layers. Session snapshots persist
-            conversations, usage data, and model selection for instant recovery across restarts.
+            Double-click any file in the Files sidebar to open it in a real editor tab — STTextView
+            with tree-sitter syntax highlighting for Swift and Markdown. Dirty-state indicator in the tab,
+            save-confirmation toast, <code style="font-family: var(--font-mono); font-size: 0.85em;">Cmd+S</code>
+            / Save As / Revert from the File menu. No leaving the window to fix a typo.
           </p>
         </div>
 
