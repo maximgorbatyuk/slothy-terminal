@@ -7,6 +7,12 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		870719C62FC04EBB0066028C /* STTextView in Frameworks */ = {isa = PBXBuildFile; productRef = 870719C52FC04EBB0066028C /* STTextView */; };
+		870719C92FC04F280066028C /* Neon in Frameworks */ = {isa = PBXBuildFile; productRef = 870719C82FC04F280066028C /* Neon */; };
+		870719CC2FC04F340066028C /* SwiftTreeSitter in Frameworks */ = {isa = PBXBuildFile; productRef = 870719CB2FC04F340066028C /* SwiftTreeSitter */; };
+		870719CE2FC04F340066028C /* SwiftTreeSitterLayer in Frameworks */ = {isa = PBXBuildFile; productRef = 870719CD2FC04F340066028C /* SwiftTreeSitterLayer */; };
+		870719D12FC04F6B0066028C /* TreeSitterSwift in Frameworks */ = {isa = PBXBuildFile; productRef = 870719D02FC04F6B0066028C /* TreeSitterSwift */; };
+		870719D42FC04FCF0066028C /* TreeSitterMarkdown in Frameworks */ = {isa = PBXBuildFile; productRef = 870719D32FC04FCF0066028C /* TreeSitterMarkdown */; };
 		873AFBE02F310CB60054BEC8 /* Sparkle in Frameworks */ = {isa = PBXBuildFile; productRef = 873AFBDF2F310CB60054BEC8 /* Sparkle */; };
 		87A00001DEAD0000BEEF0001 /* GhosttyKit.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = 87A00002DEAD0000BEEF0002 /* GhosttyKit.xcframework */; };
 /* End PBXBuildFile section */
@@ -42,8 +48,14 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				870719D42FC04FCF0066028C /* TreeSitterMarkdown in Frameworks */,
+				870719C92FC04F280066028C /* Neon in Frameworks */,
 				87A00001DEAD0000BEEF0001 /* GhosttyKit.xcframework in Frameworks */,
+				870719D12FC04F6B0066028C /* TreeSitterSwift in Frameworks */,
+				870719CC2FC04F340066028C /* SwiftTreeSitter in Frameworks */,
 				873AFBE02F310CB60054BEC8 /* Sparkle in Frameworks */,
+				870719C62FC04EBB0066028C /* STTextView in Frameworks */,
+				870719CE2FC04F340066028C /* SwiftTreeSitterLayer in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -88,6 +100,12 @@
 			name = SlothyTerminal;
 			packageProductDependencies = (
 				873AFBDF2F310CB60054BEC8 /* Sparkle */,
+				870719C52FC04EBB0066028C /* STTextView */,
+				870719C82FC04F280066028C /* Neon */,
+				870719CB2FC04F340066028C /* SwiftTreeSitter */,
+				870719CD2FC04F340066028C /* SwiftTreeSitterLayer */,
+				870719D02FC04F6B0066028C /* TreeSitterSwift */,
+				870719D32FC04FCF0066028C /* TreeSitterMarkdown */,
 			);
 			productName = SlothyTerminal;
 			productReference = 873AF9E02F30C1F90054BEC8 /* SlothyTerminal.app */;
@@ -119,6 +137,11 @@
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				873AFBDE2F310CB60054BEC8 /* XCRemoteSwiftPackageReference "Sparkle" */,
+				870719C42FC04EBB0066028C /* XCRemoteSwiftPackageReference "STTextView" */,
+				870719C72FC04F280066028C /* XCRemoteSwiftPackageReference "Neon" */,
+				870719CA2FC04F340066028C /* XCRemoteSwiftPackageReference "SwiftTreeSitter" */,
+				870719CF2FC04F6B0066028C /* XCRemoteSwiftPackageReference "tree-sitter-swift" */,
+				870719D22FC04FCF0066028C /* XCRemoteSwiftPackageReference "tree-sitter-markdown" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 873AF9E12F30C1F90054BEC8 /* Products */;
@@ -279,7 +302,7 @@
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 55;
+				CURRENT_PROJECT_VERSION = 56;
 				DEVELOPMENT_TEAM = EKKL63HDHJ;
 				ENABLE_APP_SANDBOX = NO;
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -298,7 +321,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 15.0;
-				MARKETING_VERSION = 2026.3.13;
+				MARKETING_VERSION = 2026.3.14;
 				OTHER_LDFLAGS = "-lstdc++";
 				PRODUCT_BUNDLE_IDENTIFIER = mgorbatyuk.dev.SlothyTerminal;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -317,7 +340,7 @@
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 55;
+				CURRENT_PROJECT_VERSION = 56;
 				DEVELOPMENT_TEAM = EKKL63HDHJ;
 				ENABLE_APP_SANDBOX = NO;
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -335,7 +358,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 15.0;
-				MARKETING_VERSION = 2026.3.13;
+				MARKETING_VERSION = 2026.3.14;
 				OTHER_LDFLAGS = "-lstdc++";
 				PRODUCT_BUNDLE_IDENTIFIER = mgorbatyuk.dev.SlothyTerminal;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -370,6 +393,46 @@
 /* End XCConfigurationList section */
 
 /* Begin XCRemoteSwiftPackageReference section */
+		870719C42FC04EBB0066028C /* XCRemoteSwiftPackageReference "STTextView" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/krzyzanowskim/STTextView";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 2.3.10;
+			};
+		};
+		870719C72FC04F280066028C /* XCRemoteSwiftPackageReference "Neon" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/ChimeHQ/Neon";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 0.6.0;
+			};
+		};
+		870719CA2FC04F340066028C /* XCRemoteSwiftPackageReference "SwiftTreeSitter" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/ChimeHQ/SwiftTreeSitter";
+			requirement = {
+				kind = exactVersion;
+				version = 0.8.0;
+			};
+		};
+		870719CF2FC04F6B0066028C /* XCRemoteSwiftPackageReference "tree-sitter-swift" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/alex-pinkus/tree-sitter-swift";
+			requirement = {
+				kind = revision;
+				revision = 7b7909f2f6b9414be0958275f4c8e5d69c3bca43;
+			};
+		};
+		870719D22FC04FCF0066028C /* XCRemoteSwiftPackageReference "tree-sitter-markdown" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/MDeiml/tree-sitter-markdown";
+			requirement = {
+				branch = split_parser;
+				kind = branch;
+			};
+		};
 		873AFBDE2F310CB60054BEC8 /* XCRemoteSwiftPackageReference "Sparkle" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/sparkle-project/Sparkle";
@@ -381,6 +444,36 @@
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
+		870719C52FC04EBB0066028C /* STTextView */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 870719C42FC04EBB0066028C /* XCRemoteSwiftPackageReference "STTextView" */;
+			productName = STTextView;
+		};
+		870719C82FC04F280066028C /* Neon */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 870719C72FC04F280066028C /* XCRemoteSwiftPackageReference "Neon" */;
+			productName = Neon;
+		};
+		870719CB2FC04F340066028C /* SwiftTreeSitter */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 870719CA2FC04F340066028C /* XCRemoteSwiftPackageReference "SwiftTreeSitter" */;
+			productName = SwiftTreeSitter;
+		};
+		870719CD2FC04F340066028C /* SwiftTreeSitterLayer */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 870719CA2FC04F340066028C /* XCRemoteSwiftPackageReference "SwiftTreeSitter" */;
+			productName = SwiftTreeSitterLayer;
+		};
+		870719D02FC04F6B0066028C /* TreeSitterSwift */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 870719CF2FC04F6B0066028C /* XCRemoteSwiftPackageReference "tree-sitter-swift" */;
+			productName = TreeSitterSwift;
+		};
+		870719D32FC04FCF0066028C /* TreeSitterMarkdown */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 870719D22FC04FCF0066028C /* XCRemoteSwiftPackageReference "tree-sitter-markdown" */;
+			productName = TreeSitterMarkdown;
+		};
 		873AFBDF2F310CB60054BEC8 /* Sparkle */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = 873AFBDE2F310CB60054BEC8 /* XCRemoteSwiftPackageReference "Sparkle" */;

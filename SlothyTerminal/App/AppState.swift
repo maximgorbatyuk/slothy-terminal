@@ -134,6 +134,15 @@ class AppState {
   /// Tab awaiting close confirmation (set when user tries to close an inactive tab).
   var tabPendingClose: UUID?
 
+  /// Dirty `.editor` tab awaiting a Save / Don't Save / Cancel decision.
+  /// Phase 2 will hang a SwiftUI confirmation sheet off this state.
+  var tabPendingDirtyEditorClose: UUID?
+
+  /// Snapshot of `(activeWorkspaceID, activeTabID)` captured when we
+  /// switched context to surface the dirty-editor sheet. Restored on
+  /// `cancelDirtyEditorClose` so the user is returned to where they were.
+  private var dirtyEditorCloseReturnContext: (workspaceID: UUID?, tabID: UUID?)?
+
   private var tabDragSnapshot: TabDragSnapshot?
 
   private var configManager = ConfigManager.shared
@@ -399,6 +408,67 @@ class AppState {
     switchToTab(id: tab.id)
   }
 
+  /// Opens `fileURL` in an editor tab. Dedup is global across workspaces:
+  /// if any tab already edits this file (resolved through symlinks and
+  /// path-normalized), focus that tab — switching workspaces if needed.
+  /// The new tab's `workingDirectory` is the workspace root, NOT the file's
+  /// parent, so consumers like `gitBranchRefreshContext` and Cmd+T keep
+  /// pointing at the workspace the user picked.
+  func openFileInEditor(_ fileURL: URL) {
+    let canonicalFileURL = Self.canonicalFileURL(fileURL)
+
+    if let existing = tabs.first(where: { $0.mode == .editor && $0.fileURL == canonicalFileURL }) {
+      if existing.workspaceID != activeWorkspaceID {
+        switchWorkspace(id: existing.workspaceID)
+      }
+
+      switchToTab(id: existing.id)
+      return
+    }
+
+    /// Pick a directory for resolveWorkspaceID that won't silently retarget
+    /// an existing workspace: prefer the active workspace's own root, then
+    /// the global session context, then fall back to the file's parent.
+    let directoryForResolve: URL
+    if let active = activeWorkspace {
+      directoryForResolve = active.rootDirectory
+    } else if let context = currentContextDirectory {
+      directoryForResolve = context
+    } else {
+      directoryForResolve = fileURL.deletingLastPathComponent()
+    }
+
+    let workspaceID = resolveWorkspaceID(for: directoryForResolve)
+    let workspaceRoot = workspaces.first(where: { $0.id == workspaceID })?.rootDirectory ?? directoryForResolve
+
+    let tab = Tab(
+      workspaceID: workspaceID,
+      workingDirectory: workspaceRoot,
+      mode: .editor,
+      fileURL: canonicalFileURL
+    )
+    tabs.append(tab)
+    switchToTab(id: tab.id)
+  }
+
+  /// Returns true if any editor tab other than `excludingTabID` already edits
+  /// `fileURL` (after canonicalization).
+  func hasOpenEditorTab(for fileURL: URL, excludingTabID: UUID) -> Bool {
+    let canonicalFileURL = Self.canonicalFileURL(fileURL)
+
+    return tabs.contains { tab in
+      tab.id != excludingTabID &&
+      tab.mode == .editor &&
+      tab.fileURL == canonicalFileURL
+    }
+  }
+
+  /// Canonicalizes a file URL for stable equality across symlinks, `/tmp` vs
+  /// `/private/tmp`, trailing slashes, and `.`/`..` segments.
+  static func canonicalFileURL(_ url: URL) -> URL {
+    url.resolvingSymlinksInPath().standardizedFileURL
+  }
+
   /// Activates the existing Git client tab in the active workspace, or
   /// creates one rooted at the workspace's directory if none exists.
   func openGitClientTab() {
@@ -420,17 +490,89 @@ class AppState {
   }
 
   /// Closes the tab with the specified ID.
-  /// Active tabs and stateless git tabs close immediately.
+  /// Active tabs, stateless git tabs, and *clean* editor tabs close immediately.
   /// Inactive terminal/chat tabs prompt for confirmation first.
+  /// Dirty editor tabs are routed through `tabPendingDirtyEditorClose` so
+  /// Phase 2 can present a Save / Don't Save / Cancel sheet — in Phase 1 the
+  /// tab simply does not close until the dialog is wired.
   func closeTab(id: UUID) {
     guard let tab = tabs.first(where: { $0.id == id }) else {
       return
     }
 
-    if activeTabID == id || tab.mode == .git || isTabVisibleInSplit(id) {
+    if tab.mode == .editor && tab.isDirty {
+      let needsContextSwitch = activeWorkspaceID != tab.workspaceID || activeTabID != id
+
+      if needsContextSwitch && dirtyEditorCloseReturnContext == nil {
+        /// Stash where the user was so `cancelDirtyEditorClose` can return
+        /// them there. Snapshot only once per pending close — repeated
+        /// `closeTab` calls for the same dirty tab should not overwrite the
+        /// original return context with the now-switched values.
+        dirtyEditorCloseReturnContext = (activeWorkspaceID, activeTabID)
+      }
+
+      if activeWorkspaceID != tab.workspaceID {
+        switchWorkspace(id: tab.workspaceID)
+      }
+
+      if activeTabID != id {
+        switchToTab(id: id)
+      }
+
+      tabPendingDirtyEditorClose = id
+      return
+    }
+
+    if activeTabID == id || tab.mode == .git || tab.mode == .editor || isTabVisibleInSplit(id) {
       performCloseTab(id: id)
     } else {
       tabPendingClose = id
+    }
+  }
+
+  /// User chose "Don't Save" on the dirty-editor close sheet: discard unsaved
+  /// changes and finish the close. The return-context snapshot is dropped
+  /// because the user committed to closing — there's nothing to restore.
+  func discardAndCloseDirtyEditor() {
+    guard let id = tabPendingDirtyEditorClose else {
+      return
+    }
+
+    tabPendingDirtyEditorClose = nil
+    dirtyEditorCloseReturnContext = nil
+
+    /// Clear the dirty flag so the close-time precondition holds.
+    if let tab = tabs.first(where: { $0.id == id }) {
+      tab.isDirty = false
+    }
+
+    performCloseTab(id: id)
+  }
+
+  /// User chose "Cancel" on the dirty-editor close sheet: drop the request
+  /// and restore the workspace/tab the user was looking at before we
+  /// switched context to surface the alert.
+  func cancelDirtyEditorClose() {
+    tabPendingDirtyEditorClose = nil
+
+    guard let context = dirtyEditorCloseReturnContext else {
+      return
+    }
+
+    dirtyEditorCloseReturnContext = nil
+
+    if let workspaceID = context.workspaceID,
+       workspaceID != activeWorkspaceID,
+       workspaces.contains(where: { $0.id == workspaceID })
+    {
+      switchWorkspace(id: workspaceID)
+    }
+
+    if let tabID = context.tabID,
+       tabID != activeTabID,
+       tabs.contains(where: { $0.id == tabID })
+    {
+      switchToTab(id: tabID)
     }
   }
 
@@ -451,8 +593,23 @@ class AppState {
 
   /// Performs the actual tab close: terminates processes, removes from list, selects next tab.
   private func performCloseTab(id: UUID) {
+    if let tab = tabs.first(where: { $0.id == id }) {
+      precondition(
+        !(tab.mode == .editor && tab.isDirty),
+        "Dirty editor tab closed without going through the dirty-editor sheet"
+      )
+    }
+
     if tabPendingClose == id {
       tabPendingClose = nil
+    }
+
+    if tabPendingDirtyEditorClose == id {
+      tabPendingDirtyEditorClose = nil
+      /// If the user committed to closing (Save or Don't Save), the snapshot
+      /// is no longer needed — wiping it ensures the next dirty-close cycle
+      /// starts fresh instead of restoring stale focus from a prior session.
+      dirtyEditorCloseReturnContext = nil
     }
 
     guard let index = tabs.firstIndex(where: { $0.id == id }) else {
