@@ -101,6 +101,17 @@ if ! grep -q "\[$VERSION\]" CHANGELOG.md; then
   exit 1
 fi
 
+## Refuse to overwrite an already-published release. If you really want to
+## re-upload the DMG to an existing release, do it explicitly with
+## `gh release upload v$VERSION <dmg> --clobber` outside this script.
+if gh release view "v$VERSION" &>/dev/null; then
+  echo "ERROR: GitHub release v$VERSION already exists."
+  echo "Either bump VERSION (CHANGELOG.md + appcast.xml) or, to re-upload"
+  echo "the DMG to the existing release, run:"
+  echo "  gh release upload v$VERSION <dmg-path> --clobber"
+  exit 1
+fi
+
 echo "All preflight checks passed."
 
 # ── Commit any pending changes before release ─────────────────────
@@ -120,7 +131,15 @@ else
   echo "Working tree clean — nothing to commit."
 fi
 
-# ── Step 1: Bump Xcode project version ───────────────────────────
+# ── Step 1: Bump Xcode project version (idempotent) ──────────────
+#
+# This step is idempotent on the release VERSION: if MARKETING_VERSION
+# already matches $VERSION, a prior release.sh run already bumped pbxproj
+# for this release but didn't ship — reuse the existing build number
+# instead of burning a fresh one on every retry. Without this, three
+# failed runs in a row would advance the build number by 3 even though
+# only one release is intended, and the DMG version would not match the
+# appcast.xml entry committed by a previous attempt.
 
 echo ""
 echo "==========================================="
@@ -129,18 +148,29 @@ echo "==========================================="
 echo ""
 
 CURRENT_BUILD=$(grep -m1 "CURRENT_PROJECT_VERSION" "$PBXPROJ" | sed 's/.*= \([0-9]*\);/\1/')
-NEW_BUILD=$((CURRENT_BUILD + 1))
 CURRENT_MARKETING=$(grep -m1 "MARKETING_VERSION" "$PBXPROJ" | sed 's/.*= \(.*\);/\1/' | tr -d ' ')
 
-echo "MARKETING_VERSION: $CURRENT_MARKETING → $VERSION"
-echo "CURRENT_PROJECT_VERSION: $CURRENT_BUILD → $NEW_BUILD"
+if [ "$CURRENT_MARKETING" = "$VERSION" ]; then
+  NEW_BUILD=$CURRENT_BUILD
+  echo "MARKETING_VERSION already at $VERSION — resuming the in-progress release."
+  echo "Reusing CURRENT_PROJECT_VERSION = $NEW_BUILD (no bump)."
+  echo "(To force a fresh build number, manually edit pbxproj before re-running.)"
+else
+  NEW_BUILD=$((CURRENT_BUILD + 1))
+  echo "MARKETING_VERSION: $CURRENT_MARKETING → $VERSION"
+  echo "CURRENT_PROJECT_VERSION: $CURRENT_BUILD → $NEW_BUILD"
+  sed -i '' "s/MARKETING_VERSION = .*;/MARKETING_VERSION = $VERSION;/g" "$PBXPROJ"
+  sed -i '' "s/CURRENT_PROJECT_VERSION = [0-9]*;/CURRENT_PROJECT_VERSION = $NEW_BUILD;/g" "$PBXPROJ"
+  echo "Updated $PBXPROJ"
+fi
 
-sed -i '' "s/MARKETING_VERSION = .*;/MARKETING_VERSION = $VERSION;/g" "$PBXPROJ"
-sed -i '' "s/CURRENT_PROJECT_VERSION = [0-9]*;/CURRENT_PROJECT_VERSION = $NEW_BUILD;/g" "$PBXPROJ"
-
-echo "Updated $PBXPROJ"
-
-# ── Step 2: Build, sign, notarize ─────────────────────────────────
+# ── Step 2: Build, sign, notarize (skip if cached) ────────────────
+#
+# Build + notarize takes 5–15 min. If a previous run already produced and
+# stapled a DMG for THIS build number, reuse it instead of rebuilding.
+# A DMG counts as "valid for $NEW_BUILD" only if the .app inside it
+# carries CFBundleVersion = $NEW_BUILD (anti-staleness: a DMG left over
+# from build 60 must NOT be reused on a build-61 run).
 
 echo ""
 echo "==========================================="
@@ -148,7 +178,31 @@ echo "  Step 2: Build & Notarize"
 echo "==========================================="
 echo ""
 
-./scripts/build-release.sh "$VERSION"
+REUSE_DMG=0
+if [ -f "$DMG_PATH" ] && command -v hdiutil &>/dev/null; then
+  ## Probe the DMG: mount read-only, read CFBundleVersion from the .app's
+  ## Info.plist, unmount. Any failure → fall through to a full rebuild.
+  MOUNT_POINT=$(hdiutil attach -readonly -nobrowse -mountrandom /tmp "$DMG_PATH" 2>/dev/null | grep -E '^/dev/' | tail -1 | awk '{print $NF}')
+  if [ -n "$MOUNT_POINT" ] && [ -f "$MOUNT_POINT/$APP_NAME.app/Contents/Info.plist" ]; then
+    DMG_BUILD=$(/usr/libexec/PlistBuddy -c "Print :CFBundleVersion" "$MOUNT_POINT/$APP_NAME.app/Contents/Info.plist" 2>/dev/null || echo "")
+    DMG_MARKETING=$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "$MOUNT_POINT/$APP_NAME.app/Contents/Info.plist" 2>/dev/null || echo "")
+    hdiutil detach "$MOUNT_POINT" -quiet 2>/dev/null || true
+
+    if [ "$DMG_BUILD" = "$NEW_BUILD" ] && [ "$DMG_MARKETING" = "$VERSION" ]; then
+      ## Also confirm the DMG is stapled — an un-notarized DMG would still
+      ## carry the right CFBundleVersion but fail Gatekeeper for users.
+      if xcrun stapler validate "$DMG_PATH" &>/dev/null; then
+        echo "Cached DMG found at $DMG_PATH (build $DMG_BUILD, $DMG_MARKETING, stapled)."
+        echo "Skipping rebuild. Delete the DMG to force a fresh build."
+        REUSE_DMG=1
+      fi
+    fi
+  fi
+fi
+
+if [ "$REUSE_DMG" = "0" ]; then
+  ./scripts/build-release.sh "$VERSION"
+fi
 
 if [ ! -f "$DMG_PATH" ]; then
   echo "ERROR: DMG not found at $DMG_PATH after build"

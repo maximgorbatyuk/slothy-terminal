@@ -92,16 +92,39 @@ fi
 echo "Archive created successfully"
 
 # Export
+#
+# `xcodebuild -exportArchive` has been observed to fail intermittently with
+# "IDEDistributionCopyItemStep ... Copy failed" on otherwise-valid archives
+# (Xcode 16 race with the file system / signing daemon). The retry below
+# costs ~30 s on the rare failure and saves a full re-archive (5–10 min).
+# Output is not filtered — silence on transient failures was the root cause
+# of two earlier "what's happening?" stalls during 2026.3.14.
 echo ""
 echo "[3/8] Exporting app..."
-xcodebuild -exportArchive \
-  -archivePath "$BUILD_DIR/$APP_NAME.xcarchive" \
-  -exportPath "$BUILD_DIR/export" \
-  -exportOptionsPlist ExportOptions.plist \
-  2>&1 | grep -E '(Export Succeeded|error:|warning:|\*\*)' || true
+EXPORT_TRIES=0
+EXPORT_MAX_TRIES=2
+while [ $EXPORT_TRIES -lt $EXPORT_MAX_TRIES ]; do
+  EXPORT_TRIES=$((EXPORT_TRIES + 1))
+  echo "  exportArchive attempt $EXPORT_TRIES/$EXPORT_MAX_TRIES..."
+  rm -rf "$BUILD_DIR/export"
+  if xcodebuild -exportArchive \
+    -archivePath "$BUILD_DIR/$APP_NAME.xcarchive" \
+    -exportPath "$BUILD_DIR/export" \
+    -exportOptionsPlist ExportOptions.plist
+  then
+    if [ -d "$BUILD_DIR/export/$APP_NAME.app" ]; then
+      break
+    fi
+  fi
+
+  if [ $EXPORT_TRIES -lt $EXPORT_MAX_TRIES ]; then
+    echo "  exportArchive failed; retrying in 5s..."
+    sleep 5
+  fi
+done
 
 if [ ! -d "$BUILD_DIR/export/$APP_NAME.app" ]; then
-  echo "ERROR: Export failed - app not found"
+  echo "ERROR: Export failed after $EXPORT_MAX_TRIES attempts — app not found"
   exit 1
 fi
 echo "Export completed successfully"
