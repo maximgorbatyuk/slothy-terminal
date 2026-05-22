@@ -19,7 +19,7 @@ Then **stop** and tell the user the next command to run themselves: `./scripts/r
 - Do **not** run `./scripts/release.sh`, `./scripts/build-release.sh`, or anything that signs / notarizes / pushes / tags. AGENTS.md lists these as requiring explicit confirmation.
 - Do **not** edit `project.pbxproj` (`MARKETING_VERSION`, `CURRENT_PROJECT_VERSION`) — `release.sh` does that.
 - Do **not** fill in the three appcast placeholders (`BUILD_NUMBER`, `SIGNATURE_HERE`, `FILE_SIZE_IN_BYTES`). `release.sh` substitutes them after building, signing, and stat'ing the DMG. Leaving them as literal strings is a precondition the script verifies.
-- Do **not** commit. The user reviews both files first; `release.sh` will sweep up uncommitted changes with its own "Commit before release VERSION" step.
+- Do **not** mutate git state in any way: no `git commit`, no `git add` (do not stage anything — not even the files you just edited), no `git stash`, no `git reset`, no `git checkout`, no `git tag`. The user reviews both files first; `release.sh` will sweep up uncommitted changes with its own "Commit before release VERSION" step. The user may already have unrelated uncommitted work in the index — leave the staging state exactly as you found it.
 
 ## Phase 1 — Determine the version
 
@@ -198,14 +198,22 @@ Do not run the script yourself, even if the user seems to want you to — AGENTS
 Before declaring done, run:
 
 ```bash
-# Real (non-comment) item must contain SIGNATURE_HERE — release.sh's preflight checks this.
-awk '/^    <item>/,/<\/item>/' appcast.xml | grep -c SIGNATURE_HERE
+# A real (non-comment) <item> must contain SIGNATURE_HERE — release.sh's preflight checks
+# this. `sed` strips the XML template comment first so the count reflects real items only.
+# Post-release, prior items no longer carry the literal (release.sh substituted it), so the
+# count should be exactly 1 — your new entry.
+sed '/<!--/,/-->/d' appcast.xml | grep -c SIGNATURE_HERE
 
-# CHANGELOG must contain [VERSION] — release.sh's preflight checks this.
-grep -c "\[VERSION\]" CHANGELOG.md
+# CHANGELOG must have a release-block header matching the project's `## [YYYY.N.M] - YYYY-MM-DD`
+# format. This is what release.sh's preflight checks for. Count grows by 1 for every release;
+# any value >= 1 means at least one valid header exists.
+grep -cE '^## \[[0-9]{4}\.[0-9]+\.[0-9]+\] - [0-9]{4}-[0-9]{2}-[0-9]{2}$' CHANGELOG.md
+
+# As a sanity check, also print the topmost release header — it should be the entry you just wrote.
+grep -m1 -E '^## \[' CHANGELOG.md
 ```
 
-Both should be `>= 1`. If either is `0`, the release script will refuse to run — fix before handing off.
+The SIGNATURE_HERE count should be **exactly 1** (your new entry). The CHANGELOG header count should be `>= 1`, and the topmost header line should be your new release. If any of these is off, the release script will refuse to run — fix before handing off.
 
 ## Common mistakes to avoid
 
