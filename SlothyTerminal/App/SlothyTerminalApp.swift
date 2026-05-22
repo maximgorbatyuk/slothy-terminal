@@ -99,6 +99,10 @@ struct SlothyTerminalApp: App {
         }
         .keyboardShortcut("w", modifiers: .command)
         .disabled(appState.activeTab == nil)
+
+        Divider()
+
+        EditorFileMenuItems()
       }
 
       /// View menu.

@@ -245,6 +245,10 @@ struct TabItemView: View {
       return "arrow.triangle.branch"
     }
 
+    if tab.mode == .editor {
+      return "doc.text"
+    }
+
     return tab.agentType?.iconName ?? "terminal"
   }
 
