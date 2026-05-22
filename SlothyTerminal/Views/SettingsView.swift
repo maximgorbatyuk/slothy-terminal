@@ -271,6 +271,44 @@ struct AppearanceSettingsTab: View {
           .foregroundColor(.secondary)
       }
 
+      Section("Editor Font") {
+        Picker("Font family", selection: Bindable(configManager).config.editorFontName) {
+          ForEach(ConfigManager.availableMonospacedFonts, id: \.self) { font in
+            Text(font).tag(font)
+          }
+        }
+
+        HStack {
+          Text("Font size")
+          Slider(
+            value: Bindable(configManager).config.editorFontSize,
+            in: 10...24,
+            step: 1
+          )
+          Text("\(Int(configManager.config.editorFontSize))pt")
+            .monospacedDigit()
+            .frame(width: 40, alignment: .trailing)
+        }
+
+        /// Font preview — Swift-flavored sample so users can judge how
+        /// code reads in the picked family.
+        VStack(alignment: .leading, spacing: 4) {
+          Text("Preview")
+            .appFont(.caption)
+            .foregroundColor(.secondary)
+
+          Text("func greet(name: String) -> String {\n  return \"Hello, \\(name)!\"\n}\n// 0123456789 → != <= >=")
+            .font(.custom(
+              configManager.config.editorFontName,
+              size: configManager.config.editorFontSize
+            ))
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(8)
+            .background(appCardColor)
+            .cornerRadius(6)
+        }
+      }
+
       Section("Terminal Font") {
         Picker("Font family", selection: Bindable(configManager).config.terminalFontName) {
           ForEach(ConfigManager.availableMonospacedFonts, id: \.self) { font in

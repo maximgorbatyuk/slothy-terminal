@@ -52,6 +52,14 @@ struct AppConfig: Codable, Equatable {
   /// Terminal font size in points.
   var terminalFontSize: CGFloat = 13
 
+  /// Editor (text-viewer) font family name. Independent of the terminal
+  /// font so the user can pick, say, a ligature-friendly programming font
+  /// for code editing while keeping the terminal on the platform default.
+  var editorFontName: String = "SF Mono"
+
+  /// Editor font size in points.
+  var editorFontSize: CGFloat = 13
+
   /// How terminal mouse input is handled for TUI tabs.
   var terminalInteractionMode: TerminalInteractionMode = .hostSelection
 
@@ -143,6 +151,8 @@ struct AppConfig: Codable, Equatable {
     appFont = (try? c.decode(AppFont.self, forKey: .appFont)) ?? d.appFont
     terminalFontName = (try? c.decode(String.self, forKey: .terminalFontName)) ?? d.terminalFontName
     terminalFontSize = (try? c.decode(CGFloat.self, forKey: .terminalFontSize)) ?? d.terminalFontSize
+    editorFontName = (try? c.decode(String.self, forKey: .editorFontName)) ?? d.editorFontName
+    editorFontSize = (try? c.decode(CGFloat.self, forKey: .editorFontSize)) ?? d.editorFontSize
     terminalInteractionMode = (try? c.decode(TerminalInteractionMode.self, forKey: .terminalInteractionMode)) ?? d.terminalInteractionMode
     claudeAccentColor = try? c.decode(CodableColor.self, forKey: .claudeAccentColor)
     opencodeAccentColor = try? c.decode(CodableColor.self, forKey: .opencodeAccentColor)

@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 import STTextView
 import STTextViewSwiftUI
@@ -17,6 +18,10 @@ import STTextViewSwiftUI
 struct EditorTabView: View {
   @Bindable var tab: Tab
   @Environment(AppState.self) private var appState
+  /// Non-private so the synthesized memberwise init stays internal — the
+  /// `private` access level on a stored property downgrades the whole
+  /// init's accessibility, breaking `EditorTabView(tab:)` callers.
+  var configManager = ConfigManager.shared
 
   @State private var loadState: LoadState = .loading
   @State private var attributedText: AttributedString = AttributedString()
@@ -46,25 +51,7 @@ struct EditorTabView: View {
           .frame(maxWidth: .infinity, maxHeight: .infinity)
 
       case .ready:
-        /// `selection: .constant(nil)` is deliberate. STTextViewSwiftUI
-        /// publishes selection changes through the binding on every click
-        /// / drag, which forces SwiftUI to call `updateNSView`, which
-        /// re-assigns `attributedText`, which calls `setString` on
-        /// STTextView, which wipes the layout manager's rendering
-        /// attributes — making syntax colors flash off and back on. We
-        /// don't read selection anywhere; passing `.constant(nil)` short-
-        /// circuits the wipe-on-click loop. If a future feature needs
-        /// the caret position, observe it through STTextView's delegate
-        /// rather than re-introducing this binding.
-        TextView(
-          text: $attributedText,
-          selection: .constant(nil),
-          options: [.showLineNumbers, .highlightSelectedLine],
-          plugins: [highlightingPlugin].compactMap { $0 }
-        )
-        .font(.system(size: 13, design: .monospaced))
-        .background(Color(currentTheme.background))
-        .environment(\.colorScheme, currentTheme.colorScheme)
+        readyTextView
 
       case .error(let message):
         editorMessageView(
@@ -113,6 +100,15 @@ struct EditorTabView: View {
 
       let plain = String(newValue.characters)
       tab.isDirty = (plain != lastSavedText)
+    }
+    /// Re-bake the editor font into the `AttributedString` binding whenever
+    /// the user changes the Settings → Editor Font controls. STTextView's
+    /// SwiftUI wrapper re-assigns `attributedText` from this binding on
+    /// every `updateNSView`, which wipes any `.font` attribute the live
+    /// `textView.font` setter wrote to text storage; baking the font into
+    /// the binding makes the wipe a no-op.
+    .onChange(of: editorFontSettingsKey) { _, _ in
+      rebakeEditorFont()
     }
     .focusedValue(\.editorSave, loadState == .ready ? EditorSaveAction(isEnabled: canSave, action: save) : nil)
     .focusedValue(\.editorSaveAs, loadState == .ready ? EditorSaveAsAction(isEnabled: canSaveAs, action: saveAs) : nil)
@@ -188,7 +184,7 @@ struct EditorTabView: View {
       lastSavedText = result.text
       lastSavedTextCount = AttributedString(result.text).characters.count
       skipNextDirtyCheck = true
-      attributedText = AttributedString(result.text)
+      attributedText = makeAttributedString(text: result.text, font: editorNSFont)
       loadedFileURL = fileURL
       installOrUpdateHighlightingPlugin(for: fileURL)
       tab.isDirty = false
@@ -446,6 +442,86 @@ struct EditorTabView: View {
     }
 
     return .dark
+  }
+
+  /// The TextView pipeline once the file has finished loading. Pulled
+  /// out of `body` because the inline modifier chain (TextView + font +
+  /// theme background + colorScheme override) was tripping SwiftUI's
+  /// expression-complexity limit alongside the surrounding switch and
+  /// `.onChange` modifiers.
+  @ViewBuilder
+  private var readyTextView: some View {
+    /// `selection: .constant(nil)` is deliberate. STTextViewSwiftUI
+    /// publishes selection changes through the binding on every click
+    /// / drag, which forces SwiftUI to call `updateNSView`, which
+    /// re-assigns `attributedText`, which calls `setString` on
+    /// STTextView, which wipes the layout manager's rendering
+    /// attributes — making syntax colors flash off and back on. We
+    /// don't read selection anywhere; passing `.constant(nil)` short-
+    /// circuits the wipe-on-click loop. If a future feature needs
+    /// the caret position, observe it through STTextView's delegate
+    /// rather than re-introducing this binding.
+    TextView(
+      text: $attributedText,
+      selection: .constant(nil),
+      options: [.showLineNumbers, .highlightSelectedLine],
+      plugins: [highlightingPlugin].compactMap { $0 }
+    )
+    /// STTextView's SwiftUI wrapper shadows SwiftUI's `\.font`
+    /// environment key with its own NSFont-typed one, so a plain
+    /// `.font(.custom(...))` modifier here has no effect. Use the
+    /// wrapper's `textViewFont(_:)` to push the NSFont into the
+    /// right env slot. The wrapper detects font changes in
+    /// `updateNSView` and re-applies them to the text view + gutter.
+    .textViewFont(editorNSFont)
+    .background(Color(currentTheme.background))
+    .environment(\.colorScheme, currentTheme.colorScheme)
+  }
+
+  /// Resolves the user-configured editor font to an `NSFont`, falling
+  /// back to the platform monospaced system font when the named family
+  /// is not installed.
+  private var editorNSFont: NSFont {
+    let size = configManager.config.editorFontSize
+    return NSFont(name: configManager.config.editorFontName, size: size)
+      ?? NSFont.monospacedSystemFont(ofSize: size, weight: .regular)
+  }
+
+  /// Stable `Hashable` key combining the font family and size so a
+  /// single `.onChange` modifier can watch both inputs — keeps the
+  /// `body`'s top-level modifier chain short enough for SwiftUI's
+  /// expression-complexity checker.
+  private var editorFontSettingsKey: String {
+    "\(configManager.config.editorFontName)#\(configManager.config.editorFontSize)"
+  }
+
+  /// Constructs an `AttributedString` whose entire range carries the
+  /// given NSFont as a text-storage attribute. STTextView's SwiftUI
+  /// wrapper round-trips the binding through `attributedText =` on
+  /// every `updateNSView` — embedding the font here ensures that
+  /// round-trip preserves it instead of falling back to the layout
+  /// manager's default body font.
+  private func makeAttributedString(text: String, font: NSFont) -> AttributedString {
+    let mutable = NSMutableAttributedString(
+      string: text,
+      attributes: [.font: font]
+    )
+    return AttributedString(mutable)
+  }
+
+  /// Re-bakes the current editor font into the existing buffer. Called
+  /// when the user changes the family or size in Settings; preserves
+  /// the in-memory characters and only swaps the `.font` attribute.
+  /// Sets `skipNextDirtyCheck` so the attribute-only mutation doesn't
+  /// false-trip the dirty detector.
+  private func rebakeEditorFont() {
+    guard case .ready = loadState else {
+      return
+    }
+
+    let plain = String(attributedText.characters)
+    skipNextDirtyCheck = true
+    attributedText = makeAttributedString(text: plain, font: editorNSFont)
   }
 
   /// Records that `plain` was successfully written and updates the dirty
