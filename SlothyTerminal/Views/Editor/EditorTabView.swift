@@ -33,6 +33,8 @@ struct EditorTabView: View {
   @State private var skipNextDirtyCheck: Bool = false
   @State private var highlightingPlugin: SyntaxHighlightingPlugin?
   @State private var saveErrorMessage: String?
+  @State private var showSavedToast: Bool = false
+  @State private var savedToastTask: Task<Void, Never>?
 
   enum LoadState: Equatable {
     case loading
@@ -75,6 +77,14 @@ struct EditorTabView: View {
         )
       }
     }
+    .overlay(alignment: .bottom) {
+      if showSavedToast {
+        savedToastView
+          .padding(.bottom, 16)
+          .transition(.move(edge: .bottom).combined(with: .opacity))
+      }
+    }
+    .animation(.easeInOut(duration: 0.18), value: showSavedToast)
     .task(id: tab.fileURL) {
       guard tab.fileURL != loadedFileURL else {
         return
@@ -222,6 +232,7 @@ struct EditorTabView: View {
       do {
         try await FileEditorService.save(plain, to: fileURL, encoding: writeEncoding)
         commitSavedSnapshot(plain)
+        triggerSavedToast()
       } catch let EditorError.unrepresentableOnSave(enc) {
         saveErrorMessage = unrepresentableSaveMessage(for: enc, text: plain, saveAsContext: false)
       } catch EditorError.permissionDenied {
@@ -337,6 +348,7 @@ struct EditorTabView: View {
           /// extension. Installing a fresh plugin won't take effect —
           /// STTextView only consumes plugins at makeNSView time.
           installOrUpdateHighlightingPlugin(for: canonical)
+          triggerSavedToast()
         } catch let EditorError.unrepresentableOnSave(enc) {
           tab.fileURL = previousFileURL
           loadedFileURL = previousFileURL
@@ -380,6 +392,43 @@ struct EditorTabView: View {
 
     Task {
       await loadFile()
+    }
+  }
+
+  private var savedToastView: some View {
+    HStack(spacing: 6) {
+      Image(systemName: "checkmark.circle.fill")
+        .foregroundStyle(.green)
+        .appFont(size: 12)
+
+      Text("File was saved")
+        .appFont(size: 12, weight: .medium)
+        .foregroundStyle(.primary)
+    }
+    .padding(.horizontal, 12)
+    .padding(.vertical, 7)
+    .background(
+      RoundedRectangle(cornerRadius: 8)
+        .fill(.regularMaterial)
+    )
+    .overlay(
+      RoundedRectangle(cornerRadius: 8)
+        .stroke(Color.primary.opacity(0.08), lineWidth: 1)
+    )
+    .shadow(color: Color.black.opacity(0.15), radius: 6, y: 2)
+  }
+
+  /// Shows the save-confirmation toast for ~1.6s. Rapid repeated saves
+  /// cancel the previous dismiss timer so the toast doesn't flicker.
+  private func triggerSavedToast() {
+    savedToastTask?.cancel()
+    showSavedToast = true
+    savedToastTask = Task { @MainActor in
+      try? await Task.sleep(nanoseconds: 1_600_000_000)
+      guard !Task.isCancelled else {
+        return
+      }
+      showSavedToast = false
     }
   }
 
@@ -464,7 +513,7 @@ struct EditorTabView: View {
     TextView(
       text: $attributedText,
       selection: .constant(nil),
-      options: [.showLineNumbers, .highlightSelectedLine],
+      options: [.showLineNumbers, .highlightSelectedLine, .wrapLines],
       plugins: [highlightingPlugin].compactMap { $0 }
     )
     /// STTextView's SwiftUI wrapper shadows SwiftUI's `\.font`
@@ -476,6 +525,13 @@ struct EditorTabView: View {
     .textViewFont(editorNSFont)
     .background(Color(currentTheme.background))
     .environment(\.colorScheme, currentTheme.colorScheme)
+    /// SwiftUI doesn't clip `NSViewRepresentable` contents to their
+    /// layout frame, so STTextView's gutter / document view can paint
+    /// over neighbouring SwiftUI siblings (e.g. the tab bar above)
+    /// once the scroll view's gutter view extends past the editor's
+    /// reported bounds. Clipping here keeps the editor's pixels
+    /// inside its own rect.
+    .clipped()
   }
 
   /// Resolves the user-configured editor font to an `NSFont`, falling

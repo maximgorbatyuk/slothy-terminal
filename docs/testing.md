@@ -35,15 +35,15 @@ This catches missing imports, misuse of AppKit symbols, and broken `Views/` refe
 
 **Covered by `swift test`:**
 
-- `Models/` — pure value types and Codable behaviour (`AppConfig`, `Tab`, `Workspace`, `WorkspaceSplitState`, `SavedPrompt`, `MakeCommitComposerState`, `UsageModels`, …).
+- `Models/` — pure value types and Codable behaviour (`AppConfig`, `Tab`, `Workspace`, `WorkspaceSplitState`, `SavedPrompt`, `MakeCommitComposerState`, `UsageModels`, …). Editor-mode tab invariants (fileURL precondition, derived title, isDirty label prefix, agentType rejection) live in `EditorTabTests.swift`.
 - `Agents/` — agent type metadata, command-label parsing, launch-type behaviour.
-- Most of `Services/` listed in `Package.swift` `sources:` — config, recent-folders, git process runner / parsing / lane calculation, working-tree, ANSI stripping, prompt scanners, cursor usage decoding, claude cooldown, activity gating.
+- Most of `Services/` listed in `Package.swift` `sources:` — config, recent-folders, git process runner / parsing / lane calculation, working-tree, ANSI stripping, prompt scanners, cursor usage decoding, claude cooldown, activity gating, file editor I/O (`FileEditorService` — load/save, encoding fallbacks, binary sniff, size cap, symlink resolution; see `FileEditorServiceTests.swift`).
 - `Injection/` — orchestrator queue, surface registry, request semantics. Backed by mock surfaces.
-- `App/AppState` — only the parts that don't transitively depend on Views or AppKit.
+- `App/AppState` — only the parts that don't transitively depend on Views or AppKit (incl. `openFileInEditor` dedup, `canonicalFileURL`, dirty-editor close routing).
 
 **Not covered by `swift test`:**
 
-- Anything under `Views/` (SwiftUI views, modifiers, sidebars, settings panels).
+- Anything under `Views/` (SwiftUI views, modifiers, sidebars, settings panels), including `Views/Editor/` — STTextView, tree-sitter highlighting, and the file menu wiring are exercised manually only.
 - `Terminal/GhosttyApp.swift`, `Terminal/GhosttySurfaceView.swift` — depend on the GhosttyKit binary.
 - `Services/UpdateManager.swift`, `Services/ExternalAppManager.swift`, `Services/DirectoryTreeManager.swift`, `Services/FinderServicesProvider.swift` — AppKit-bound or Sparkle-bound.
 

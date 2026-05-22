@@ -13,16 +13,19 @@ A named container that groups tabs under a single root directory.
 
 ## Tab (`Models/Tab.swift`)
 
-A single session inside a workspace. Two shapes exist:
+A single session inside a workspace. Three shapes exist (`TabMode`: `.terminal` / `.git` / `.editor`):
 
 - **Terminal mode** — runs an external process (claude / opencode / shell) inside a libghostty surface.
 - **Git mode** — pure SwiftUI Git client, no PTY, no agent. Has no `agentType`.
+- **Editor mode** — pure SwiftUI file editor (STTextView + tree-sitter), no PTY, no agent. Has no `agentType`. Carries a `fileURL` (required) and an `isDirty` flag.
 
 Invariants:
 
-- A `.git` tab must not have an `agentType` (asserted in `init`).
-- Only `.terminal` tabs with `agentType == .terminal` show the last submitted command in the tab label. Claude/OpenCode tabs use the agent's display name.
-- `isTerminalBusy` is set on terminal activity and auto-cleared after a short idle window. `hasBackgroundActivity` flags unseen output on a non-active tab and is cleared on activation.
+- A non-terminal tab (`.git` / `.editor`) must not have an `agentType` (asserted in `init`).
+- An `.editor` tab must carry a non-nil `fileURL` (asserted in `init`).
+- For `.editor` tabs the displayed `title` is derived from `fileURL.lastPathComponent`; writes to `Tab.title` are an assertion-no-op so that Save As (which mutates `fileURL`) keeps the title in sync automatically.
+- Only `.terminal` tabs with `agentType == .terminal` show the last submitted command in the tab label. Claude/OpenCode tabs use the agent's display name. Editor tabs show the file name, with a leading `● ` while dirty.
+- `isTerminalBusy` is set on terminal activity and auto-cleared after a short idle window. `hasBackgroundActivity` flags unseen output on a non-active tab and is cleared on activation. `.git` and `.editor` tabs always report `isExecuting == false`.
 
 Tab title and label rules live in `tabName` / `displayTitle`. The full token-aware command-label parser (`commandLabel(from:)`) handles `env`, `sudo`, `command`, env assignments, quoting, and `--` terminators.
 
@@ -52,6 +55,35 @@ The factory (`AgentFactory`) is the only place that constructs concrete agents.
 4. The surface registers itself with `TerminalSurfaceRegistry` so the injection orchestrator can find it by tab id.
 5. On tab close, the surface is destroyed and the registry entry removed.
 
+## Editor tab (`Models/Tab.swift` mode `.editor`, `Views/Editor/`, `Services/FileEditorService.swift`)
+
+The editor is a separate `TabMode` with no PTY, no agent, and no Ghostty surface. It is opened by:
+
+- Double-clicking a file in the *Files* sidebar (`SidebarView.FileItemRow` → `AppState.openFileInEditor`).
+- File menu → *Open…* once a file is picked (where applicable).
+
+Open flow:
+
+1. `AppState.openFileInEditor(_:)` canonicalizes the URL via `Self.canonicalFileURL(_:)` — `resolvingSymlinksInPath().standardizedFileURL`. This is the equality key for editor tabs across symlinks, `/tmp` vs `/private/tmp`, and trailing-slash variants.
+2. If any existing tab in any workspace already edits the canonical URL, that tab is focused (switching workspaces if needed) instead of opening a duplicate.
+3. Otherwise a new `.editor` tab is appended to the active workspace, with `workingDirectory` set to the workspace root (not the file's parent), so Cmd+T and git-branch context keep targeting the workspace the user opened.
+
+Read / write:
+
+- `FileEditorService.load(_:)` reads with a single `FileHandle` — size, binary sniff (NUL bytes in the first 8 KB), and content all come from the same descriptor to close the TOCTOU window. Files over 10 MB are refused (`EditorError.tooLarge`); binary content is refused (`EditorError.binaryFile`); the loader walks `utf8 → windowsCP1252 → macOSRoman → isoLatin1` and falls back through them in order.
+- `FileEditorService.save(_:to:encoding:)` resolves symlinks before writing (so editing a symlinked dotfile keeps the link intact) and uses an atomic write.
+
+Dirty-close lifecycle:
+
+- `Tab.isDirty` is the source of truth. The editor view toggles it on every text change.
+- `AppState.closeTab(id:)` does not close a dirty editor tab directly. It snapshots the current `(workspaceID, tabID)` into `dirtyEditorCloseReturnContext`, switches to the dirty tab if needed, and sets `tabPendingDirtyEditorClose` — which `EditorTabView` observes to present the Save / Don't Save / Cancel alert.
+- *Save* writes the buffer and, if the post-save state is still clean, completes the close. If the user typed during the save, the close is cancelled and the dirty marker stays.
+- *Don't Save* clears `isDirty` and finishes the close (`discardAndCloseDirtyEditor`).
+- *Cancel* drops the pending-close request and restores the snapshotted `(workspaceID, tabID)` so the user is returned to where they were before the alert preempted them (`cancelDirtyEditorClose`).
+- `performCloseTab` precondition-traps if a dirty editor tab reaches it without going through the sheet — preventing silent data loss.
+
+Save / Save As / Revert are surfaced to the global File menu through `FocusedValues` (`editorSave`, `editorSaveAs`, `editorRevert`), bound to Cmd+S / Cmd+Shift+S. The menu items render unconditionally (see `docs/gotchas.md`).
+
 ## Injection (`Injection/`)
 
 Programmatic input to a running terminal surface — used by saved prompts, the "open in tab" flow, and Finder Services.
@@ -73,6 +105,8 @@ Per-provider snapshot of plan limits and token spend. Providers are `claude`, `c
 ## Stable invariants
 
 - A `Tab` always belongs to exactly one `Workspace` (`workspaceID`).
-- `agentType == nil` ⇒ `mode == .git`. The reverse is asserted in `Tab.init`.
+- `agentType == nil` ⇒ `mode ∈ {.git, .editor}`. The reverse is asserted in `Tab.init`.
+- An `.editor` tab always carries a non-nil `fileURL` (asserted in `Tab.init`).
+- A dirty `.editor` tab cannot reach `AppState.performCloseTab`. The Save / Don't Save / Cancel sheet flow is the only legal close path; bypassing it precondition-traps.
 - Bundled font registration must succeed at launch — `AppDelegate.assertBundledFontsRegistered()` will fail loud if `ATSApplicationFontsPath` is misconfigured.
 - A terminal surface is registered with `TerminalSurfaceRegistry` for the lifetime of its tab; injection that arrives before registration sees an empty queue and fails fast with `"No surface registered"`.

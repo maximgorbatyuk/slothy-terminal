@@ -16,7 +16,7 @@
 
 ## Project overview
 
-SlothyTerminal is a native macOS terminal application (Swift/SwiftUI) for AI coding assistants. It hosts a tabbed interface for Claude CLI, OpenCode CLI, and plain shell sessions, plus a built-in Git client. OpenCode is the primary smart backend for multi-provider model access.
+SlothyTerminal is a native macOS terminal application (Swift/SwiftUI) for AI coding assistants. It hosts a tabbed interface for Claude CLI, OpenCode CLI, and plain shell sessions, plus a built-in Git client and a built-in file editor with tree-sitter syntax highlighting. OpenCode is the primary smart backend for multi-provider model access.
 
 - **Platform:** macOS 14.0+ (SPM platform), macOS 15.0 (Xcode deployment target)
 - **Language:** Swift 5.9+
@@ -109,9 +109,29 @@ Set in: `TerminalView.makeLaunchEnvironment()`, `TerminalAgent.environmentVariab
 - Change `Info.plist`'s `SUPublicEDKey` or `SUFeedURL`.
 - Modify `GhosttyKit.xcframework` contents.
 - Add UI / Sparkle / GhosttyKit-dependent files to the `Package.swift` `sources:` list.
+- Replace the live `SyntaxHighlightingPlugin` instance on an editor tab. The STTextView plugin API is add-only and the SwiftUI wrapper only consumes the `plugins` array in `makeNSView`. Mutate the existing instance via `Coordinator.updateLanguage(_:)` / `updateTheme(_:)`.
+
+## Keep docs in sync with code
+
+Documentation under `docs/` and `AGENTS.md` is treated as part of the codebase, not as commentary on it. Any change that adds, removes, or alters the behaviour of a feature, dependency, build/release script, public model invariant, or non-obvious runtime contract **must** land with matching updates in the relevant doc file in the same PR.
+
+Use this mapping when deciding which doc to touch:
+
+| Change touches… | Update… |
+|---|---|
+| Module layout, build coverage, persistence fields, external dependencies | `docs/architecture.md` |
+| `Tab`, `Workspace`, `AppState` lifecycle / invariants, agent or mode semantics | `docs/domain.md` |
+| New spawned process, outbound HTTP, OS integration, filesystem touchpoint | `docs/interactions.md` |
+| New trap, footgun, or non-obvious constraint that already bit someone | `docs/gotchas.md` |
+| Test coverage map, SPM vs Xcode boundary, CI | `docs/testing.md` |
+| Release scripts, signing, notarization, appcast flow | `docs/release.md` |
+| New project-wide rule that should bind future contributors | `AGENTS.md` (this file) |
+
+A PR whose `git diff` modifies code in scope of these docs but leaves every doc untouched is incomplete. If you genuinely believe no doc applies, say so in the PR description so the reviewer can confirm.
 
 ## Things to do every time you finish work
 
 - `swift test` for any change touching the SPM-covered core.
 - An Xcode build (or at minimum the `xcodebuild` CLI command above) for any change touching `Views/`, `Terminal/`, or app-only services.
+- Update the relevant doc files per the *Keep docs in sync with code* table above.
 - Re-read § *Swift style guidelines* above before opening a PR.

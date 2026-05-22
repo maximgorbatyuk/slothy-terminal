@@ -2,6 +2,24 @@
 
 All notable changes to SlothyTerminal will be documented in this file.
 
+## [2026.3.15] - 2026-05-22
+
+### Added
+- **Save-confirmation toast in the editor.** A successful write (either `Save` or `Save As…`) now surfaces a transient "File was saved" pill at the bottom of the editor canvas — green checkmark on a `.regularMaterial` background, ~1.6 s on-screen, fades out via a `.move(edge: .bottom).combined(with: .opacity)` transition with a 0.18 s `easeInOut` animation. Repeated rapid saves cancel the previous dismiss `Task` and reset the timer instead of stacking, so the toast doesn't flicker when the user hammers `⌘S`. Previously a successful save was silently visible only through the disappearance of the `●` dirty marker — fine when you were watching the tab label, easy to miss otherwise (and ambiguous between "save succeeded" and "save did nothing because nothing was dirty"). Wired into both the `Save` (post-`commitSavedSnapshot`) and `Save As…` (post-`installOrUpdateHighlightingPlugin`) success branches so the surfaces match. (`SlothyTerminal/Views/Editor/EditorTabView.swift:36-37, 80-87, 233-235, 349-351, 397-434`)
+- **Hover highlight on file rows in the Files sidebar.** Hovering a row in `FileItemRow` now paints an accent-color background at 0.06 opacity and a 1 pt accent-color border on a 4 pt-radius rounded rect, transitioning in over 0.12 s `easeInOut`. The previous flat-on-flat rendering made it hard to tell whether a row was actually click-target sized — there was no visual feedback at all between the cursor entering the row and the user committing a click. The hover state is local `@State` on each row rather than driven from `appState`, so a moving cursor doesn't churn observable state. (`SlothyTerminal/Views/SidebarView.swift:178, 230-243`)
+
+### Changed
+- **Editor now wraps long lines to the viewport instead of scrolling horizontally.** `TextView`'s `options` set goes from `[.showLineNumbers, .highlightSelectedLine]` to `[.showLineNumbers, .highlightSelectedLine, .wrapLines]`. The previous behavior pushed a long Markdown paragraph or a wide Swift signature off the right edge and required horizontal scrolling to read it, which is the wrong default for the prose-and-code workflow the editor exists to serve. Soft wrapping is a view-only setting — the on-disk file is unchanged on save. (`SlothyTerminal/Views/Editor/EditorTabView.swift:516`)
+- **Files sidebar hint text now reflects actual behaviour.** "Double-click to copy path. Right-click for more options." → "Double-click to open in editor. Right-click for more options." The double-click action was already changed to "open in editor" in 2026.3.14 (the copy-to-clipboard moved to the right-click menu), but the inline hint above the directory tree still advertised the old behavior. (`SlothyTerminal/Views/SidebarView.swift:99`)
+
+### Fixed
+- **STTextView no longer paints over neighbouring SwiftUI siblings.** Added `.clipped()` to the `TextView(...)` modifier chain in `editorView`. SwiftUI does not clip `NSViewRepresentable` contents to their layout frame, so STTextView's scroll view + gutter view could draw past the editor's reported bounds and overlap the tab bar above (most visible during a scroll, when the gutter's tracking rect briefly extended past the editor's top edge). Clipping at the SwiftUI layer is cheaper than fighting STTextView's geometry and keeps the editor's pixels inside its own rect. (`SlothyTerminal/Views/Editor/EditorTabView.swift:527-534`)
+
+### Notes
+- The save-toast `Task` is `@MainActor` and cancellable. We deliberately do *not* drive the dismiss timer with a SwiftUI `withAnimation` + `DispatchQueue.main.asyncAfter` pair — that pattern can't cancel cleanly, and back-to-back saves would queue a second dismiss that fires after the second save's toast already appeared. The `Task` form lets the `triggerSavedToast` call cancel the prior dismiss before scheduling the new one.
+- Verified with `swift test` and `xcodebuild -project SlothyTerminal.xcodeproj -scheme SlothyTerminal -configuration Debug build CODE_SIGNING_ALLOWED=NO` (BUILD SUCCEEDED). Manual smoke recommended for: (a) edit a buffer → `⌘S` → toast appears → fades after ~1.6 s, (b) `⌘S` repeatedly in <1 s — toast stays visible without flickering, (c) hover a row in the Files sidebar — accent-color border fades in within ~120 ms, (d) open a very long Markdown line — text wraps to the viewport rather than triggering a horizontal scrollbar, (e) scroll a tall file with another tab bar above — gutter never paints over the tab bar.
+- Marketing copy and the editor section in `README.md` were already updated as part of the editor feature work that shipped in 2026.3.14; this release does not change the public surface of the editor beyond the items above.
+
 ## [2026.3.14] - 2026-05-22
 
 ### Added

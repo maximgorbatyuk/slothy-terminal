@@ -96,7 +96,7 @@ struct DirectoryTreeView: View {
 
       if isExpanded {
         /// Hint text.
-        Text("Double-click to copy path. Right-click for more options.")
+        Text("Double-click to open in editor. Right-click for more options.")
           .appFont(size: 9)
           .foregroundColor(.secondary)
           .opacity(0.7)
@@ -175,6 +175,7 @@ struct FileItemRow: View {
   @Environment(AppState.self) private var appState
   @State private var showCopiedTooltip: Bool = false
   @State private var childLoadTask: Task<Void, Never>?
+  @State private var isHovered: Bool = false
 
   /// Relative path from the root directory.
   private var relativePath: String {
@@ -226,7 +227,20 @@ struct FileItemRow: View {
         Spacer()
       }
       .padding(.vertical, 3)
+      .padding(.horizontal, 4)
+      .background(
+        RoundedRectangle(cornerRadius: 4)
+          .fill(Color.accentColor.opacity(isHovered ? 0.06 : 0))
+      )
+      .overlay(
+        RoundedRectangle(cornerRadius: 4)
+          .stroke(Color.accentColor.opacity(isHovered ? 0.6 : 0), lineWidth: 1)
+      )
+      .animation(.easeInOut(duration: 0.12), value: isHovered)
       .contentShape(Rectangle())
+      .onHover { hovering in
+        isHovered = hovering
+      }
       /// Double-click is attached before single-click so SwiftUI resolves
       /// the higher-count gesture first; otherwise the count:1 recognizer
       /// often wins and swallows the second click of a real double-click.

@@ -54,7 +54,40 @@ Once an `InjectionRequest` is `failed` / `timeout` / `cancelled`, a later `compl
 
 ### Resilient config decoding
 
-`AppConfig` decoding tolerates missing keys (e.g. `splitState`, `lastFocusedTabID`, `savedPromptTags` are all `try?`-decoded). Keep this discipline when adding fields. A non-resilient decode will crash existing users on first launch after an update.
+`AppConfig` decoding tolerates missing keys (e.g. `splitState`, `lastFocusedTabID`, `savedPromptTags`, `defaultTabMode`, `editorFontName`, `editorFontSize` are all `try?`-decoded). Keep this discipline when adding fields. A non-resilient decode will crash existing users on first launch after an update.
+
+## Editor
+
+### STTextView plugin API is add-only
+
+`STTextView.addPlugin` has no inverse — you cannot remove a plugin once installed. The SwiftUI wrapper only consumes the `plugins` array in `makeNSView`, so passing a different plugin instance on the next `updateNSView` is a no-op. The codebase reflects this: `EditorTabView` builds `SyntaxHighlightingPlugin` lazily once (the first time the load reaches `.ready`) and reuses it forever, calling `Coordinator.updateLanguage(_:)` / `updateTheme(_:)` on Save As / Revert to swap grammars in place. Allocating a new plugin on language change will silently do nothing.
+
+### STTextView's SwiftUI wrapper round-trips `attributedText` every `updateNSView`
+
+The wrapper writes the binding back into the text view on every SwiftUI update, which wipes anything you set via `textView.font = …` or rendering attributes from the layout manager. Two consequences:
+
+- **Font:** bake the `NSFont` into the `AttributedString` itself (`NSAttributedString.Key.font`) inside `makeAttributedString(...)`. A `.font(.custom(...))` modifier outside the binding has no effect; STTextView's wrapper shadows SwiftUI's `\.font` environment key.
+- **Selection:** pass `selection: .constant(nil)`. The wrapper publishes selection changes through the binding on every click / drag, which forces `updateNSView`, which re-assigns `attributedText`, which wipes the layout manager's rendering attributes — making syntax colors flash off and back on with every click. Don't reintroduce a live selection binding without solving the wipe-on-click loop.
+
+### Cmd+S must stay claimed app-wide
+
+`EditorFileMenuItems` renders its `Save` / `Save As…` / `Revert to Saved` buttons unconditionally — even when no editor tab is focused — and disables them via `editorSave?.isEnabled`. This is deliberate. If the buttons are conditionally absent, Cmd+S falls through to the focused terminal surface, which writes `^S` (XOFF / stop output) into the PTY and freezes the foreground process. Do not gate the buttons' presence on focus.
+
+### Editor tab dedup needs canonical URLs
+
+`AppState.openFileInEditor` and `hasOpenEditorTab(for:excludingTabID:)` route through `AppState.canonicalFileURL(_:)` (`resolvingSymlinksInPath().standardizedFileURL`). Comparing raw `URL`s misses `/tmp` ↔ `/private/tmp`, symlinks, and trailing-slash differences — opening duplicate tabs onto the same file. Save As also writes the canonical URL synchronously before the async save so a concurrent `openFileInEditor` dedupes correctly.
+
+### Dirty editor close path is not optional
+
+`AppState.closeTab` defers dirty `.editor` tabs through `tabPendingDirtyEditorClose`. `performCloseTab` precondition-traps if a dirty editor tab reaches it directly. Never bypass the sheet flow; the trap exists to prevent silent data loss.
+
+### Tree-sitter bundle resolution uses exact-suffix match
+
+SPM emits one resource bundle per grammar package. `TreeSitterMarkdown` and `TreeSitterMarkdownInline` both ship `queries/highlights.scm` but expose different grammars — substring matching loads the wrong one. `EditorLanguage.bundleName(_:matchesHint:)` enforces an exact-suffix match on the stripped bundle name. Don't relax it.
+
+### Editor I/O guards must not be loosened
+
+`FileEditorService.loadSync` reads size, performs the NUL-byte binary sniff, and reads content from a single `FileHandle` — splitting these across separate filesystem calls reopens a TOCTOU window where a concurrent rewriter can slip larger or binary content past the guards. `saveSync` NUL-checks the SOURCE text (Unicode scalars), not the encoded bytes — UTF-16-encoded ASCII contains 0x00 bytes everywhere, so checking encoded bytes would block every legitimate UTF-16 save.
 
 ## Release
 
