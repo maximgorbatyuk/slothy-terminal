@@ -1,6 +1,8 @@
 #!/bin/bash
 set -e
 
+source "$(dirname "$0")/lib/colors.sh"
+
 # Update GhosttyKit.xcframework from local Ghostty source
 # Usage: ./scripts/update-ghostty.sh [--tag <version>] [--ghostty-dir <path>]
 #
@@ -26,205 +28,183 @@ while [[ $# -gt 0 ]]; do
       shift 2
       ;;
     -h|--help)
-      echo "Usage: ./scripts/update-ghostty.sh [OPTIONS]"
-      echo ""
-      echo "Options:"
-      echo "  --tag <version>       Checkout a specific Ghostty tag (e.g. v1.2.0)"
-      echo "  --ghostty-dir <path>  Path to Ghostty source (default: ~/projects/ghostty)"
-      echo "  -h, --help            Show this help"
-      echo ""
-      echo "Environment variables:"
-      echo "  GHOSTTY_DIR           Same as --ghostty-dir"
+      info "Usage: ./scripts/update-ghostty.sh [OPTIONS]"
+      info ""
+      info "Options:"
+      info "  --tag <version>       Checkout a specific Ghostty tag (e.g. v1.2.0)"
+      info "  --ghostty-dir <path>  Path to Ghostty source (default: ~/projects/ghostty)"
+      info "  -h, --help            Show this help"
+      info ""
+      info "Environment variables:"
+      info "  GHOSTTY_DIR           Same as --ghostty-dir"
       exit 0
       ;;
     *)
-      echo "Unknown option: $1"
-      echo "Run with --help for usage"
+      err "Unknown option: $1"
+      info "Run with --help for usage"
       exit 1
       ;;
   esac
 done
 
-echo "==========================================="
-echo "  GhosttyKit.xcframework Update"
-echo "==========================================="
-echo ""
-echo "  Ghostty source: $GHOSTTY_DIR"
-echo "  Target project: $PROJECT_DIR"
+header "GhosttyKit.xcframework Update"
+info "  Ghostty source: $GHOSTTY_DIR"
+info "  Target project: $PROJECT_DIR"
 if [ -n "$TAG" ]; then
-  echo "  Checkout tag:   $TAG"
+  info "  Checkout tag:   $TAG"
 else
-  echo "  Branch:         main (latest)"
+  info "  Branch:         main (latest)"
 fi
-echo ""
 
 # --- Step 1: Check prerequisites ---
 
-echo "[1/6] Checking prerequisites..."
+step "[1/6] Checking prerequisites"
 
 if ! command -v zig &>/dev/null; then
-  echo "ERROR: zig not found. Install with: brew install zig"
+  err "zig not found. Install with: brew install zig"
   exit 1
 fi
-echo "  zig: $(zig version)"
+info "  zig: $(zig version)"
 
 if ! command -v xcodebuild &>/dev/null; then
-  echo "ERROR: xcodebuild not found. Install Xcode CLI tools: xcode-select --install"
+  err "xcodebuild not found. Install Xcode CLI tools: xcode-select --install"
   exit 1
 fi
-echo "  xcodebuild: $(xcodebuild -version | head -1)"
+info "  xcodebuild: $(xcodebuild -version | head -1)"
 
 if [ ! -d "$GHOSTTY_DIR" ]; then
-  echo ""
-  echo "ERROR: Ghostty source not found at $GHOSTTY_DIR"
-  echo ""
-  echo "Clone it first:"
-  echo "  git clone https://github.com/ghostty-org/ghostty.git $GHOSTTY_DIR"
-  echo ""
-  echo "Or specify a custom path:"
-  echo "  ./scripts/update-ghostty.sh --ghostty-dir /path/to/ghostty"
+  err "Ghostty source not found at $GHOSTTY_DIR"
+  info ""
+  info "Clone it first:"
+  info "  git clone https://github.com/ghostty-org/ghostty.git $GHOSTTY_DIR"
+  info ""
+  info "Or specify a custom path:"
+  info "  ./scripts/update-ghostty.sh --ghostty-dir /path/to/ghostty"
   exit 1
 fi
 
 if [ ! -f "$GHOSTTY_DIR/build.zig" ]; then
-  echo "ERROR: $GHOSTTY_DIR does not look like a Ghostty repo (no build.zig)"
+  err "$GHOSTTY_DIR does not look like a Ghostty repo (no build.zig)"
   exit 1
 fi
 
-echo ""
-
 # --- Step 2: Pull latest Ghostty source ---
 
-echo "[2/6] Updating Ghostty source..."
+step "[2/6] Updating Ghostty source"
 cd "$GHOSTTY_DIR"
 
-git fetch --all --tags --force
+git fetch --all --tags --force 2>&1 | dim_lines
 
 if [ -n "$TAG" ]; then
-  echo "  Checking out tag: $TAG"
-  git checkout "$TAG"
+  info "  Checking out tag: $TAG"
+  git checkout "$TAG" 2>&1 | dim_lines
 else
-  echo "  Checking out main branch..."
-  git checkout main
-  git pull
+  info "  Checking out main branch..."
+  git checkout main 2>&1 | dim_lines
+  git pull 2>&1 | dim_lines
 fi
 
 GHOSTTY_COMMIT=$(git rev-parse --short HEAD)
 GHOSTTY_DESC=$(git describe --tags --always 2>/dev/null || echo "$GHOSTTY_COMMIT")
-echo "  Ghostty version: $GHOSTTY_DESC ($GHOSTTY_COMMIT)"
-echo ""
+ok "Ghostty version: $GHOSTTY_DESC ($GHOSTTY_COMMIT)"
 
 # --- Step 3: Build xcframework ---
 
-echo "[3/6] Building GhosttyKit.xcframework..."
-echo "  This may take 2-3 minutes..."
-echo ""
+step "[3/6] Building GhosttyKit.xcframework"
+info "  This may take 2-3 minutes..."
 
 cd "$GHOSTTY_DIR"
 
-if ! zig build -Dapp-runtime=none -Demit-xcframework -Dxcframework-target=native 2>&1; then
-  echo ""
-  echo "BUILD FAILED. Common fixes:"
-  echo "  - Metal Toolchain: xcodebuild -downloadComponent MetalToolchain"
-  echo "  - Zig version: check $GHOSTTY_DIR/build.zig.zon for minimum_zig_version"
-  echo "  - Xcode CLI tools: xcode-select --install"
+if ! zig build -Dapp-runtime=none -Demit-xcframework -Dxcframework-target=native 2>&1 | dim_lines; then
+  err "BUILD FAILED. Common fixes:"
+  info "  - Metal Toolchain: xcodebuild -downloadComponent MetalToolchain"
+  info "  - Zig version: check $GHOSTTY_DIR/build.zig.zon for minimum_zig_version"
+  info "  - Xcode CLI tools: xcode-select --install"
   exit 1
 fi
 
 XCFRAMEWORK_SRC="$GHOSTTY_DIR/macos/GhosttyKit.xcframework"
 if [ ! -d "$XCFRAMEWORK_SRC" ]; then
-  echo "ERROR: Build succeeded but xcframework not found at $XCFRAMEWORK_SRC"
+  err "Build succeeded but xcframework not found at $XCFRAMEWORK_SRC"
   exit 1
 fi
 
-echo ""
-echo "  Build succeeded"
-echo ""
+ok "Build succeeded"
 
 # --- Step 4: Copy xcframework into project ---
 
-echo "[4/6] Copying xcframework into project..."
+step "[4/6] Copying xcframework into project"
 
 XCFRAMEWORK_DST="$PROJECT_DIR/GhosttyKit.xcframework"
 
 if [ -d "$XCFRAMEWORK_DST" ]; then
   rm -rf "$XCFRAMEWORK_DST"
-  echo "  Removed old xcframework"
+  info "  Removed old xcframework"
 fi
 
 cp -R "$XCFRAMEWORK_SRC" "$XCFRAMEWORK_DST"
 
 FRAMEWORK_SIZE=$(du -sh "$XCFRAMEWORK_DST" | cut -f1)
-echo "  Copied ($FRAMEWORK_SIZE)"
-echo ""
+ok "Copied ($FRAMEWORK_SIZE)"
 
 # --- Step 5: Verify builds ---
 
-echo "[5/6] Running verification builds..."
+step "[5/6] Running verification builds"
 cd "$PROJECT_DIR"
 
-echo ""
-echo "  [5a] SwiftPM build..."
-if swift build 2>&1; then
-  echo "  SwiftPM build: PASSED"
+info "  [5a] SwiftPM build..."
+if swift build 2>&1 | dim_lines; then
+  ok "SwiftPM build: PASSED"
 else
-  echo "  SwiftPM build: FAILED"
-  echo "  (This may be unrelated to GhosttyKit — SwiftPM target excludes Ghostty code)"
+  warn "SwiftPM build: FAILED"
+  info "  (This may be unrelated to GhosttyKit — SwiftPM target excludes Ghostty code)"
 fi
 
-echo ""
-echo "  [5b] Xcode build..."
+info "  [5b] Xcode build..."
 if xcodebuild -project SlothyTerminal.xcodeproj \
     -scheme SlothyTerminal \
     -configuration Debug \
     build \
     CODE_SIGNING_ALLOWED=NO \
-    2>&1 | tail -5; then
+    2>&1 | dim_lines; then
   XCODE_RESULT="PASSED"
 else
   XCODE_RESULT="FAILED"
 fi
 
-echo ""
-echo "  Xcode build: $XCODE_RESULT"
-
-if [ "$XCODE_RESULT" = "FAILED" ]; then
-  echo ""
-  echo "  The Xcode build failed — likely due to Ghostty API changes."
-  echo "  Files to update:"
-  echo "    - SlothyTerminal/Terminal/GhosttyApp.swift"
-  echo "    - SlothyTerminal/Terminal/GhosttySurfaceView.swift"
-  echo ""
-  echo "  Reference implementation:"
-  echo "    $GHOSTTY_DIR/macos/Sources/Ghostty/"
-  echo ""
-  echo "  See docs/release.md 'Updating Embedded Libghostty' for details."
+if [ "$XCODE_RESULT" = "PASSED" ]; then
+  ok "Xcode build: PASSED"
+else
+  err "Xcode build: FAILED"
+  info ""
+  info "  The Xcode build failed — likely due to Ghostty API changes."
+  info "  Files to update:"
+  info "    - SlothyTerminal/Terminal/GhosttyApp.swift"
+  info "    - SlothyTerminal/Terminal/GhosttySurfaceView.swift"
+  info ""
+  info "  Reference implementation:"
+  info "    $GHOSTTY_DIR/macos/Sources/Ghostty/"
+  info ""
+  info "  See docs/release.md 'Updating Embedded Libghostty' for details."
   exit 1
 fi
 
-echo ""
-echo "  [5c] SwiftPM tests..."
-if swift test 2>&1; then
-  echo "  SwiftPM tests: PASSED"
+info "  [5c] SwiftPM tests..."
+if swift test 2>&1 | dim_lines; then
+  ok "SwiftPM tests: PASSED"
 else
-  echo "  SwiftPM tests: FAILED"
+  warn "SwiftPM tests: FAILED"
 fi
-
-echo ""
 
 # --- Step 6: Done ---
 
-echo "==========================================="
-echo "  Update Complete"
-echo "==========================================="
-echo ""
-echo "  Ghostty version: $GHOSTTY_DESC ($GHOSTTY_COMMIT)"
-echo "  xcframework:     $XCFRAMEWORK_DST"
-echo "  Size:            $FRAMEWORK_SIZE"
-echo ""
-echo "  Next steps:"
-echo "    1. Run the app and smoke test (see docs/release.md)"
-echo "    2. Commit the update:"
-echo "       git add GhosttyKit.xcframework SlothyTerminal/Terminal/"
-echo "       git commit -m \"chore: update GhosttyKit.xcframework to Ghostty $GHOSTTY_DESC\""
-echo ""
+header "Update Complete"
+info "  Ghostty version: $GHOSTTY_DESC ($GHOSTTY_COMMIT)"
+info "  xcframework:     $XCFRAMEWORK_DST"
+info "  Size:            $FRAMEWORK_SIZE"
+info ""
+info "  Next steps:"
+info "    1. Run the app and smoke test (see docs/release.md)"
+info "    2. Commit the update:"
+info "       git add GhosttyKit.xcframework SlothyTerminal/Terminal/"
+info "       git commit -m \"chore: update GhosttyKit.xcframework to Ghostty $GHOSTTY_DESC\""

@@ -1,6 +1,8 @@
 #!/bin/bash
 set -e
 
+source "$(dirname "$0")/lib/colors.sh"
+
 # SlothyTerminal Build Script
 # Usage: ./scripts/build-release.sh [VERSION]
 # Example: ./scripts/build-release.sh 2026.2.1
@@ -18,56 +20,46 @@ APP_NAME="SlothyTerminal"
 KEYCHAIN_PROFILE="AC_PASSWORD"
 TEAM_ID="${TEAM_ID:-EKKL63HDHJ}"
 
-echo "==========================================="
-echo "  $APP_NAME Release Build"
-echo "  Version: $VERSION"
-echo "  Team ID: $TEAM_ID"
-echo "==========================================="
+header "$APP_NAME Release Build — $VERSION (team $TEAM_ID)"
 
 # Ensure GhosttyKit binary dependency is present.
 if [ ! -d "GhosttyKit.xcframework" ]; then
-  echo ""
-  echo "ERROR: GhosttyKit.xcframework not found in project root."
-  echo "This release requires libghostty binaries to be available before archiving."
-  echo ""
+  err "GhosttyKit.xcframework not found in project root."
+  info "This release requires libghostty binaries to be available before archiving."
   exit 1
 fi
 
 # Check if credentials are stored
 if ! xcrun notarytool history --keychain-profile "$KEYCHAIN_PROFILE" &>/dev/null; then
-  echo ""
-  echo "ERROR: Notarization credentials not found."
-  echo ""
+  warn "Notarization credentials not found."
 
   # Check if .env has the required values
   if [ -n "$APPLE_ID" ] && [ -n "$APP_SPECIFIC_PASSWORD" ]; then
-    echo "Found credentials in .env, storing in Keychain..."
+    info "Found credentials in .env, storing in Keychain..."
     xcrun notarytool store-credentials "$KEYCHAIN_PROFILE" \
       --apple-id "$APPLE_ID" \
       --team-id "$TEAM_ID" \
       --password "$APP_SPECIFIC_PASSWORD"
-    echo "Credentials stored successfully."
+    ok "Credentials stored successfully."
   else
-    echo "To fix this, either:"
-    echo ""
-    echo "Option 1: Create .env file with:"
-    echo "  APPLE_ID=your@email.com"
-    echo "  APP_SPECIFIC_PASSWORD=xxxx-xxxx-xxxx-xxxx"
-    echo "  TEAM_ID=$TEAM_ID"
-    echo ""
-    echo "Option 2: Run manually:"
-    echo "  xcrun notarytool store-credentials \"$KEYCHAIN_PROFILE\" \\"
-    echo "    --apple-id \"your@email.com\" \\"
-    echo "    --team-id \"$TEAM_ID\" \\"
-    echo "    --password \"your-app-specific-password\""
-    echo ""
+    err "To fix this, either:"
+    info ""
+    info "Option 1: Create .env file with:"
+    info "  APPLE_ID=your@email.com"
+    info "  APP_SPECIFIC_PASSWORD=xxxx-xxxx-xxxx-xxxx"
+    info "  TEAM_ID=$TEAM_ID"
+    info ""
+    info "Option 2: Run manually:"
+    info "  xcrun notarytool store-credentials \"$KEYCHAIN_PROFILE\" \\"
+    info "    --apple-id \"your@email.com\" \\"
+    info "    --team-id \"$TEAM_ID\" \\"
+    info "    --password \"your-app-specific-password\""
     exit 1
   fi
 fi
 
 # Clean previous build
-echo ""
-echo "[1/8] Cleaning previous build..."
+step "[1/8] Cleaning previous build"
 rm -rf "$BUILD_DIR"
 mkdir -p "$BUILD_DIR"
 
@@ -75,60 +67,77 @@ mkdir -p "$BUILD_DIR"
 # GhosttyKit.xcframework is built for arm64 only (via -Dxcframework-target=native).
 # Restrict the archive to arm64 to match. macOS 15.0+ runs on Apple Silicon
 # (or Rosetta 2), so x86_64 is not needed.
-echo ""
-echo "[2/8] Creating archive (arm64)..."
+step "[2/8] Creating archive (arm64)"
 xcodebuild -scheme "$APP_NAME" \
   -configuration Release \
   -archivePath "$BUILD_DIR/$APP_NAME.xcarchive" \
   ARCHS=arm64 \
   ONLY_ACTIVE_ARCH=NO \
   archive \
-  2>&1 | grep -E '(Archive Succeeded|BUILD SUCCEEDED|error:|warning:|\*\*)' || true
+  2>&1 | dim_lines
 
 if [ ! -d "$BUILD_DIR/$APP_NAME.xcarchive" ]; then
-  echo "ERROR: Archive failed"
+  err "Archive failed"
   exit 1
 fi
 echo "Archive created successfully"
 
 # Export
-echo ""
-echo "[3/8] Exporting app..."
-xcodebuild -exportArchive \
-  -archivePath "$BUILD_DIR/$APP_NAME.xcarchive" \
-  -exportPath "$BUILD_DIR/export" \
-  -exportOptionsPlist ExportOptions.plist \
-  2>&1 | grep -E '(Export Succeeded|error:|warning:|\*\*)' || true
+#
+# `xcodebuild -exportArchive` has been observed to fail intermittently with
+# "IDEDistributionCopyItemStep ... Copy failed" on otherwise-valid archives
+# (Xcode 16 race with the file system / signing daemon). The retry below
+# costs ~30 s on the rare failure and saves a full re-archive (5–10 min).
+# Output is not filtered — silence on transient failures was the root cause
+# of two earlier "what's happening?" stalls during 2026.3.14.
+step "[3/8] Exporting app"
+EXPORT_TRIES=0
+EXPORT_MAX_TRIES=2
+while [ $EXPORT_TRIES -lt $EXPORT_MAX_TRIES ]; do
+  EXPORT_TRIES=$((EXPORT_TRIES + 1))
+  info "  exportArchive attempt $EXPORT_TRIES/$EXPORT_MAX_TRIES..."
+  rm -rf "$BUILD_DIR/export"
+  if xcodebuild -exportArchive \
+    -archivePath "$BUILD_DIR/$APP_NAME.xcarchive" \
+    -exportPath "$BUILD_DIR/export" \
+    -exportOptionsPlist ExportOptions.plist 2>&1 | dim_lines
+  then
+    if [ -d "$BUILD_DIR/export/$APP_NAME.app" ]; then
+      break
+    fi
+  fi
+
+  if [ $EXPORT_TRIES -lt $EXPORT_MAX_TRIES ]; then
+    warn "exportArchive failed; retrying in 5s..."
+    sleep 5
+  fi
+done
 
 if [ ! -d "$BUILD_DIR/export/$APP_NAME.app" ]; then
-  echo "ERROR: Export failed - app not found"
+  err "Export failed after $EXPORT_MAX_TRIES attempts — app not found"
   exit 1
 fi
-echo "Export completed successfully"
+ok "Export completed successfully"
 
 # Create ZIP for notarization
-echo ""
-echo "[4/8] Creating ZIP for notarization..."
+step "[4/8] Creating ZIP for notarization"
 ditto -c -k --keepParent "$BUILD_DIR/export/$APP_NAME.app" "$BUILD_DIR/$APP_NAME.zip"
-echo "ZIP created: $BUILD_DIR/$APP_NAME.zip"
+ok "ZIP created: $BUILD_DIR/$APP_NAME.zip"
 
 # Notarize
-echo ""
-echo "[5/8] Submitting for notarization..."
-echo "This may take several minutes..."
+step "[5/8] Submitting for notarization"
+info "This may take several minutes..."
 xcrun notarytool submit "$BUILD_DIR/$APP_NAME.zip" \
   --keychain-profile "$KEYCHAIN_PROFILE" \
-  --wait
+  --wait 2>&1 | dim_lines
 
 # Staple app
-echo ""
-echo "[6/8] Stapling notarization ticket to app..."
-xcrun stapler staple "$BUILD_DIR/export/$APP_NAME.app"
-echo "Stapling completed"
+step "[6/8] Stapling notarization ticket to app"
+xcrun stapler staple "$BUILD_DIR/export/$APP_NAME.app" 2>&1 | dim_lines
+ok "Stapling completed"
 
 # Create DMG with Applications symlink
-echo ""
-echo "[7/8] Creating DMG..."
+step "[7/8] Creating DMG"
 
 # Create temporary folder for DMG contents
 DMG_TEMP="$BUILD_DIR/dmg-contents"
@@ -147,40 +156,35 @@ hdiutil create \
   -srcfolder "$DMG_TEMP" \
   -ov \
   -format UDZO \
-  "$BUILD_DIR/$APP_NAME-$VERSION.dmg"
+  "$BUILD_DIR/$APP_NAME-$VERSION.dmg" 2>&1 | dim_lines
 
 # Clean up temp folder
 rm -rf "$DMG_TEMP"
 
-echo "DMG created: $BUILD_DIR/$APP_NAME-$VERSION.dmg"
+ok "DMG created: $BUILD_DIR/$APP_NAME-$VERSION.dmg"
 
 # Notarize and staple DMG
-echo ""
-echo "[8/8] Notarizing and stapling DMG..."
+step "[8/8] Notarizing and stapling DMG"
 xcrun notarytool submit "$BUILD_DIR/$APP_NAME-$VERSION.dmg" \
   --keychain-profile "$KEYCHAIN_PROFILE" \
-  --wait
+  --wait 2>&1 | dim_lines
 
-xcrun stapler staple "$BUILD_DIR/$APP_NAME-$VERSION.dmg"
-echo "DMG notarized and stapled"
+xcrun stapler staple "$BUILD_DIR/$APP_NAME-$VERSION.dmg" 2>&1 | dim_lines
+ok "DMG notarized and stapled"
 
 # Verify
-echo ""
-echo "==========================================="
-echo "  Verification"
-echo "==========================================="
+header "Verification"
 
-echo ""
-echo "App signature:"
-codesign -dv "$BUILD_DIR/export/$APP_NAME.app" 2>&1 | grep -E '(Identifier|TeamIdentifier|Signature)' || true
+info "App signature:"
+codesign -dv "$BUILD_DIR/export/$APP_NAME.app" 2>&1 | grep -E '(Identifier|TeamIdentifier|Signature)' | dim_lines || true
 
-echo ""
-echo "Gatekeeper check (app):"
-spctl -a -vv "$BUILD_DIR/export/$APP_NAME.app" 2>&1 || true
+info ""
+info "Gatekeeper check (app):"
+spctl -a -vv "$BUILD_DIR/export/$APP_NAME.app" 2>&1 | dim_lines || true
 
-echo ""
-echo "Gatekeeper check (DMG):"
-spctl -a -vv --type install "$BUILD_DIR/$APP_NAME-$VERSION.dmg" 2>&1 || true
+info ""
+info "Gatekeeper check (DMG):"
+spctl -a -vv --type install "$BUILD_DIR/$APP_NAME-$VERSION.dmg" 2>&1 | dim_lines || true
 
 # Calculate file size
 DMG_SIZE=$(du -h "$BUILD_DIR/$APP_NAME-$VERSION.dmg" | cut -f1)
@@ -188,47 +192,40 @@ DMG_SIZE_BYTES=$(stat -f%z "$BUILD_DIR/$APP_NAME-$VERSION.dmg")
 
 # Sign for Sparkle (if sign_update tool exists)
 echo ""
-echo "==========================================="
-echo "  Sparkle Signing"
-echo "==========================================="
+header "Sparkle Signing"
 SPARKLE_BIN="./sparkle-tools/bin/sign_update"
 if [ -f "$SPARKLE_BIN" ]; then
-  echo "Signing DMG for Sparkle updates..."
+  info "Signing DMG for Sparkle updates..."
   SPARKLE_SIGN=$($SPARKLE_BIN "$BUILD_DIR/$APP_NAME-$VERSION.dmg")
-  echo ""
-  echo "Sparkle signature generated:"
-  echo "$SPARKLE_SIGN"
-  echo ""
-  echo "Add this to appcast.xml:"
-  echo "  sparkle:edSignature=\"$(echo "$SPARKLE_SIGN" | grep -o 'sparkle:edSignature="[^"]*"' | cut -d'"' -f2)\""
-  echo "  length=\"$DMG_SIZE_BYTES\""
+  info ""
+  info "Sparkle signature generated:"
+  info "$SPARKLE_SIGN"
+  info ""
+  info "Add this to appcast.xml:"
+  info "  sparkle:edSignature=\"$(echo "$SPARKLE_SIGN" | grep -o 'sparkle:edSignature="[^"]*"' | cut -d'"' -f2)\""
+  info "  length=\"$DMG_SIZE_BYTES\""
 else
-  echo "WARNING: Sparkle sign_update tool not found at $SPARKLE_BIN"
-  echo ""
-  echo "To enable Sparkle signing:"
-  echo "  1. Download Sparkle from: https://github.com/sparkle-project/Sparkle/releases/latest"
-  echo "  2. Extract to ./sparkle-tools/"
-  echo "  3. Run this script again"
-  echo ""
-  echo "Or sign manually:"
-  echo "  ./sparkle-tools/bin/sign_update \"$BUILD_DIR/$APP_NAME-$VERSION.dmg\""
+  warn "Sparkle sign_update tool not found at $SPARKLE_BIN"
+  info ""
+  info "To enable Sparkle signing:"
+  info "  1. Download Sparkle from: https://github.com/sparkle-project/Sparkle/releases/latest"
+  info "  2. Extract to ./sparkle-tools/"
+  info "  3. Run this script again"
+  info ""
+  info "Or sign manually:"
+  info "  ./sparkle-tools/bin/sign_update \"$BUILD_DIR/$APP_NAME-$VERSION.dmg\""
 fi
 
-echo ""
-echo "==========================================="
-echo "  Build Complete!"
-echo "==========================================="
-echo ""
-echo "  DMG: $BUILD_DIR/$APP_NAME-$VERSION.dmg"
-echo "  Size: $DMG_SIZE ($DMG_SIZE_BYTES bytes)"
-echo ""
-echo "  Next steps:"
-echo "  1. Test the DMG installation"
-echo "  2. Sign DMG with Sparkle (if not done above):"
-echo "     ./sparkle-tools/bin/sign_update $BUILD_DIR/$APP_NAME-$VERSION.dmg"
-echo "  3. Update appcast.xml with signature and file size"
-echo "  4. Commit and push appcast.xml"
-echo "  5. Go to: https://github.com/maximgorbatyuk/slothy-terminal/releases"
-echo "  6. Create new release with tag: v$VERSION"
-echo "  7. Upload: $APP_NAME-$VERSION.dmg"
-echo ""
+header "Build Complete!"
+info "  DMG:  $BUILD_DIR/$APP_NAME-$VERSION.dmg"
+info "  Size: $DMG_SIZE ($DMG_SIZE_BYTES bytes)"
+info ""
+info "  Next steps:"
+info "  1. Test the DMG installation"
+info "  2. Sign DMG with Sparkle (if not done above):"
+info "     ./sparkle-tools/bin/sign_update $BUILD_DIR/$APP_NAME-$VERSION.dmg"
+info "  3. Update appcast.xml with signature and file size"
+info "  4. Commit and push appcast.xml"
+info "  5. Go to: https://github.com/maximgorbatyuk/slothy-terminal/releases"
+info "  6. Create new release with tag: v$VERSION"
+info "  7. Upload: $APP_NAME-$VERSION.dmg"
