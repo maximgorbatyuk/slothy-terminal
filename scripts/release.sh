@@ -253,10 +253,22 @@ ok "Updated appcast.xml with build number ($NEW_BUILD), signature, and file size
 ## Verify the entry now carries the freshly-computed values — not stale ones
 ## from a prior failed run. grep -F for the exact strings; anything mismatched
 ## means the substitution didn't take effect on the right line.
+##
+## Capture the full <item>…</item> block whose body contains $VERSION. Starting
+## the capture at <item> (not at <sparkle:shortVersionString>) matters: the
+## <sparkle:version> line sits ABOVE shortVersionString in the appcast format,
+## so a verifier anchored on shortVersionString would silently exclude the very
+## line it's about to grep for.
 VERSION_BLOCK=$(awk -v ver="$VERSION" '
-  /shortVersionString>/ && index($0, ver) { in_ver = 1 }
-  in_ver { print }
-  in_ver && /<\/item>/ { exit }
+  /<item>/ { in_item = 1; buf = "" }
+  in_item { buf = buf $0 "\n" }
+  in_item && /<\/item>/ {
+    in_item = 0
+    if (index(buf, ver)) {
+      printf "%s", buf
+      exit
+    }
+  }
 ' appcast.xml)
 
 if ! echo "$VERSION_BLOCK" | grep -qF "<sparkle:version>$NEW_BUILD</sparkle:version>"; then
