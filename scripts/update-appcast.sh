@@ -6,34 +6,36 @@
 
 set -e
 
+source "$(dirname "$0")/lib/colors.sh"
+
 VERSION="${1}"
 BUILD_NUMBER="${2}"
 SIGNATURE="${3}"
 FILE_SIZE="${4}"
 
 if [ -z "$VERSION" ] || [ -z "$BUILD_NUMBER" ] || [ -z "$SIGNATURE" ] || [ -z "$FILE_SIZE" ]; then
-  echo "Usage: $0 VERSION BUILD_NUMBER SIGNATURE FILE_SIZE"
-  echo ""
-  echo "Arguments:"
-  echo "  VERSION      - Version string (e.g., 2026.1.2)"
-  echo "  BUILD_NUMBER - Build number (e.g., 2)"
-  echo "  SIGNATURE    - EdDSA signature from sign_update"
-  echo "  FILE_SIZE    - DMG file size in bytes"
-  echo ""
-  echo "Example:"
-  echo "  $0 2026.1.2 2 \"abc123...\" 15000000"
-  echo ""
-  echo "To get signature and file size, run:"
-  echo "  ./sparkle-tools/bin/sign_update build/SlothyTerminal-VERSION.dmg"
+  info "Usage: $0 VERSION BUILD_NUMBER SIGNATURE FILE_SIZE"
+  info ""
+  info "Arguments:"
+  info "  VERSION      - Version string (e.g., 2026.1.2)"
+  info "  BUILD_NUMBER - Build number (e.g., 2)"
+  info "  SIGNATURE    - EdDSA signature from sign_update"
+  info "  FILE_SIZE    - DMG file size in bytes"
+  info ""
+  info "Example:"
+  info "  $0 2026.1.2 2 \"abc123...\" 15000000"
+  info ""
+  info "To get signature and file size, run:"
+  info "  ./sparkle-tools/bin/sign_update build/SlothyTerminal-VERSION.dmg"
   exit 1
 fi
 
 DATE=$(date -R)
 
-echo "Add this entry to the top of the <channel> section in appcast.xml:"
-echo ""
-echo "------- BEGIN APPCAST ENTRY -------"
-cat << EOF
+info "Add this entry to the top of the <channel> section in appcast.xml:"
+info ""
+header "BEGIN APPCAST ENTRY"
+cat << EOF | dim_lines
     <item>
       <title>Version $VERSION</title>
       <pubDate>$DATE</pubDate>
@@ -54,8 +56,8 @@ cat << EOF
       />
     </item>
 EOF
-echo "------- END APPCAST ENTRY -------"
-echo ""
-echo "Don't forget to:"
-echo "  1. Update the release notes in the entry above"
-echo "  2. Commit and push appcast.xml before creating the GitHub release"
+header "END APPCAST ENTRY"
+info ""
+info "Don't forget to:"
+info "  1. Update the release notes in the entry above"
+info "  2. Commit and push appcast.xml before creating the GitHub release"
