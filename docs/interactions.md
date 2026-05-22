@@ -11,6 +11,15 @@ The terminal-rendering boundary. Both directions go through `GhosttyKit.xcframew
 
 The xcframework is not in the repo. See `docs/release.md` § *Updating Embedded Libghostty* for build steps and what to check when the C ABI changes.
 
+## STTextView + tree-sitter (in-process, SPM dependencies)
+
+The file editor (`Views/Editor/`) is backed by two SPM packages resolved into the Xcode target:
+
+- **STTextView** — AppKit text view exposed to SwiftUI via `STTextViewSwiftUI.TextView`. Drives the line numbers, line highlight, and wrapping. Plugin API is **add-only** — `SyntaxHighlightingPlugin` is installed once at first `makeNSView` and never replaced; language / theme changes mutate the coordinator in place. See `docs/gotchas.md`.
+- **SwiftTreeSitter** + bundled grammars (`TreeSitterSwift`, `TreeSitterMarkdown`) — used for capture-driven syntax highlighting. `EditorLanguage.loadHighlightsQuery()` resolves the per-grammar `queries/highlights.scm` resource from the SPM-generated bundle and feeds it to `Query` for rendering. The bundle-name match uses an exact suffix so `TreeSitterMarkdownInline` doesn't shadow `TreeSitterMarkdown`.
+
+Both dependencies are intentionally absent from the SPM test target — only the Xcode target links them.
+
 ## Spawned subprocesses
 
 | Process | Spawned by | Purpose | Notes |
@@ -51,6 +60,7 @@ There is no telemetry, analytics, or crash-reporting endpoint. The app does not 
 - `~/Library/Application Support/Cursor/User/globalStorage/state.vscdb` — Cursor.app's SQLite token store, read by `CursorUsageProvider` if the user picks auto-detect.
 - `~/Library/Preferences/<bundle id>.plist` — `UserDefaults` storage used by Sparkle and by `ConfigManager` for the JSON config blob.
 - macOS Keychain — service `com.slothyterminal.usage` (see `docs/authentication.md`).
+- Arbitrary user files via the editor — `FileEditorService` reads and writes whatever path the user double-clicks in the Files sidebar or saves to. Writes are atomic and follow symlinks so a symlinked dotfile stays linked. Reads enforce a 10 MB cap and a NUL-byte binary sniff before decoding.
 
 ## What this section is not
 

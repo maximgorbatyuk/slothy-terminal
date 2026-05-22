@@ -6,6 +6,7 @@ A native macOS SwiftUI app that hosts:
 
 - one or more **terminal surfaces** rendered by libghostty (Metal-accelerated PTY emulator)
 - a **Git client** view that runs `git` as a subprocess
+- a **file editor** built on STTextView with tree-sitter syntax highlighting (Swift + Markdown grammars bundled)
 - a **usage stats** display that polls third-party APIs (Cursor, Anthropic) using credentials in the macOS Keychain
 - an **auto-updater** that pulls a Sparkle appcast from GitHub and verifies it with an embedded EdDSA public key
 
@@ -40,6 +41,15 @@ There is no backend service we own. Everything runs in-process on the user's Mac
 
 The only stable native-code dependency is `GhosttyKit.xcframework` (built from the Ghostty source — see `docs/release.md`). The xcframework is not in the git tree. A fresh clone cannot build in Xcode until it is produced.
 
+SPM-resolved dependencies pulled by the Xcode target:
+
+- `Sparkle` — auto-updates.
+- `STTextView` — text view backing the file editor (`Views/Editor/EditorTabView.swift`).
+- `SwiftTreeSitter` + `SwiftTreeSitterLayer` — incremental parser bindings.
+- `TreeSitterSwift`, `TreeSitterMarkdown` — bundled grammars + `queries/highlights.scm` resources consumed by `SyntaxHighlightingPlugin`.
+
+The SPM test target intentionally excludes all of the above — see `docs/testing.md`.
+
 ## Modules
 
 Source lives under `SlothyTerminal/`. Each subdirectory has a single responsibility:
@@ -49,15 +59,16 @@ Source lives under `SlothyTerminal/`. Each subdirectory has a single responsibil
 | `App/` | `@main` entry point (`SlothyTerminalApp`), `AppDelegate`, global `AppState`. | `AppState` — SPM. App / delegate — Xcode-only. |
 | `Agents/` | `AIAgent` protocol + `TerminalAgent` / `ClaudeAgent` / `OpenCodeAgent` / `AgentFactory`. Resolves CLI paths and supplies env/args for the spawned process. | SPM. |
 | `Models/` | Plain value types (`Tab`, `Workspace`, `AppConfig`, `SavedPrompt`, etc.). Domain shapes documented in `docs/domain.md`. | SPM. |
-| `Services/` | Long-running app services and stateless utilities — config, git, usage, logging, file scanners. | Mixed. SPM-covered set is enumerated in `Package.swift`. UI- or Sparkle- or AppKit-bound services (`UpdateManager`, `ExternalAppManager`, `DirectoryTreeManager`, `FinderServicesProvider`) are Xcode-only. |
+| `Services/` | Long-running app services and stateless utilities — config, git, usage, logging, file scanners, file editor I/O (`FileEditorService`). | Mixed. SPM-covered set is enumerated in `Package.swift`. UI- or Sparkle- or AppKit-bound services (`UpdateManager`, `ExternalAppManager`, `DirectoryTreeManager`, `FinderServicesProvider`) are Xcode-only. `FileEditorService` is SPM-covered. |
 | `Injection/` | Per-tab FIFO queue + registry of live terminal surfaces. Used to programmatically write into a running session. See `docs/domain.md` § *Injection*. | SPM. |
 | `Terminal/` | `GhosttyApp` singleton + `GhosttySurfaceView` `NSView` subclass. The libghostty C-ABI boundary lives here. | Xcode-only. |
 | `Views/` | All SwiftUI views — main window, tab bar, sidebars, settings, git client, dialogs. | Xcode-only. |
+| `Views/Editor/` | Editor tab — STTextView SwiftUI host, tree-sitter syntax highlighting plugin, theme palette, file menu hooks. | Xcode-only (depends on STTextView + tree-sitter SPM products that are not in the test target). |
 | `Resources/` | Build-config JSON (`Config.debug.json` / `Config.release.json`), bundled fonts, third-party licences. | Bundled into the app. |
 
 ## State ownership
 
-- **`AppState` (`App/AppState.swift`)** is `@MainActor @Observable`, instantiated once in `SlothyTerminalApp` and threaded through the SwiftUI environment. It owns the workspace list, the tab list, the active modal, and the `InjectionOrchestrator`. Persistence is delegated to `ConfigManager`.
+- **`AppState` (`App/AppState.swift`)** is `@MainActor @Observable`, instantiated once in `SlothyTerminalApp` and threaded through the SwiftUI environment. It owns the workspace list, the tab list, the active modal, the dirty-editor close state (`tabPendingDirtyEditorClose` + return-context snapshot), and the `InjectionOrchestrator`. Persistence is delegated to `ConfigManager`.
 - **`ConfigManager.shared`** is the single source of truth for `AppConfig`. Mutations are written back to disk on app termination (`willTerminateNotification`) and on focus changes via `saveImmediately()`.
 - **`UsageService.shared`** owns the auth-source resolution and refresh loop. Credentials are in the Keychain (`UsageKeychainStore`); see `docs/authentication.md`.
 - **`InjectionOrchestrator`** is owned by `AppState` and references the `TerminalSurfaceRegistry`, which Ghostty surface views populate on attach/detach. The registry is the bridge between SwiftUI tab identity and live `NSView` surfaces.
@@ -70,7 +81,7 @@ Source lives under `SlothyTerminal/`. Each subdirectory has a single responsibil
 
 ## Persistence
 
-- **App config:** JSON, written by `ConfigManager`. Schema is the `AppConfig` Codable struct in `Models/AppConfig.swift`. Decoding is intentionally resilient — unknown / removed keys must not crash older config files.
+- **App config:** JSON, written by `ConfigManager`. Schema is the `AppConfig` Codable struct in `Models/AppConfig.swift`. Decoding is intentionally resilient — unknown / removed keys must not crash older config files. Editor-related fields (`defaultTabMode`, `editorFontName`, `editorFontSize`) follow the same `try?`-decoded pattern.
 - **Saved prompts and workspaces:** persisted inside `AppConfig`.
 - **Recent folders:** `RecentFoldersManager` maintains the bounded list (cap configured in `AppConfig.maxRecentFolders`).
 - **Usage credentials:** macOS Keychain — service `com.slothyterminal.usage`, account `<provider>.<sourceKind>`. See `docs/authentication.md`.
