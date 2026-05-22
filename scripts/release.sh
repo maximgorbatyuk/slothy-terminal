@@ -74,6 +74,26 @@ if ! gh auth status &>/dev/null; then
   exit 1
 fi
 
+## Short-circuit if v$VERSION already shipped. This is a clean exit (status 0),
+## not an error — the script has no work to do for an already-released version.
+## Runs before any other check so a re-invocation with a shipped version
+## doesn't even touch the working tree.
+##
+## To re-upload the DMG to an existing release, do it explicitly outside this
+## script with `gh release upload v$VERSION <dmg-path> --clobber`.
+if gh release view "v$VERSION" &>/dev/null; then
+  RELEASE_URL=$(gh release view "v$VERSION" --json url -q .url 2>/dev/null)
+  echo ""
+  echo "GitHub release v$VERSION already exists — nothing to do."
+  if [ -n "$RELEASE_URL" ]; then
+    echo "  $RELEASE_URL"
+  fi
+  echo ""
+  echo "To release a new version, bump VERSION in CHANGELOG.md + appcast.xml"
+  echo "and re-run with the new value."
+  exit 0
+fi
+
 if [ ! -f "$SPARKLE_BIN" ]; then
   echo "ERROR: Sparkle sign_update not found at $SPARKLE_BIN"
   echo "Download from: https://github.com/sparkle-project/Sparkle/releases/latest"
@@ -98,17 +118,6 @@ fi
 if ! grep -q "\[$VERSION\]" CHANGELOG.md; then
   echo "ERROR: CHANGELOG.md does not contain an entry for [$VERSION]."
   echo "Write the changelog entry before running this script."
-  exit 1
-fi
-
-## Refuse to overwrite an already-published release. If you really want to
-## re-upload the DMG to an existing release, do it explicitly with
-## `gh release upload v$VERSION <dmg> --clobber` outside this script.
-if gh release view "v$VERSION" &>/dev/null; then
-  echo "ERROR: GitHub release v$VERSION already exists."
-  echo "Either bump VERSION (CHANGELOG.md + appcast.xml) or, to re-upload"
-  echo "the DMG to the existing release, run:"
-  echo "  gh release upload v$VERSION <dmg-path> --clobber"
   exit 1
 fi
 
