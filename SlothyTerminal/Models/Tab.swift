@@ -4,6 +4,7 @@ import Foundation
 enum TabMode: String, Codable, CaseIterable {
   case terminal
   case git
+  case editor
 
   /// Modes available as a default startup option in settings.
   static var defaultOptions: [TabMode] {
@@ -17,6 +18,9 @@ enum TabMode: String, Codable, CaseIterable {
 
     case .git:
       return "Git client"
+
+    case .editor:
+      return "Editor"
     }
   }
 }
@@ -30,12 +34,42 @@ class Tab: Identifiable {
   let agentType: AgentType?
   let mode: TabMode
   var workingDirectory: URL
-  var title: String
+  private var storedTitle: String
   var lastSubmittedCommandLabel: String?
   var isActive: Bool = false
   var hasBackgroundActivity: Bool = false
   let startTime: Date = Date()
   var isTerminalBusy: Bool = false
+
+  /// URL of the file being edited. Only set for `.editor` mode.
+  var fileURL: URL?
+
+  /// Whether the editor buffer has unsaved changes. Only meaningful for `.editor` mode.
+  var isDirty: Bool = false
+
+  /// Display title. For `.editor` mode this is derived from `fileURL` so a future
+  /// Save As that mutates `fileURL` stays in sync with the title automatically.
+  var title: String {
+    get {
+      if mode == .editor {
+        return fileURL?.lastPathComponent ?? "Untitled"
+      }
+
+      return storedTitle
+    }
+    set {
+      /// For `.editor` mode the getter always returns `fileURL?.lastPathComponent`,
+      /// so writes to `storedTitle` are unobservable. Soft-fail (loud in
+      /// Debug via `assertionFailure`, no-op in Release) so a stray assignment
+      /// doesn't crash production but does flag in test runs.
+      if mode == .editor {
+        assertionFailure("Tab.title is derived from fileURL for editor tabs; assignment ignored")
+        return
+      }
+
+      storedTitle = newValue
+    }
+  }
   private var terminalActivityResetTask: Task<Void, Never>?
   private let terminalActivityIdleDelayNanoseconds: UInt64 = 2_000_000_000
 
@@ -49,6 +83,15 @@ class Tab: Identifiable {
   /// The AI agent for this tab (nil for non-agent modes like `.git`).
   let agent: AIAgent?
 
+  /// Creates a tab in a specific mode.
+  ///
+  /// Invariants:
+  /// - `agentType` is allowed only for `.terminal` tabs.
+  /// - `.editor` tabs must carry a `fileURL`.
+  ///
+  /// Historically the `agentType` check was looser. If an editor/git mode ever
+  /// needs agent-backed behavior, add an explicit multi-mode pathway instead of
+  /// weakening this initializer precondition.
   init(
     id: UUID = UUID(),
     workspaceID: UUID,
@@ -57,11 +100,16 @@ class Tab: Identifiable {
     title: String? = nil,
     initialPrompt: SavedPrompt? = nil,
     launchArgumentsOverride: [String]? = nil,
-    mode: TabMode = .terminal
+    mode: TabMode = .terminal,
+    fileURL: URL? = nil
   ) {
-    assert(
-      mode != .git || agentType == nil,
-      "Git tabs must not have an agentType"
+    precondition(
+      agentType == nil || mode == .terminal,
+      "Only terminal-mode tabs may have an agentType"
+    )
+    precondition(
+      mode != .editor || fileURL != nil,
+      "Editor tabs require a fileURL"
     )
 
     self.id = id
@@ -69,10 +117,13 @@ class Tab: Identifiable {
     self.agentType = agentType
     self.mode = mode
     self.workingDirectory = workingDirectory
-    self.title = title ?? workingDirectory.lastPathComponent
+    /// For `.editor` the title is computed from `fileURL`; storedTitle is only
+    /// consulted for non-editor modes.
+    self.storedTitle = title ?? workingDirectory.lastPathComponent
     self.lastSubmittedCommandLabel = nil
     self.initialPrompt = initialPrompt
     self.launchArgumentsOverride = launchArgumentsOverride
+    self.fileURL = fileURL
     if let agentType {
       let createdAgent = AgentFactory.createAgent(for: agentType)
       self.agent = createdAgent
@@ -87,10 +138,15 @@ class Tab: Identifiable {
   }
 
   /// Stable tab label shown in the tab bar.
-  /// Examples: "Claude | chat", "Opencode | cli", "Git client".
+  /// Examples: "Claude | chat", "Opencode | cli", "Git client", "● file.swift".
   var tabName: String {
     if mode == .git {
       return "Git client"
+    }
+
+    if mode == .editor {
+      let baseName = fileURL?.lastPathComponent ?? "Untitled"
+      return isDirty ? "● \(baseName)" : baseName
     }
 
     if let submittedCommandLabel = submittedCommandLabelForTab {
@@ -316,6 +372,9 @@ class Tab: Identifiable {
 
     case .git:
       return "git"
+
+    case .editor:
+      return "editor"
     }
   }
 
@@ -358,7 +417,8 @@ class Tab: Identifiable {
     case .terminal:
       return isTerminalBusy
 
-    case .git:
+    case .git,
+         .editor:
       return false
     }
   }

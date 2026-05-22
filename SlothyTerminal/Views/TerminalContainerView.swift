@@ -191,6 +191,10 @@ struct ActiveTerminalView: View {
         GitClientView(workingDirectory: tab.workingDirectory)
           .contentShape(Rectangle())
           .onTapGesture { onPaneFocused?() }
+      } else if tab.mode == .editor {
+        EditorTabView(tab: tab)
+          .contentShape(Rectangle())
+          .onTapGesture { onPaneFocused?() }
       } else if let error = agentUnavailableError {
         AgentUnavailableView(agentName: tab.agent?.displayName ?? "Unknown", error: error)
           .environment(\.colorScheme, .dark)
@@ -303,8 +307,8 @@ struct ActiveTerminalView: View {
       isShowingClaudeCooldownOverlay = false
     }
     .task {
-      // Git mode renders its own content; no PTY or chat setup needed.
-      if tab.mode == .git {
+      // Git and editor modes render their own content; no PTY or chat setup needed.
+      if tab.mode == .git || tab.mode == .editor {
         return
       }
 

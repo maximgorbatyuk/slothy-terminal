@@ -184,9 +184,12 @@ echo "  Step 4: Update appcast.xml"
 echo "==========================================="
 echo ""
 
-## Replace placeholders only in the <item> block for this specific version.
-## The template comment in appcast.xml also contains these strings — skip it.
-## BUILD_NUMBER appears before shortVersionString, so buffer each <item> block.
+## Replace the build/signature/size in the <item> block for this version.
+## Uses regex against the full tag (e.g. <sparkle:version>X</sparkle:version>)
+## instead of placeholder gsub, so a re-run after a partially failed release
+## overwrites stale values left by the prior attempt. The template comment
+## block has its own <item>...</item> but uses Version X.X.X, so the
+## `index(buf, ver)` guard skips it.
 awk -v sig="$SIGNATURE" -v size="$DMG_SIZE_BYTES" -v ver="$VERSION" -v build="$NEW_BUILD" '
   /<item>/ { in_item = 1; buf = "" }
   in_item {
@@ -195,9 +198,9 @@ awk -v sig="$SIGNATURE" -v size="$DMG_SIZE_BYTES" -v ver="$VERSION" -v build="$N
   in_item && /<\/item>/ {
     in_item = 0
     if (index(buf, ver)) {
-      gsub(/BUILD_NUMBER/, build, buf)
-      gsub(/SIGNATURE_HERE/, sig, buf)
-      gsub(/FILE_SIZE_IN_BYTES/, size, buf)
+      gsub(/<sparkle:version>[^<]*<\/sparkle:version>/, "<sparkle:version>" build "</sparkle:version>", buf)
+      gsub(/sparkle:edSignature="[^"]*"/, "sparkle:edSignature=\"" sig "\"", buf)
+      gsub(/length="[^"]*"/, "length=\"" size "\"", buf)
     }
     printf "%s", buf
     next
@@ -207,23 +210,25 @@ awk -v sig="$SIGNATURE" -v size="$DMG_SIZE_BYTES" -v ver="$VERSION" -v build="$N
 
 echo "Updated appcast.xml with build number ($NEW_BUILD), signature, and file size."
 
-## Verify: the real entry should have real values, template comment may still have placeholders.
+## Verify the entry now carries the freshly-computed values — not stale ones
+## from a prior failed run. grep -F for the exact strings; anything mismatched
+## means the substitution didn't take effect on the right line.
 VERSION_BLOCK=$(awk -v ver="$VERSION" '
   /shortVersionString>/ && index($0, ver) { in_ver = 1 }
   in_ver { print }
   in_ver && /<\/item>/ { exit }
 ' appcast.xml)
 
-if echo "$VERSION_BLOCK" | grep -q "BUILD_NUMBER"; then
-  echo "ERROR: appcast.xml entry for $VERSION still contains BUILD_NUMBER"
+if ! echo "$VERSION_BLOCK" | grep -qF "<sparkle:version>$NEW_BUILD</sparkle:version>"; then
+  echo "ERROR: appcast.xml entry for $VERSION does not carry expected build number $NEW_BUILD"
   exit 1
 fi
-if echo "$VERSION_BLOCK" | grep -q "SIGNATURE_HERE"; then
-  echo "ERROR: appcast.xml entry for $VERSION still contains SIGNATURE_HERE"
+if ! echo "$VERSION_BLOCK" | grep -qF "sparkle:edSignature=\"$SIGNATURE\""; then
+  echo "ERROR: appcast.xml entry for $VERSION does not carry the freshly-computed Sparkle signature"
   exit 1
 fi
-if echo "$VERSION_BLOCK" | grep -q "FILE_SIZE_IN_BYTES"; then
-  echo "ERROR: appcast.xml entry for $VERSION still contains FILE_SIZE_IN_BYTES"
+if ! echo "$VERSION_BLOCK" | grep -qF "length=\"$DMG_SIZE_BYTES\""; then
+  echo "ERROR: appcast.xml entry for $VERSION does not carry expected DMG size $DMG_SIZE_BYTES"
   exit 1
 fi
 
@@ -281,6 +286,17 @@ echo "==========================================="
 echo "  Step 7: Push & Merge to Main"
 echo "==========================================="
 echo ""
+
+## Build steps rewrite some tracked files (e.g. Package.resolved on every
+## xcodebuild archive) but Step 6 only commits appcast.xml + project.pbxproj.
+## Discard the build leftovers now — otherwise `git checkout main` quietly
+## carries them across and `git merge develop` aborts with
+## "Your local changes to the following files would be overwritten by merge".
+if ! git diff --quiet; then
+  echo "Discarding build-artifact working-tree changes before merge:"
+  git diff --name-only
+  git restore .
+fi
 
 BRANCH=$(git branch --show-current)
 echo "Current branch: $BRANCH"

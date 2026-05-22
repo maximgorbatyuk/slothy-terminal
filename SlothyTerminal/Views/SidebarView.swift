@@ -172,6 +172,7 @@ struct FileItemRow: View {
   @Binding var item: FileItem
   let depth: Int
   let rootDirectory: URL
+  @Environment(AppState.self) private var appState
   @State private var showCopiedTooltip: Bool = false
   @State private var childLoadTask: Task<Void, Never>?
 
@@ -226,13 +227,18 @@ struct FileItemRow: View {
       }
       .padding(.vertical, 3)
       .contentShape(Rectangle())
+      /// Double-click is attached before single-click so SwiftUI resolves
+      /// the higher-count gesture first; otherwise the count:1 recognizer
+      /// often wins and swallows the second click of a real double-click.
+      .onTapGesture(count: 2) {
+        if !item.isDirectory {
+          appState.openFileInEditor(item.url)
+        }
+      }
       .onTapGesture(count: 1) {
         if item.isDirectory {
           toggleExpand()
         }
-      }
-      .onTapGesture(count: 2) {
-        copyToClipboard(relativePath)
       }
       .contextMenu {
         Button("Copy Relative Path") {
