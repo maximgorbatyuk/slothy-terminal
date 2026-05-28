@@ -93,7 +93,7 @@ Use Claude CLI, OpenCode, or plain terminal sessions in a clean tabbed interface
 - Displays files and folders with native system icons
 - Shows hidden files (.github, .claude, .gitignore, etc.)
 - Sorted display: folders first, then files (alphabetically)
-- Double-click a file to open it in the built-in editor (accent-color hover state highlights the focused row)
+- Double-click a file to open it in the built-in editor; double-click a folder to expand or collapse it (accent-color hover state highlights the focused row)
 - Right-click context menu:
   - Copy Relative Path
   - Copy Filename

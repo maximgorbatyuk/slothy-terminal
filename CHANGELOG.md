@@ -2,6 +2,17 @@
 
 All notable changes to SlothyTerminal will be documented in this file.
 
+## [2026.3.16] - 2026-05-28
+
+### Changed
+- **Double-clicking a folder in the Files sidebar now toggles expansion instead of being a no-op.** `FileItemRow`'s `onTapGesture(count: 2)` previously branched on `!item.isDirectory`, so a real double-click on a folder row fell through to nothing — the count:2 recognizer fired (and won, by the deliberate gesture ordering on `FileItemRow`), but the body did no work. The single-click handler at `count: 1` still toggled the folder, but a fast double-click was swallowed by the higher-count recognizer and felt like a dead row to anyone used to Finder-style folder navigation. The body now dispatches on `item.isDirectory`: directories call `toggleExpand()`, files call `appState.openFileInEditor(item.url)`. Net effect: single-click *and* double-click on a folder both toggle expansion (the latter no longer needs the user to slow down to register as two separate singles), and the file-opens-in-editor path is unchanged. (`SlothyTerminal/Views/SidebarView.swift:247-253`)
+- **Hint text above the file tree now mentions folder double-click.** "Double-click to open in editor. Right-click for more options." → "Double-click files to open. Double-click folders to expand/collapse. Right-click for more options." Same motivation as 2026.3.15's hint-text update — keep the inline copy aligned with what the gesture actually does. README and `docs/domain.md` carry matching updates. (`SlothyTerminal/Views/SidebarView.swift:99`, `README.md:96`, `docs/domain.md:65`)
+
+### Notes
+- An earlier draft of this change extracted a `FileTreeRowInteraction.doubleClickAction(isDirectory:)` helper plus a unit test for the mapping. Both were removed during review: the helper added an indirection over a one-line conditional, and its test only re-stated the helper rather than verifying the view's `switch` wired the cases to the right side effects. Inlining the `if/else` makes the call site cheaper to read, and the deleted test was not meaningfully covering the regression it appeared to cover.
+- The single-click handler at `onTapGesture(count: 1)` still toggles directories. Single-click and double-click on a folder are intentionally redundant — single-click matches the existing chevron-style tree-view convention, double-click matches Finder. We did not pick one and remove the other.
+- Verified with `swift test` (239 tests passing) and `xcodebuild -project SlothyTerminal.xcodeproj -scheme SlothyTerminal -configuration Debug build CODE_SIGNING_ALLOWED=NO` (BUILD SUCCEEDED). Manual smoke recommended: (a) double-click a folder row in the Files sidebar — folder expands (or collapses) in one motion, (b) double-click a file row — editor tab still opens, (c) single-click a folder row — still toggles, as before.
+
 ## [2026.3.15] - 2026-05-22
 
 ### Added
