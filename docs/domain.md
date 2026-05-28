@@ -62,6 +62,8 @@ The editor is a separate `TabMode` with no PTY, no agent, and no Ghostty surface
 - Double-clicking a file in the *Files* sidebar (`SidebarView.FileItemRow` → `AppState.openFileInEditor`).
 - File menu → *Open…* once a file is picked (where applicable).
 
+Folder rows in the *Files* sidebar use the same double-click gesture to toggle expansion; they never open editor tabs.
+
 Open flow:
 
 1. `AppState.openFileInEditor(_:)` canonicalizes the URL via `Self.canonicalFileURL(_:)` — `resolvingSymlinksInPath().standardizedFileURL`. This is the equality key for editor tabs across symlinks, `/tmp` vs `/private/tmp`, and trailing-slash variants.

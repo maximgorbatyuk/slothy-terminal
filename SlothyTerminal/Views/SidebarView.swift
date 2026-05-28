@@ -96,7 +96,7 @@ struct DirectoryTreeView: View {
 
       if isExpanded {
         /// Hint text.
-        Text("Double-click to open in editor. Right-click for more options.")
+        Text("Double-click files to open. Double-click folders to expand/collapse. Right-click for more options.")
           .appFont(size: 9)
           .foregroundColor(.secondary)
           .opacity(0.7)
@@ -245,7 +245,9 @@ struct FileItemRow: View {
       /// the higher-count gesture first; otherwise the count:1 recognizer
       /// often wins and swallows the second click of a real double-click.
       .onTapGesture(count: 2) {
-        if !item.isDirectory {
+        if item.isDirectory {
+          toggleExpand()
+        } else {
           appState.openFileInEditor(item.url)
         }
       }
