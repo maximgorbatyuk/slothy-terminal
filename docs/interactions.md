@@ -59,6 +59,7 @@ There is no telemetry, analytics, or crash-reporting endpoint. The app does not 
 - `~/.config/ghostty/config` — read by libghostty for terminal customization. The app does not write there.
 - `~/Library/Application Support/Cursor/User/globalStorage/state.vscdb` — Cursor.app's SQLite token store, read by `CursorUsageProvider` if the user picks auto-detect.
 - `~/Library/Preferences/<bundle id>.plist` — `UserDefaults` storage used by Sparkle and by `ConfigManager` for the JSON config blob.
+- `~/Library/Application Support/SlothyTerminal/directory-tree-state.json` — sidebar directory-tree expansion state, read/written by `DirectoryTreeExpansionStore` (debounced writes, flushed synchronously at app termination).
 - macOS Keychain — service `com.slothyterminal.usage` (see `docs/authentication.md`).
 - Arbitrary user files via the editor — `FileEditorService` reads and writes whatever path the user double-clicks in the Files sidebar or saves to. Writes are atomic and follow symlinks so a symlinked dotfile stays linked. Reads enforce a 10 MB cap and a NUL-byte binary sniff before decoding.
 

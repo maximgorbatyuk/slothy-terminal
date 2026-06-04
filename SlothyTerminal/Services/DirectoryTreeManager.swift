@@ -50,7 +50,11 @@ final class DirectoryTreeManager {
   private init() {}
 
   /// Loads the top-level items for a directory.
-  func loadItems(in url: URL, showHidden: Bool = true) async -> [FileItem] {
+  ///
+  /// Directories whose paths appear in `expandingPaths` are restored as
+  /// expanded, with their children loaded recursively. Recursion is bounded
+  /// by the finite set of remembered paths.
+  func loadItems(in url: URL, showHidden: Bool = true, expandingPaths: Set<String> = []) async -> [FileItem] {
     let entries = await DirectoryTreeScanner.scan(
       directory: url,
       showHidden: showHidden,
@@ -61,18 +65,39 @@ final class DirectoryTreeManager {
       return []
     }
 
-    return await MainActor.run {
+    var items = await MainActor.run {
       entries.map(Self.makeFileItem(from:))
     }
+
+    guard !expandingPaths.isEmpty else {
+      return items
+    }
+
+    for index in items.indices
+    where items[index].isDirectory && expandingPaths.contains(items[index].url.path) {
+      guard !Task.isCancelled else {
+        return items
+      }
+
+      items[index].isExpanded = true
+      items[index].children = await loadItems(
+        in: items[index].url,
+        showHidden: showHidden,
+        expandingPaths: expandingPaths
+      )
+      items[index].didLoadChildren = true
+    }
+
+    return items
   }
 
   /// Loads children for a directory item.
-  func loadChildren(in url: URL, showHidden: Bool = true) async -> [FileItem] {
+  func loadChildren(in url: URL, showHidden: Bool = true, expandingPaths: Set<String> = []) async -> [FileItem] {
     guard isDirectory(url) else {
       return []
     }
 
-    return await loadItems(in: url, showHidden: showHidden)
+    return await loadItems(in: url, showHidden: showHidden, expandingPaths: expandingPaths)
   }
 
   /// Creates a FileItem from a scanned directory entry.

@@ -27,38 +27,77 @@ struct StatusBarUsageBars: View {
     }
   }
 
+  /// Whether any visible provider fetch is currently in flight.
+  private var isAnyLoading: Bool {
+    activeProviders.contains { provider in
+      if case .loading = usageService.status(for: provider) {
+        return true
+      }
+
+      return false
+    }
+  }
+
   var body: some View {
     if !activeProviders.isEmpty {
-      HStack(spacing: 8) {
-        ForEach(activeProviders, id: \.self) { provider in
-          providerBar(provider)
-            .contentShape(Rectangle())
-            .onTapGesture {
-              selectedProvider = provider
-              isPopoverPresented = true
-            }
-        }
+      HStack(spacing: 6) {
+        refreshButton
+
+        barsGroup
       }
-      .padding(.horizontal, 6)
-      .padding(.vertical, 3)
-      .background(
-        RoundedRectangle(cornerRadius: 4)
-          .fill(isHovered ? Color.primary.opacity(0.08) : Color.clear)
+    }
+  }
+
+  /// Refreshes all resolved providers at once; also acts as a retry for
+  /// providers in `.failed` state. Kept outside `barsGroup` so it neither
+  /// triggers the popover tap gesture nor the bars' hover highlight.
+  private var refreshButton: some View {
+    Button {
+      Task {
+        await usageService.fetchAll()
+      }
+    } label: {
+      Image(systemName: "arrow.clockwise")
+        .appFont(size: 9)
+        .foregroundColor(.secondary)
+    }
+    .buttonStyle(.plain)
+    .disabled(isAnyLoading)
+    .opacity(isAnyLoading ? 0.4 : 1.0)
+    .help("Refresh all usage")
+  }
+
+  /// Per-provider bars with hover highlight; click opens the detail popover.
+  private var barsGroup: some View {
+    HStack(spacing: 8) {
+      ForEach(activeProviders, id: \.self) { provider in
+        providerBar(provider)
+          .contentShape(Rectangle())
+          .onTapGesture {
+            selectedProvider = provider
+            isPopoverPresented = true
+          }
+      }
+    }
+    .padding(.horizontal, 6)
+    .padding(.vertical, 3)
+    .background(
+      RoundedRectangle(cornerRadius: 4)
+        .fill(isHovered ? Color.primary.opacity(0.08) : Color.clear)
+    )
+    .contentShape(Rectangle())
+    .onHover { hovering in
+      isHovered = hovering
+    }
+    .onTapGesture {
+      isPopoverPresented.toggle()
+    }
+    .help("Click to view usage details")
+    .popover(isPresented: $isPopoverPresented) {
+      UsagePopoverView(
+        isPresented: $isPopoverPresented,
+        selectedProvider: $selectedProvider
       )
-      .contentShape(Rectangle())
-      .onHover { hovering in
-        isHovered = hovering
-      }
-      .onTapGesture {
-        isPopoverPresented.toggle()
-      }
-      .help("Click to view usage details")
-      .popover(isPresented: $isPopoverPresented) {
-        UsagePopoverView(
-          isPresented: $isPopoverPresented,
-          selectedProvider: $selectedProvider
-        )
-      }
     }
   }
 

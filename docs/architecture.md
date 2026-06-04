@@ -84,6 +84,7 @@ Source lives under `SlothyTerminal/`. Each subdirectory has a single responsibil
 - **App config:** JSON, written by `ConfigManager`. Schema is the `AppConfig` Codable struct in `Models/AppConfig.swift`. Decoding is intentionally resilient — unknown / removed keys must not crash older config files. Editor-related fields (`defaultTabMode`, `editorFontName`, `editorFontSize`) follow the same `try?`-decoded pattern.
 - **Saved prompts and workspaces:** persisted inside `AppConfig`.
 - **Recent folders:** `RecentFoldersManager` maintains the bounded list (cap configured in `AppConfig.maxRecentFolders`).
+- **Sidebar directory-tree expansion:** JSON at `~/Library/Application Support/SlothyTerminal/directory-tree-state.json`, written by `DirectoryTreeExpansionStore` (`Services/DirectoryTreeExpansionStore.swift`) — expanded folder paths keyed by root directory path. Deliberately kept out of the observable `AppConfig` so frequent folder toggles don't invalidate every config-reading view (same reasoning as `ConfigManager.saveWindowFrame`).
 - **Usage credentials:** macOS Keychain — service `com.slothyterminal.usage`, account `<provider>.<sourceKind>`. See `docs/authentication.md`.
 
 ## Deployment surface

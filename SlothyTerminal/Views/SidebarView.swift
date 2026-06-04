@@ -14,9 +14,8 @@ struct SidebarView: View {
       } else {
         EmptySidebarView()
       }
-
-      Spacer()
     }
+    .frame(maxHeight: .infinity, alignment: .top)
     .padding()
     .background(appBackgroundColor)
   }
@@ -56,6 +55,7 @@ struct TerminalSidebarView: View {
       /// Project docs.
       ProjectDocsView(workingDirectory: tab.workingDirectory)
     }
+    .frame(maxHeight: .infinity, alignment: .top)
   }
 }
 
@@ -127,12 +127,13 @@ struct DirectoryTreeView: View {
           }
           .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .frame(maxHeight: 300)
+        .frame(maxHeight: .infinity)
         .padding(10)
         .background(appCardColor)
         .cornerRadius(8)
       }
     }
+    .frame(maxHeight: isExpanded ? .infinity : nil, alignment: .top)
     .task(id: loadKey) {
       guard isExpanded else {
         rootLoadGeneration += 1
@@ -150,7 +151,10 @@ struct DirectoryTreeView: View {
       let loadGeneration = rootLoadGeneration
       isLoading = true
 
-      let loadedItems = await DirectoryTreeManager.shared.loadItems(in: directory)
+      /// Restore remembered folder expansion so the tree survives
+      /// workspace switches, which recreate this view.
+      let expandedPaths = DirectoryTreeExpansionStore.shared.expandedPaths(forRoot: directory.path)
+      let loadedItems = await DirectoryTreeManager.shared.loadItems(in: directory, expandingPaths: expandedPaths)
 
       guard !Task.isCancelled,
             rootDirectory == directory,
@@ -317,6 +321,12 @@ struct FileItemRow: View {
       return
     }
 
+    DirectoryTreeExpansionStore.shared.setExpanded(
+      item.isExpanded,
+      path: item.url.path,
+      rootPath: rootDirectory.path
+    )
+
     if !item.isExpanded {
       childLoadTask?.cancel()
       childLoadTask = nil
@@ -337,7 +347,10 @@ struct FileItemRow: View {
     item.isLoadingChildren = true
     childLoadTask?.cancel()
     childLoadTask = Task { @MainActor in
-      let children = await DirectoryTreeManager.shared.loadChildren(in: itemURL)
+      /// Pass remembered paths so previously expanded subfolders reopen
+      /// when this folder is expanded again after a view recreation.
+      let expandedPaths = DirectoryTreeExpansionStore.shared.expandedPaths(forRoot: rootDirectory.path)
+      let children = await DirectoryTreeManager.shared.loadChildren(in: itemURL, expandingPaths: expandedPaths)
 
       guard item.id == itemID,
             item.childLoadGeneration == loadGeneration
