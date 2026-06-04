@@ -44,6 +44,7 @@ struct SlothyTerminalApp: App {
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.willTerminateNotification)) { _ in
           appState.terminateAllSessions()
           configManager.saveImmediately()
+          DirectoryTreeExpansionStore.shared.saveNow()
         }
     }
     .windowStyle(.titleBar)

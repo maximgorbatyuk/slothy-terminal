@@ -37,7 +37,7 @@ This catches missing imports, misuse of AppKit symbols, and broken `Views/` refe
 
 - `Models/` — pure value types and Codable behaviour (`AppConfig`, `Tab`, `Workspace`, `WorkspaceSplitState`, `SavedPrompt`, `MakeCommitComposerState`, `UsageModels`, …). Editor-mode tab invariants (fileURL precondition, derived title, isDirty label prefix, agentType rejection) live in `EditorTabTests.swift`.
 - `Agents/` — agent type metadata, command-label parsing, launch-type behaviour.
-- Most of `Services/` listed in `Package.swift` `sources:` — config, recent-folders, git process runner / parsing / lane calculation, working-tree, ANSI stripping, prompt scanners, cursor usage decoding, claude cooldown, activity gating, file editor I/O (`FileEditorService` — load/save, encoding fallbacks, binary sniff, size cap, symlink resolution; see `FileEditorServiceTests.swift`).
+- Most of `Services/` listed in `Package.swift` `sources:` — config, recent-folders, git process runner / parsing / lane calculation, working-tree, ANSI stripping, prompt scanners, cursor usage decoding, claude cooldown, activity gating, directory-tree expansion state (`DirectoryTreeExpansionStore` — per-root expand/collapse persistence; see `DirectoryTreeExpansionStoreTests.swift`), file editor I/O (`FileEditorService` — load/save, encoding fallbacks, binary sniff, size cap, symlink resolution; see `FileEditorServiceTests.swift`).
 - `Injection/` — orchestrator queue, surface registry, request semantics. Backed by mock surfaces.
 - `App/AppState` — only the parts that don't transitively depend on Views or AppKit (incl. `openFileInEditor` dedup, `canonicalFileURL`, dirty-editor close routing).
 
