@@ -248,6 +248,20 @@ enum SidebarTab: String, Codable, CaseIterable, Identifiable {
     }
   }
 
+  /// Short label shown next to the icon in the sidebar tab selector.
+  var title: String {
+    switch self {
+    case .explorer:
+      return "Files"
+
+    case .prompts:
+      return "Prompts"
+
+    case .automation:
+      return "Scripts"
+    }
+  }
+
   var tooltip: String {
     switch self {
     case .explorer:
