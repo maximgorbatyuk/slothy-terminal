@@ -130,7 +130,7 @@ struct MainView: View {
     return min(max(proposedWidth, minSidebarWidth), upperBound)
   }
 
-  /// Window title pattern: `📁 <workspace> — <directory> | Slothy Terminal`.
+  /// Window title pattern: `📁 <directory> | SlothyTerminal`.
   private func updateWindowTitle() {
     let title = windowTitleText
 
@@ -143,13 +143,10 @@ struct MainView: View {
   private var windowTitleText: String {
     if let activeTab = appState.activeTab {
       let directory = activeTab.workingDirectory.lastPathComponent
-      if let workspace = appState.workspace(for: activeTab.workspaceID) {
-        return "📁 \(workspace.name) — \(directory) | Slothy Terminal"
-      }
-      return "📁 \(directory) | Slothy Terminal"
+      return "📁 \(directory) | SlothyTerminal"
     }
 
-    return "Slothy Terminal"
+    return "SlothyTerminal"
   }
 }
 

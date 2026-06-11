@@ -531,6 +531,17 @@ struct OpenFolderWelcomeView: View {
     appState.activeWorkspace != nil && appState.visibleTabs.isEmpty
   }
 
+  /// True when the empty active workspace is the only one, so closing it
+  /// would leave the app with nothing to show. In that case the action
+  /// quits the app instead of dropping back to the welcome card.
+  private var isLastWorkspace: Bool {
+    appState.workspaces.count <= 1
+  }
+
+  private var closeButtonTitle: String {
+    isLastWorkspace ? "Close App" : "Close Workspace"
+  }
+
   private var headlineText: String {
     hasEmptyActiveWorkspace
       ? "Pick a folder for this workspace"
@@ -568,6 +579,15 @@ struct OpenFolderWelcomeView: View {
 
       if !recentFolders.isEmpty {
         recentSection
+      }
+
+      if hasEmptyActiveWorkspace {
+        Divider()
+          .frame(maxWidth: 220)
+
+        AppButton(closeButtonTitle, action: closeWorkspaceOrApp)
+          .buttonStyle(.bordered)
+          .controlSize(.regular)
       }
     }
     .padding(28)
@@ -676,6 +696,24 @@ struct OpenFolderWelcomeView: View {
   private func openFolder(at url: URL) {
     recentFoldersManager.addRecentFolder(url)
     appState.createTab(agent: .terminal, directory: url)
+  }
+
+  /// Closes the active, now tab-less workspace — or quits the app when it's
+  /// the last workspace. Only reachable when `hasEmptyActiveWorkspace` is
+  /// true, so the workspace close always succeeds; `AppState` then switches
+  /// to another workspace. Quitting goes through `NSApp.terminate`, which
+  /// fires `willTerminateNotification` for session cleanup and config save.
+  private func closeWorkspaceOrApp() {
+    if isLastWorkspace {
+      NSApp.terminate(nil)
+      return
+    }
+
+    guard let id = appState.activeWorkspace?.id else {
+      return
+    }
+
+    appState.closeWorkspace(id: id)
   }
 }
 
